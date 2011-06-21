@@ -16,11 +16,24 @@
  * using the generic single-entry routines.
  */
 
+/*
+初始化以@name为名称的list_head结构
+两个指针域均为指向自身的指针
+
+@name:传进来的参数为以name为名称的结构体
+*/
 #define LIST_HEAD_INIT(name) { &(name), &(name) }
 
+/* 声明并初始化一个以@name为名称的list_head头节点 */
 #define LIST_HEAD(name) \
 	struct list_head name = LIST_HEAD_INIT(name)
 
+/*
+初始化list_head头节点
+开始时next指针指向头节点本身，空的时候next再次指向头节点本身
+
+@list:传进来的参数为一个指针
+*/
 static inline void INIT_LIST_HEAD(struct list_head *list)
 {
 	list->next = list;
@@ -73,6 +86,7 @@ static inline void list_add(struct list_head *new, struct list_head *head)
  */
 static inline void list_add_tail(struct list_head *new, struct list_head *head)
 {
+	/* 加在head节点的前面，即加在了整个链表的最后面，因为这是一个双向循环链表 */
 	__list_add(new, head->prev, head);
 }
 
@@ -183,6 +197,7 @@ static inline int list_is_last(const struct list_head *list,
  * list_empty - tests whether a list is empty
  * @head: the list to test.
  */
+/* list_head的判空条件即next指针又指向了头节点本身 */
 static inline int list_empty(const struct list_head *head)
 {
 	return head->next == head;
@@ -347,6 +362,7 @@ static inline void list_splice_tail_init(struct list_head *list,
  * @type:	the type of the struct this is embedded in.
  * @member:	the name of the list_struct within the struct.
  */
+/* 根据入口指针获取该list节点的容器结构指针 */
 #define list_entry(ptr, type, member) \
 	container_of(ptr, type, member)
 
@@ -366,6 +382,10 @@ static inline void list_splice_tail_init(struct list_head *list,
  * @pos:	the &struct list_head to use as a loop cursor.
  * @head:	the head for your list.
  */
+/*
+@pos    : 一个struct list_head *的局部变量指针，相当于for循环中熟悉的i
+@head   : 待遍历的链表的头节点(这里到头节点不是内嵌在其他结构中的list_head结构)
+*/
 #define list_for_each(pos, head) \
 	for (pos = (head)->next; pos != (head); pos = pos->next)
 
@@ -394,6 +414,11 @@ static inline void list_splice_tail_init(struct list_head *list,
  * @n:		another &struct list_head to use as temporary storage
  * @head:	the head for your list.
  */
+/*
+相比list_for_each多了一个局部变量@n
+@n      : 另外一个局部变量struct list_head指针，记录下一项
+		  用于防止前一项从链表中被移除时断链
+*/
 #define list_for_each_safe(pos, n, head) \
 	for (pos = (head)->next, n = pos->next; pos != (head); \
 		pos = n, n = pos->next)
@@ -415,6 +440,14 @@ static inline void list_splice_tail_init(struct list_head *list,
  * @head:	the head for your list.
  * @member:	the name of the list_struct within the struct.
  */
+/*
+entry   : 翻译成"条目"或"项"
+
+从链表第一个节点开始遍历链表中的每一个条目
+@pos    : 一个容器结构的局部变量指针，相当于for循环中熟悉的i
+@head   : 链表的头节点
+@member : 内嵌的struct list_head在@pos结构中的成员变量名称
+*/
 #define list_for_each_entry(pos, head, member)				\
 	for (pos = list_entry((head)->next, typeof(*pos), member);	\
 	     &pos->member != (head); 	\
@@ -426,6 +459,7 @@ static inline void list_splice_tail_init(struct list_head *list,
  * @head:	the head for your list.
  * @member:	the name of the list_struct within the struct.
  */
+/* 从链表最后一个节点开始遍历链表中的每一个条目 */
 #define list_for_each_entry_reverse(pos, head, member)			\
 	for (pos = list_entry((head)->prev, typeof(*pos), member);	\
 	     &pos->member != (head); 	\
@@ -451,6 +485,11 @@ static inline void list_splice_tail_init(struct list_head *list,
  * Continue to iterate over list of given type, continuing after
  * the current position.
  */
+/*
+从确定的一个节点的下一项开始遍历到链表结束
+
+@pos    : 不再是随意的局部变量指针，而是链表中确定的某一项的容器结构指针
+*/
 #define list_for_each_entry_continue(pos, head, member) 		\
 	for (pos = list_entry(pos->member.next, typeof(*pos), member);	\
 	     &pos->member != (head);	\
@@ -478,6 +517,7 @@ static inline void list_splice_tail_init(struct list_head *list,
  *
  * Iterate over list of given type, continuing from current position.
  */
+/* 从确定的一个节点开始遍历到链表结束(包括该节点) */
 #define list_for_each_entry_from(pos, head, member) 			\
 	for (; &pos->member != (head);	\
 	     pos = list_entry(pos->member.next, typeof(*pos), member))
@@ -489,6 +529,10 @@ static inline void list_splice_tail_init(struct list_head *list,
  * @head:	the head for your list.
  * @member:	the name of the list_struct within the struct.
  */
+/*
+相比list_for_each_entry多了一个变量@n
+@n      : 另外一个局部变量指针，记录下一项，用于防止前一项从链表中被移除时断链
+*/
 #define list_for_each_entry_safe(pos, n, head, member)			\
 	for (pos = list_entry((head)->next, typeof(*pos), member),	\
 		n = list_entry(pos->member.next, typeof(*pos), member);	\
