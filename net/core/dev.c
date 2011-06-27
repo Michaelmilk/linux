@@ -170,6 +170,11 @@
  *		86DD	IPv6
  */
 
+/*
+PTYPE_HASH_SIZE为ptype_base哈希表的大小
+PTYPE_HASH_MASK计算哈希值时的掩码
+通常我们都是取模，这里因为16是2^n，所以位与的效果一样
+*/
 #define PTYPE_HASH_SIZE	(16)
 #define PTYPE_HASH_MASK	(PTYPE_HASH_SIZE - 1)
 
@@ -378,8 +383,10 @@ static inline void netdev_set_addr_lockdep_class(struct net_device *dev)
 static inline struct list_head *ptype_head(const struct packet_type *pt)
 {
 	if (pt->type == htons(ETH_P_ALL))
+		/* ETH_P_ALL协议类型加入ptype_all链表 */
 		return &ptype_all;
 	else
+		/* 根据协议类型计算一个哈希值，加入对应的链表 */
 		return &ptype_base[ntohs(pt->type) & PTYPE_HASH_MASK];
 }
 
@@ -396,8 +403,20 @@ static inline struct list_head *ptype_head(const struct packet_type *pt)
  *	will see the new packet type (until the next received packet).
  */
 
+/*
+dev_add_pack()是将一个协议类型结构链入某一个链表， 
+当协议类型为ETH_P_ALL时，它将被链入ptype_all链表，
+这个链表是用于sniffer这样一些程序的，它接收所有NIC收到的包。
+一个双向的链表。
+
+还有一个是HASH链表ptype_base，用于各种协议，它是一个16个元素的数组，
+dev_add_pack()会根据协议类型将这个packet_type链入相应的HASH链表中。
+
+ptype_head()对加入的链表进行了简单封装。
+*/
 void dev_add_pack(struct packet_type *pt)
 {
+	/* 取得该@pt准备加入的链表头 */
 	struct list_head *head = ptype_head(pt);
 
 	spin_lock(&ptype_lock);
