@@ -168,6 +168,10 @@ static void skb_under_panic(struct sk_buff *skb, int sz, void *here)
  *	Buffers may only be allocated from interrupts using a @gfp_mask of
  *	%GFP_ATOMIC.
  */
+/*
+@size	: 申请的线性区长度
+@fclone : fast clone标志
+*/
 struct sk_buff *__alloc_skb(unsigned int size, gfp_t gfp_mask,
 			    int fclone, int node)
 {
@@ -185,6 +189,7 @@ struct sk_buff *__alloc_skb(unsigned int size, gfp_t gfp_mask,
 	prefetchw(skb);
 
 	size = SKB_DATA_ALIGN(size);
+	/* data buffer后面还有一个skb_shared_info */
 	data = kmalloc_node_track_caller(size + sizeof(struct skb_shared_info),
 			gfp_mask, node);
 	if (!data)
@@ -196,7 +201,9 @@ struct sk_buff *__alloc_skb(unsigned int size, gfp_t gfp_mask,
 	 * actually initialise below. Hence, don't put any more fields after
 	 * the tail pointer in struct sk_buff!
 	 */
+    /* 清0只到tail的前面，tail字段后面的指针指向线性区，当然不能清0了 */
 	memset(skb, 0, offsetof(struct sk_buff, tail));
+	/* 并不包含struct skb_shared_info */
 	skb->truesize = size + sizeof(struct sk_buff);
 	atomic_set(&skb->users, 1);
 	skb->head = data;
@@ -282,6 +289,10 @@ EXPORT_SYMBOL(skb_add_rx_frag);
  *	%NULL is returned if there is no free memory. Although this function
  *	allocates memory it can be called from an interrupt.
  */
+/*
+可用于中断处理程序
+如网卡驱动中
+*/
 struct sk_buff *dev_alloc_skb(unsigned int length)
 {
 	/*
@@ -310,6 +321,9 @@ static inline void skb_drop_fraglist(struct sk_buff *skb)
 	skb_drop_list(&skb_shinfo(skb)->frag_list);
 }
 
+/*
+实际上就是增加链表中各个skb的users引用
+*/
 static void skb_clone_fraglist(struct sk_buff *skb)
 {
 	struct sk_buff *list;
@@ -320,18 +334,22 @@ static void skb_clone_fraglist(struct sk_buff *skb)
 
 static void skb_release_data(struct sk_buff *skb)
 {
+    /* 没有被clone，或数据区引用为0 */
 	if (!skb->cloned ||
 	    !atomic_sub_return(skb->nohdr ? (1 << SKB_DATAREF_SHIFT) + 1 : 1,
 			       &skb_shinfo(skb)->dataref)) {
+		/* 释放数组frags中的页 */
 		if (skb_shinfo(skb)->nr_frags) {
 			int i;
 			for (i = 0; i < skb_shinfo(skb)->nr_frags; i++)
 				put_page(skb_shinfo(skb)->frags[i].page);
 		}
 
+		/* 释放单链表frag_list中的skb */
 		if (skb_has_frag_list(skb))
 			skb_drop_fraglist(skb);
 
+		/* 释放线性数据区buffer */
 		kfree(skb->head);
 	}
 }
@@ -344,6 +362,7 @@ static void kfree_skbmem(struct sk_buff *skb)
 	struct sk_buff *other;
 	atomic_t *fclone_ref;
 
+	/* 根据fclone标志将skb结构本身交还给cache */
 	switch (skb->fclone) {
 	case SKB_FCLONE_UNAVAILABLE:
 		kmem_cache_free(skbuff_head_cache, skb);
@@ -428,6 +447,7 @@ EXPORT_SYMBOL(__kfree_skb);
  *	Drop a reference to the buffer and free it if the usage count has
  *	hit zero.
  */
+/* 释放一个skb缓冲区。kfree_skb被内核内部使用 */
 void kfree_skb(struct sk_buff *skb)
 {
 	if (unlikely(!skb))
@@ -555,6 +575,7 @@ static struct sk_buff *__skb_clone(struct sk_buff *n, struct sk_buff *skb)
 #define C(x) n->x = skb->x
 
 	n->next = n->prev = NULL;
+	/* clone的skb不属于某个socket */
 	n->sk = NULL;
 	__copy_skb_header(n, skb);
 
@@ -572,6 +593,7 @@ static struct sk_buff *__skb_clone(struct sk_buff *n, struct sk_buff *skb)
 	C(truesize);
 	atomic_set(&n->users, 1);
 
+	/* 被clone的skb数据区引用+1 */
 	atomic_inc(&(skb_shinfo(skb)->dataref));
 	skb->cloned = 1;
 
@@ -610,6 +632,11 @@ EXPORT_SYMBOL_GPL(skb_morph);
  *	%GFP_ATOMIC.
  */
 
+/*
+这个函数克隆一个skb。
+两份拷贝共享分组数据，但分别拥有自己的sk_buff结构。
+新拷贝不属于任何socket，引用计数为1。
+*/
 struct sk_buff *skb_clone(struct sk_buff *skb, gfp_t gfp_mask)
 {
 	struct sk_buff *n;
@@ -634,6 +661,9 @@ struct sk_buff *skb_clone(struct sk_buff *skb, gfp_t gfp_mask)
 }
 EXPORT_SYMBOL(skb_clone);
 
+/*
+复制控制结构sk_buff中相关字段的数据
+*/
 static void copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
 {
 #ifndef NET_SKBUFF_DATA_USES_OFFSET
@@ -674,6 +704,10 @@ static void copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
  *	header is going to be modified. Use pskb_copy() instead.
  */
 
+/*
+会把paged data 和 frag_list 里的数据都给 copy 到线性Buffer 区域
+如果不需要改变非线性区数据的话，使用pskb_copy()就够了
+*/
 struct sk_buff *skb_copy(const struct sk_buff *skb, gfp_t gfp_mask)
 {
 	int headerlen = skb_headroom(skb);
@@ -765,17 +799,25 @@ EXPORT_SYMBOL(pskb_copy);
  *	reloaded after call to this function.
  */
 
+/*
+为@skb扩展线性区buffer
+
+@nhead	: 在头部新增的长度
+@ntail	: 在尾部新增的长度
+*/
 int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
 		     gfp_t gfp_mask)
 {
 	int i;
 	u8 *data;
+	/* 新线性区长度 */
 	int size = nhead + (skb_end_pointer(skb) - skb->head) + ntail;
 	long off;
 	bool fastpath;
 
 	BUG_ON(nhead < 0);
 
+	/* sk_buff本身只能有1个引用，不可以是共享的 */
 	if (skb_shared(skb))
 		BUG();
 
@@ -803,6 +845,7 @@ int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
 		goto adjust_others;
 	}
 
+	/* 分配新的线性区 */
 	data = kmalloc(size + sizeof(struct skb_shared_info), gfp_mask);
 	if (!data)
 		goto nodata;
@@ -810,8 +853,10 @@ int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
 	/* Copy only real data... and, alas, header. This should be
 	 * optimized for the cases when header is void.
 	 */
+	/* 复制原线性区数据 */
 	memcpy(data + nhead, skb->head, skb_tail_pointer(skb) - skb->head);
 
+	/* 复制原skb_shared_info */
 	memcpy((struct skb_shared_info *)(data + size),
 	       skb_shinfo(skb),
 	       offsetof(struct skb_shared_info, frags[skb_shinfo(skb)->nr_frags]));
@@ -825,8 +870,17 @@ int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
 		if (skb_has_frag_list(skb))
 			skb_clone_fraglist(skb);
 
+	    /* 上面为paged data和frag_list增加了引用
+           故这里主要是释放原有的线性区buffer */
 		skb_release_data(skb);
 	}
+
+    /* 这里求偏移的方式有点不好理解
+       skb->head是原数据区起始位置
+       在skb_release_data()里kfree(skb->head)时并没有将skb->head至为NULL
+       clone的skb也许并不会有释放动作
+       而新分配的data指针可能与原数据区相差很远
+       假定两个buffer紧挨着，画图示意下 */
 	off = (data + nhead) - skb->head;
 
 	skb->head     = data;
@@ -847,6 +901,7 @@ adjust_others:
 	/* Only adjust this if it actually is csum_start rather than csum */
 	if (skb->ip_summed == CHECKSUM_PARTIAL)
 		skb->csum_start += nhead;
+	/* skb有新的线性区，不再是clone的 */
 	skb->cloned   = 0;
 	skb->hdr_len  = 0;
 	skb->nohdr    = 0;
@@ -860,15 +915,25 @@ EXPORT_SYMBOL(pskb_expand_head);
 
 /* Make private copy of skb with writable head and some headroom */
 
+/*
+@skb        : 源skb
+@headroom   : 头部空间新的长度
+
+返回一个新的可写的（private） skb （包括线性数据区）
+*/
 struct sk_buff *skb_realloc_headroom(struct sk_buff *skb, unsigned int headroom)
 {
 	struct sk_buff *skb2;
 	int delta = headroom - skb_headroom(skb);
 
+	/* 头部空间足够，直接复制 */
 	if (delta <= 0)
 		skb2 = pskb_copy(skb, GFP_ATOMIC);
+	/* 头部空间不够，则重新分配并扩大头部空间 */
 	else {
 		skb2 = skb_clone(skb, GFP_ATOMIC);
+        /* 先clone，若clone都失败了，则节约线性区空间的分配
+           若clone成功，则分配新的线性区 */
 		if (skb2 && pskb_expand_head(skb2, SKB_DATA_ALIGN(delta), 0,
 					     GFP_ATOMIC)) {
 			kfree_skb(skb2);
@@ -897,6 +962,9 @@ EXPORT_SYMBOL(skb_realloc_headroom);
  *	You must pass %GFP_ATOMIC as the allocation priority if this function
  *	is called from an interrupt.
  */
+/*
+返回新的skb，该skb是线性化的
+*/
 struct sk_buff *skb_copy_expand(const struct sk_buff *skb,
 				int newheadroom, int newtailroom,
 				gfp_t gfp_mask)
@@ -958,17 +1026,25 @@ EXPORT_SYMBOL(skb_copy_expand);
  *	May return error in out of memory cases. The skb is freed on error.
  */
 
+/*
+把skb->data+skb->len后面长度@pad置0，如果线性区不够的话会扩展线性区
+
+返回0，表示成功
+*/
 int skb_pad(struct sk_buff *skb, int pad)
 {
 	int err;
 	int ntail;
 
 	/* If the skbuff is non linear tailroom is always zero.. */
+	/* 线性区尾部空间足够pad，直接置0 */
 	if (!skb_cloned(skb) && skb_tailroom(skb) >= pad) {
 		memset(skb->data+skb->len, 0, pad);
 		return 0;
 	}
 
+    /* clone的，或tailroom空间不足则需要重新分配线性区buffer
+       加上了data_len，以便下面进行线性化时pskb_expand_head中节省再次分配空间 */
 	ntail = skb->data_len + pad - (skb->end - skb->tail);
 	if (likely(skb_cloned(skb) || ntail > 0)) {
 		err = pskb_expand_head(skb, 0, ntail, GFP_ATOMIC);
@@ -1001,12 +1077,20 @@ EXPORT_SYMBOL(skb_pad);
  *	exceed the total buffer size the kernel will panic. A pointer to the
  *	first byte of the extra data is returned.
  */
+/*
+skb->tail指针后移@len字节
+skb->len的长度增加@len字节
+
+当有数据要加到缓冲区的尾部时，用于增加skb->tail和skb->len。
+返回值是修改之前的skb->tail指针
+*/
 unsigned char *skb_put(struct sk_buff *skb, unsigned int len)
 {
 	unsigned char *tmp = skb_tail_pointer(skb);
 	SKB_LINEAR_ASSERT(skb);
 	skb->tail += len;
 	skb->len  += len;
+	/* 如果超出线性区范围，则越界错误 */
 	if (unlikely(skb->tail > skb->end))
 		skb_over_panic(skb, len, __builtin_return_address(0));
 	return tmp;
@@ -1022,6 +1106,13 @@ EXPORT_SYMBOL(skb_put);
  *	start. If this would exceed the total buffer headroom the kernel will
  *	panic. A pointer to the first byte of the extra data is returned.
  */
+/*
+skb->data域指针前移@len个字节
+skb->len域总长度加@len
+
+当有数据要加到缓冲区的首部时，用于减少skb->data及增大skb->len。
+返回值是修改之后的skb->data
+*/
 unsigned char *skb_push(struct sk_buff *skb, unsigned int len)
 {
 	skb->data -= len;
@@ -1042,6 +1133,15 @@ EXPORT_SYMBOL(skb_push);
  *	is returned. Once the data has been pulled future pushes will overwrite
  *	the old data.
  */
+/*
+skb->data域指针后移@len个字节
+skb->len域总长度减@len
+
+从数据包的头部剔除数据。它减少skb->len并增加skb->data。
+以太网的头就是这样从接收到的数据包中被剔除的。
+
+skb_pull()只能操作线性区
+*/
 unsigned char *skb_pull(struct sk_buff *skb, unsigned int len)
 {
 	return skb_pull_inline(skb, len);
@@ -1057,6 +1157,10 @@ EXPORT_SYMBOL(skb_pull);
  *	the buffer is already under the length specified it is not modified.
  *	The skb must be linear.
  */
+/*
+从数据包的尾部剔除数据。它将skb->len设为len，并改变skb->tail。
+@skb必须是线性化的。
+*/
 void skb_trim(struct sk_buff *skb, unsigned int len)
 {
 	if (skb->len > len)
@@ -1071,6 +1175,7 @@ int ___pskb_trim(struct sk_buff *skb, unsigned int len)
 {
 	struct sk_buff **fragp;
 	struct sk_buff *frag;
+	/* 线性区数据长度 */
 	int offset = skb_headlen(skb);
 	int nfrags = skb_shinfo(skb)->nr_frags;
 	int i;
@@ -1081,9 +1186,11 @@ int ___pskb_trim(struct sk_buff *skb, unsigned int len)
 		return err;
 
 	i = 0;
+	/* 线性区长度比新长度大，则说明paged data和frag_list都不需要了 */
 	if (offset >= len)
 		goto drop_pages;
 
+	/* 用paged data凑够len */
 	for (; i < nfrags; i++) {
 		int end = offset + skb_shinfo(skb)->frags[i].size;
 
@@ -1105,10 +1212,12 @@ drop_pages:
 		goto done;
 	}
 
+	/* 用frag_list凑够len */
 	for (fragp = &skb_shinfo(skb)->frag_list; (frag = *fragp);
 	     fragp = &frag->next) {
 		int end = offset + frag->len;
 
+		/* 共享的frag，则clone一个新的 */
 		if (skb_shared(frag)) {
 			struct sk_buff *nfrag;
 
@@ -1175,26 +1284,40 @@ EXPORT_SYMBOL(___pskb_trim);
  *
  * It is pretty complicated. Luckily, it is called only in exceptional cases.
  */
+/*
+可以从paged data和frag_list复制数据进行pull
+即把后面的数据提到线性区来
+*/
 unsigned char *__pskb_pull_tail(struct sk_buff *skb, int delta)
 {
 	/* If skb has not enough free space at tail, get new one
 	 * plus 128 bytes for future expansions. If we have enough
 	 * room at tail, reallocate without expansion only if skb is cloned.
 	 */
+    /* eat表示需要从paged data和frag_list中(被吃掉的)复制到线性区的数据长度 */
 	int i, k, eat = (skb->tail + delta) - skb->end;
 
+    /* eat>0说明线性区tailroom空间不足
+       或者是clone的 */
 	if (eat > 0 || skb_cloned(skb)) {
 		if (pskb_expand_head(skb, 0, eat > 0 ? eat + 128 : 0,
 				     GFP_ATOMIC))
 			return NULL;
 	}
 
+	/* 从paged data和frag_list中复制数据 */
 	if (skb_copy_bits(skb, skb_headlen(skb), skb_tail_pointer(skb), delta))
 		BUG();
+
+    /* 修改paged data和frag_list的一些指针 */
 
 	/* Optimization: no fragments, no reasons to preestimate
 	 * size of pulled pages. Superb.
 	 */
+    /* 如果没有 frag_list，或者是 paged data 的长度已经足够 delta 了，
+       则只用修改 frags数组 和 tail 指针：使用 put_page 删掉需要取出的 paged data，
+       然后把剩余的往前移
+    */
 	if (!skb_has_frag_list(skb))
 		goto pull_pages;
 
@@ -1213,6 +1336,7 @@ unsigned char *__pskb_pull_tail(struct sk_buff *skb, int delta)
 	 * further bloating skb head and crucify ourselves here instead.
 	 * Pure masohism, indeed. 8)8)
 	 */
+    /* 如果 paged data 加起来还不够 delta，需要修改 frag_list */
 	if (eat) {
 		struct sk_buff *list = skb_shinfo(skb)->frag_list;
 		struct sk_buff *clone = NULL;
@@ -1284,14 +1408,30 @@ pull_pages:
 	skb->tail     += delta;
 	skb->data_len -= delta;
 
+	/* 返回新的tail指针 */
 	return skb_tail_pointer(skb);
 }
 EXPORT_SYMBOL(__pskb_pull_tail);
 
 /* Copy some data bits from skb to kernel buffer. */
 
+/*
+从 skb的数据区指定偏移（int offset）处 ，
+copy 一定长度（int len）的数据到特定指针（void *to）指向的内存空间，
+成功返回 0，否则返回-EFAULT
+
+顺序:线性区=>paged data=>frag_list
+
+@offset可能为负数的，即从 skb->data 往前，最多到 skb->head
+
+@skb    : 源skb
+@offset : 偏移
+@to     : 目的指针
+@len    : 待复制数据长度
+*/
 int skb_copy_bits(const struct sk_buff *skb, int offset, void *to, int len)
 {
+	/* 线性区长度 */
 	int start = skb_headlen(skb);
 	struct sk_buff *frag_iter;
 	int i, copy;
@@ -1597,6 +1737,13 @@ done:
  *	traversing fragment lists and such.
  */
 
+/*
+skb_store_bits()，是skb_copy_bits 的逆操作，从指针（void *from）指向的内存空间，
+copy 一定长度（int len）到 skb 的数据区指定偏移（int offset）处，
+成功返回 0，否则返回-EFAULT
+
+顺序:线性区=>paged data=>frag_list
+*/
 int skb_store_bits(struct sk_buff *skb, int offset, const void *from, int len)
 {
 	int start = skb_headlen(skb);
@@ -1671,6 +1818,9 @@ EXPORT_SYMBOL(skb_store_bits);
 
 /* Checksum skb data. */
 
+/*
+把对应 offset位置，长度为 len 的数据计算 checksum
+*/
 __wsum skb_checksum(const struct sk_buff *skb, int offset,
 			  int len, __wsum csum)
 {
@@ -1744,6 +1894,11 @@ EXPORT_SYMBOL(skb_checksum);
 
 /* Both of above in one bottle. */
 
+/*
+与skb_copy_bits()基本一致，
+只是需要把 copy 出来的数据按照 32bit 对齐
+计算checksum 并返回（跟 TCP，IP 头部计算校验和一样的算法）
+*/
 __wsum skb_copy_and_csum_bits(const struct sk_buff *skb, int offset,
 				    u8 *to, int len, __wsum csum)
 {
@@ -1821,6 +1976,10 @@ __wsum skb_copy_and_csum_bits(const struct sk_buff *skb, int offset,
 }
 EXPORT_SYMBOL(skb_copy_and_csum_bits);
 
+/*
+与skb_copy_and_csum_bits()一样的功能，
+不同的是利用硬件计算的部分 checksum 结果（skb->ip_summed == CHECKSUM_PARTIAL）
+*/
 void skb_copy_and_csum_dev(const struct sk_buff *skb, u8 *to)
 {
 	__wsum csum;
@@ -1897,6 +2056,11 @@ EXPORT_SYMBOL(skb_dequeue_tail);
  *	the list and one reference dropped. This function takes the list
  *	lock and is atomic with respect to other list locking functions.
  */
+/*
+purge:净化
+
+清空链表
+*/
 void skb_queue_purge(struct sk_buff_head *list)
 {
 	struct sk_buff *skb;
@@ -2009,6 +2173,9 @@ void skb_insert(struct sk_buff *old, struct sk_buff *newsk, struct sk_buff_head 
 }
 EXPORT_SYMBOL(skb_insert);
 
+/*
+在线性区分割
+*/
 static inline void skb_split_inside_header(struct sk_buff *skb,
 					   struct sk_buff* skb1,
 					   const u32 len, const int pos)
@@ -2018,18 +2185,27 @@ static inline void skb_split_inside_header(struct sk_buff *skb,
 	skb_copy_from_linear_data_offset(skb, len, skb_put(skb1, pos - len),
 					 pos - len);
 	/* And move data appendix as is. */
+	/* 把源skb的分片数据放到新skb内 */
 	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++)
 		skb_shinfo(skb1)->frags[i] = skb_shinfo(skb)->frags[i];
 
 	skb_shinfo(skb1)->nr_frags = skb_shinfo(skb)->nr_frags;
+	/* 源skb无分片了 */
 	skb_shinfo(skb)->nr_frags  = 0;
 	skb1->data_len		   = skb->data_len;
 	skb1->len		   += skb1->data_len;
 	skb->data_len		   = 0;
+	/* 源skb新长度 */
 	skb->len		   = len;
 	skb_set_tail_pointer(skb, len);
 }
 
+/*
+@skb    : 源skb
+@skb1   : 新skb
+@len    : 源skb新长度
+@pos    : 源skb线性区长度
+*/
 static inline void skb_split_no_header(struct sk_buff *skb,
 				       struct sk_buff* skb1,
 				       const u32 len, int pos)
@@ -2045,9 +2221,11 @@ static inline void skb_split_no_header(struct sk_buff *skb,
 	for (i = 0; i < nfrags; i++) {
 		int size = skb_shinfo(skb)->frags[i].size;
 
+		/* 后面的分片放入新skb */
 		if (pos + size > len) {
 			skb_shinfo(skb1)->frags[k] = skb_shinfo(skb)->frags[i];
 
+			/* 找到分割点所在的分片 */
 			if (pos < len) {
 				/* Split frag.
 				 * We have two variants in this case:
@@ -2065,7 +2243,9 @@ static inline void skb_split_no_header(struct sk_buff *skb,
 			}
 			k++;
 		} else
+		/* 前面的分片依然在源skb内，源skb分片数+1 */
 			skb_shinfo(skb)->nr_frags++;
+		/* 到下一个分片 */
 		pos += size;
 	}
 	skb_shinfo(skb1)->nr_frags = k;
@@ -2079,6 +2259,7 @@ static inline void skb_split_no_header(struct sk_buff *skb,
  */
 void skb_split(struct sk_buff *skb, struct sk_buff *skb1, const u32 len)
 {
+	/* 源skb线性区长度 */
 	int pos = skb_headlen(skb);
 
 	if (len < pos)	/* Split line is inside header. */
@@ -2406,6 +2587,9 @@ EXPORT_SYMBOL(skb_find_text);
  * Description: This procedure append the user data in the fragment part
  * of the skb if any page alloc fails user this procedure returns  -ENOMEM
  */
+/*
+把用户态数据 copy 到 skb 的paged data 部分，需要 alloc page
+*/
 int skb_append_datato_frags(struct sock *sk, struct sk_buff *skb,
 			int (*getfrag)(void *from, char *to, int offset,
 					int len, int odd, struct sk_buff *skb),
