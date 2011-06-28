@@ -125,6 +125,7 @@ struct sk_buff;
 /* To allow 64K frame to be packed as single skb without frag_list. Since
  * GRO uses frags we allocate at least 16 regardless of page size.
  */
+/* 对于4KB页大小，算出来为18 */
 #if (65536/PAGE_SIZE + 2) < 16
 #define MAX_SKB_FRAGS 16UL
 #else
@@ -192,26 +193,43 @@ enum {
 /* This data is invariant across clones and lives at
  * the end of the header data, ie. at skb->end.
  */
+/*
+该结构在alloc_skb()时紧跟在申请的data buffer后面，即skb->end后面
+
+用于管理 paged data
+用于管理分片
+*/
 struct skb_shared_info {
+	/* 下面数组frags中的计数 */
 	unsigned short	nr_frags;
+    /* “gso_size”，“gso_segs”，“gso_type”
+        由“GSO”（Generic  Segmentation  Offload，或
+        叫“TSO”，即 TCP Segmentation Offload）功能使用 */
 	unsigned short	gso_size;
 	/* Warning: this field is not always filled in (UFO)! */
 	unsigned short	gso_segs;
 	unsigned short  gso_type;
 	__be32          ip6_frag_id;
 	__u8		tx_flags;
+	/* 分片处理中，记录分片使用 */
 	struct sk_buff	*frag_list;
 	struct skb_shared_hwtstamps hwtstamps;
 
 	/*
 	 * Warning : all fields before dataref are cleared in __alloc_skb()
 	 */
+	/* skb 的data 区域(线性buffer)引用计数，
+       即有多少个sk_buff结构指向这块data区域(skb_clone时++) */
 	atomic_t	dataref;
 
 	/* Intermediate layers must ensure that destructor_arg
 	 * remains valid until skb destructor */
 	void *		destructor_arg;
 	/* must be last field, see pskb_expand_head() */
+	/* 用来记录paged_data实际位置，
+       包含 page 指针，在page 中的offset，以及占用的size 。
+       (可以有不同的 skb 指向同一个page 中的不同offset和 size，
+       也可以指向相同的，由page里头的_count来代表引用计数) */
 	skb_frag_t	frags[MAX_SKB_FRAGS];
 };
 
@@ -261,8 +279,10 @@ typedef unsigned int sk_buff_data_t;
 typedef unsigned char *sk_buff_data_t;
 #endif
 
-#if defined(CONFIG_NF_DEFRAG_IPV4) || defined(CONFIG_NF_DEFRAG_IPV4_MODULE) || \
-    defined(CONFIG_NF_DEFRAG_IPV6) || defined(CONFIG_NF_DEFRAG_IPV6_MODULE)
+/*
+用"\"换行的时候，SI定位不到struct sk_buff，所以改成一行
+*/
+#if defined(CONFIG_NF_DEFRAG_IPV4) || defined(CONFIG_NF_DEFRAG_IPV4_MODULE) || defined(CONFIG_NF_DEFRAG_IPV6) || defined(CONFIG_NF_DEFRAG_IPV6_MODULE)
 #define NET_SKBUFF_NF_DEFRAG_NEEDED 1
 #endif
 
@@ -327,9 +347,14 @@ struct sk_buff {
 	struct sk_buff		*next;
 	struct sk_buff		*prev;
 
+	/* 此变量用于记录 packet　的到达时间或发送时间。
+       由于计算时间有一定开销，因此只在必要时才使用此变量。
+       需要记录时间时，调用net_enable_timestamp()，
+       不需要时，调用net_disable_timestamp() 。 */
 	ktime_t			tstamp;
 
 	struct sock		*sk;
+	/* 接收或者发送该数据包的网络设备，跟踪与packet相关的device */
 	struct net_device	*dev;
 
 	/*
@@ -338,36 +363,74 @@ struct sk_buff {
 	 * want to keep them across layers you have to do a skb_clone()
 	 * first. This is owned by whoever has the skb queued ATM.
 	 */
+    /* 此数组作为 SKB 的控制块，具体的协议可用它来做一些私有用途，
+       例如 TCP 用这个控制块保存序列号和重传状态。 */
 	char			cb[48] __aligned(8);
 
 	unsigned long		_skb_refdst;
 #ifdef CONFIG_XFRM
 	struct	sec_path	*sp;
 #endif
+	/* 当前数据包的大小。为(线性区长度+data_len)之和。
+	   线性区长度 = skb->tail - skb->data，在各个层之间是变化的
+       以ip层为例，进入了ip层，skb->len就是当前ip数据包的长度，包括ip头部和其载荷 */
 	unsigned int		len,
+	/* skb_shared_info中链表frag_list和数组frags中数据长度之和 */
 				data_len;
+	/* 链路层头部长度，对应以太网便是ETH_HLEN */
 	__u16			mac_len,
 				hdr_len;
 	union {
+		/* 保存 packet 的校验和 */
 		__wsum		csum;
 		struct {
 			__u16	csum_start;
 			__u16	csum_offset;
 		};
 	};
+	/* 用于实现 QoS，它的值可能取之于 IPv4 头中的 TOS 域。
+       Traffic Control 模块需要根据这个域来对 packet 进行分类，以决定调度策略。 */
 	__u32			priority;
 	kmemcheck_bitfield_begin(flags1);
+	/* local_df在 IPv4 中使用，设为1 后代表允许对已经分片的数据包进行再次分片，
+       在IPSec等情况下使用 */
 	__u8			local_df:1,
+	/* 代表 skb 是否被 clone 当一个 SKB 被 clone 后，
+       原来的 SKB 和新的 SKB 结构中，”cloned” 都要被设置为1。 */
 				cloned:1,
+	/* 表示校验和的执行策略，代表网卡是否支持计算接收包checksum
+	   CHECKSUM_NONE：代表网卡不算checksum
+	   CHECKSUM_HW：代表网卡支持硬件计算checksum（对L4 head + payload 的校验），
+                    并且已经将计算结果复制给skb->csum，
+                    软件需要计算“伪头(pseudo header)”的校验和，
+                    与skb->csum相加得到L4 的结果
+	   CHECKSUM_UNNECESSARY：网卡已经计算并校验过整个包的校验，包括伪头，
+                             软件无需再次计算，一般用于 loopback device */
 				ip_summed:2,
+	/* nohdr代表了 skb_shared_info 里的dataref 有没有被分成两部分
+       nohdr = 0：dataref代表整个skb数据区的引用计数
+       nohdr = 1：dataref的高16bits 代表 skb 数据区“payload 部分”的引用计数，
+                  低 16bits代表整个 skb数据区的引用计数 */
 				nohdr:1,
+	/* nfctinfo用于netfilter子系统中的conntrack模块记录连接状态，
+       可取值为 enum ip_conntrack_info变量 */
 				nfctinfo:3;
+	/* 根据mac标记该数据包的类型
+       PACKET_HOST, PACKET_OTHERHOST, PACKET_BROADCAST等
+       表示根据 L2的目的mac地址得到的包类型 */
 	__u8			pkt_type:3,
+	/* fast clone
+       通过fclone 参数选择从skbuff_head_cache或者skbuff_fclone_cache 中分配
+	   参考函数__alloc_skb() */
 				fclone:2,
+	/* “ipvs_property”是为ip_vs模块添加的变量，
+       置为1 代表已经被ip_vs 某个部分处理过，后续不需要再处理 */
 				ipvs_property:1,
 				peeked:1,
 				nf_trace:1;
 	kmemcheck_bitfield_end(flags1);
+	/* 给数据包使用的网络层协议，L2头中携带的L3网络层协议号
+	   收包时由eth_type_trans()取值返回，net byte order */
 	__be16			protocol;
 
 	void			(*destructor)(struct sk_buff *skb);
@@ -381,6 +444,9 @@ struct sk_buff {
 	struct nf_bridge_info	*nf_bridge;
 #endif
 
+	/* 接收数据包的时候，dev 和 skb_iif 都指向最初的 interface，
+       此后，如果需要被 virtual driver 处理，那么 dev 会发生变化，而 iif 始终不变。
+       参考函数__netif_receive_skb() */
 	int			skb_iif;
 #ifdef CONFIG_NET_SCHED
 	__u16			tc_index;	/* traffic control index */
@@ -414,15 +480,26 @@ struct sk_buff {
 
 	__u16			vlan_tci;
 
+	/* L4传输层头部指针，ip_local_deliver_finish() 里初始化 */
 	sk_buff_data_t		transport_header;
+	/* L3网络层头部指针，netif_receive_skb() 里初始化 */
 	sk_buff_data_t		network_header;
+	/* L2链路层头部指针，eth_type_trans() 里初始化 */
 	sk_buff_data_t		mac_header;
 	/* These elements must be at the end, see alloc_skb() for details.  */
+	/* head和end指针则在skb内存空间分配后就固定不变，指向的是线性区的开头和结尾
+	   data指针随着skb到达的层不同不断变化
+	   tail指针指向线性区中有效数据的结尾 */
 	sk_buff_data_t		tail;
 	sk_buff_data_t		end;
 	unsigned char		*head,
 				*data;
+	/* 分配到的内存空间大小。一个skb消耗的所有内存空间。
+       linear_len = skb->end - skb->head
+       truesize = sizeof(struct sk_buff) + linear_len + data_len
+       并不包含struct skb_shared_info */
 	unsigned int		truesize;
+	/* sk_buff 结构本身的引用计数 */
 	atomic_t		users;
 };
 
@@ -492,12 +569,24 @@ extern void consume_skb(struct sk_buff *skb);
 extern void	       __kfree_skb(struct sk_buff *skb);
 extern struct sk_buff *__alloc_skb(unsigned int size,
 				   gfp_t priority, int fclone, int node);
+
+/*
+分配一个缓冲区并初始化skb->data和skb->tail指针等于skb->head
+包括sk_buff结构，和线性区
+
+@size   	: 线性区长度(这里传的参数长度不包含struct skb_shared_info)
+@priority	: GFP_ATOMIC等类似参数或组合，是否允许睡眠等
+*/
 static inline struct sk_buff *alloc_skb(unsigned int size,
 					gfp_t priority)
 {
 	return __alloc_skb(size, priority, 0, NUMA_NO_NODE);
 }
 
+/*
+从skbuff_fclone_cache中分配
+传给__alloc_skb()的fast clone参数为1
+*/
 static inline struct sk_buff *alloc_skb_fclone(unsigned int size,
 					       gfp_t priority)
 {
@@ -577,6 +666,9 @@ static inline unsigned char *skb_end_pointer(const struct sk_buff *skb)
 #endif
 
 /* Internal */
+/*
+取struct sk_buff后面的struct skb_shared_info，参考分配函数__alloc_skb()
+*/
 #define skb_shinfo(SKB)	((struct skb_shared_info *)(skb_end_pointer(SKB)))
 
 static inline struct skb_shared_hwtstamps *skb_hwtstamps(struct sk_buff *skb)
@@ -664,6 +756,7 @@ static inline struct sk_buff *skb_queue_prev(const struct sk_buff_head *list,
  *	Makes another reference to a socket buffer and returns a pointer
  *	to the buffer.
  */
+/* skb使用计数+1，返回一个指向skb的指针，获取数据。 */
 static inline struct sk_buff *skb_get(struct sk_buff *skb)
 {
 	atomic_inc(&skb->users);
@@ -686,6 +779,7 @@ static inline struct sk_buff *skb_get(struct sk_buff *skb)
 static inline int skb_cloned(const struct sk_buff *skb)
 {
 	return skb->cloned &&
+			/* 低16位表示skb线性数据区的引用计数 */
 	       (atomic_read(&skb_shinfo(skb)->dataref) & SKB_DATAREF_MASK) != 1;
 }
 
@@ -696,6 +790,9 @@ static inline int skb_cloned(const struct sk_buff *skb)
  *	Returns true if modifying the header part of the buffer requires
  *	the data to be copied.
  */
+/*
+判断@skb的线性数据区是否被多个skb引用
+*/
 static inline int skb_header_cloned(const struct sk_buff *skb)
 {
 	int dataref;
@@ -1089,21 +1186,33 @@ static inline struct sk_buff *__skb_dequeue_tail(struct sk_buff_head *list)
 	return skb;
 }
 
-
+/*
+有分片长度，则是非线性的skb，即skb的数据不是全部在线性数据区
+即是否包含“paged data”或 frag_list
+包含“paged data”或 frag_list的是非线性化skb
+*/
 static inline int skb_is_nonlinear(const struct sk_buff *skb)
 {
 	return skb->data_len;
 }
 
+/*
+返回从 skb->data开始到 skb->tail 结束的线性buffer 区长度
+即线性区域实际使用长度
+*/
 static inline unsigned int skb_headlen(const struct sk_buff *skb)
 {
 	return skb->len - skb->data_len;
 }
 
+/*
+返回frags数组分片长度和线性区长度之和
+*/
 static inline int skb_pagelen(const struct sk_buff *skb)
 {
 	int i, len = 0;
 
+    /* 遍历struct skb_shared_info中frags数组内各分片，求各分片长度的和 */
 	for (i = (int)skb_shinfo(skb)->nr_frags - 1; i >= 0; i--)
 		len += skb_shinfo(skb)->frags[i].size;
 	return len + skb_headlen(skb);
@@ -1165,6 +1274,9 @@ static inline void skb_set_tail_pointer(struct sk_buff *skb, const int offset)
  *	Add data to an sk_buff
  */
 extern unsigned char *skb_put(struct sk_buff *skb, unsigned int len);
+/*
+和skb_put()相比，__skb_put()减少了线性区尾部有效性的检查
+*/
 static inline unsigned char *__skb_put(struct sk_buff *skb, unsigned int len)
 {
 	unsigned char *tmp = skb_tail_pointer(skb);
@@ -1175,6 +1287,9 @@ static inline unsigned char *__skb_put(struct sk_buff *skb, unsigned int len)
 }
 
 extern unsigned char *skb_push(struct sk_buff *skb, unsigned int len);
+/*
+和skb_push()相比，__skb_push()少了线性区头部有效性检查
+*/
 static inline unsigned char *__skb_push(struct sk_buff *skb, unsigned int len)
 {
 	skb->data -= len;
@@ -1183,6 +1298,9 @@ static inline unsigned char *__skb_push(struct sk_buff *skb, unsigned int len)
 }
 
 extern unsigned char *skb_pull(struct sk_buff *skb, unsigned int len);
+/*
+__skb_pull()只能操作线性区
+*/
 static inline unsigned char *__skb_pull(struct sk_buff *skb, unsigned int len)
 {
 	skb->len -= len;
@@ -1197,6 +1315,10 @@ static inline unsigned char *skb_pull_inline(struct sk_buff *skb, unsigned int l
 
 extern unsigned char *__pskb_pull_tail(struct sk_buff *skb, int delta);
 
+/*
+如果线性区长度不够的话，
+会重新分配线性区，并把paged data直至frag_list中的数据复制到新的线性区
+*/
 static inline unsigned char *__pskb_pull(struct sk_buff *skb, unsigned int len)
 {
 	if (len > skb_headlen(skb) &&
@@ -1206,17 +1328,27 @@ static inline unsigned char *__pskb_pull(struct sk_buff *skb, unsigned int len)
 	return skb->data += len;
 }
 
+/*
+可以操作paged data和frag_list
+*/
 static inline unsigned char *pskb_pull(struct sk_buff *skb, unsigned int len)
 {
 	return unlikely(len > skb->len) ? NULL : __pskb_pull(skb, len);
 }
 
+/*
+用于判断 skb 的线性 buffer 区可否 pull
+即保证线性区长度至少达到了@len长度
+随后便可以使用__skb_pull()来移动data指针
+如ip_rcv()中来判断报文至少要有个iphdr头的长度可用
+*/
 static inline int pskb_may_pull(struct sk_buff *skb, unsigned int len)
 {
 	if (likely(len <= skb_headlen(skb)))
 		return 1;
 	if (unlikely(len > skb->len))
 		return 0;
+	/* 调用__pskb_pull_tail()进行线性区补充 */
 	return __pskb_pull_tail(skb, len - skb_headlen(skb)) != NULL;
 }
 
@@ -1226,6 +1358,9 @@ static inline int pskb_may_pull(struct sk_buff *skb, unsigned int len)
  *
  *	Return the number of bytes of free space at the head of an &sk_buff.
  */
+/*
+该函数返回@skb可以push的空间大小，即首部剩余空间大小。
+*/
 static inline unsigned int skb_headroom(const struct sk_buff *skb)
 {
 	return skb->data - skb->head;
@@ -1237,8 +1372,13 @@ static inline unsigned int skb_headroom(const struct sk_buff *skb)
  *
  *	Return the number of bytes of free space at the tail of an sk_buff
  */
+/*
+该函数返回在sk_buff中可用于put的空间大小（尾部剩余空间）。
+*/
 static inline int skb_tailroom(const struct sk_buff *skb)
 {
+    /* 非线性化的skb则返回0
+       线性化的skb返回end与tail指针之间的大小 */
 	return skb_is_nonlinear(skb) ? 0 : skb->end - skb->tail;
 }
 
@@ -1250,6 +1390,12 @@ static inline int skb_tailroom(const struct sk_buff *skb)
  *	Increase the headroom of an empty &sk_buff by reducing the tail
  *	room. This is only allowed for an empty buffer.
  */
+/*
+该函数既增加skb->data又增加skb->tail，即在首部留出@len大小的空间。
+在填充缓冲区之前，可用该函数保留一部分首部空间。
+许多以太网卡在首部保留2字节空间，
+这样在14字节的以太网头的后面，IP头就能以16字节对齐了。
+*/
 static inline void skb_reserve(struct sk_buff *skb, int len)
 {
 	skb->data += len;
@@ -1261,6 +1407,7 @@ static inline void skb_reset_mac_len(struct sk_buff *skb)
 	skb->mac_len = skb->network_header - skb->mac_header;
 }
 
+/* 使用相对head指针的偏移方式 */
 #ifdef NET_SKBUFF_DATA_USES_OFFSET
 static inline unsigned char *skb_transport_header(const struct sk_buff *skb)
 {
@@ -1317,6 +1464,7 @@ static inline void skb_set_mac_header(struct sk_buff *skb, const int offset)
 }
 
 #else /* NET_SKBUFF_DATA_USES_OFFSET */
+/* 未定义NET_SKBUFF_DATA_USES_OFFSET，其他字段保存的为指针 */
 
 static inline unsigned char *skb_transport_header(const struct sk_buff *skb)
 {
@@ -1445,8 +1593,13 @@ static inline int pskb_network_may_pull(struct sk_buff *skb, unsigned int len)
 
 extern int ___pskb_trim(struct sk_buff *skb, unsigned int len);
 
+/*
+简单是修改len和tail
+该函数只能用于线性化的skb
+*/
 static inline void __skb_trim(struct sk_buff *skb, unsigned int len)
 {
+	/* 该函数只能用于线性化的skb */
 	if (unlikely(skb_is_nonlinear(skb))) {
 		WARN_ON(1);
 		return;
@@ -1457,6 +1610,13 @@ static inline void __skb_trim(struct sk_buff *skb, unsigned int len)
 
 extern void skb_trim(struct sk_buff *skb, unsigned int len);
 
+/*
+该函数可以处理非线性化skb
+
+两个下划线，如果 skb->data 区域包含“paged data”，即非线性化skb
+调用___pskb_trim()（三个下划线），
+线性化的skb则调用__skb_trim()。
+*/
 static inline int __pskb_trim(struct sk_buff *skb, unsigned int len)
 {
 	if (skb->data_len)
@@ -1465,6 +1625,12 @@ static inline int __pskb_trim(struct sk_buff *skb, unsigned int len)
 	return 0;
 }
 
+/*
+检查 len 的合法性，只有比 skb->len 小，才能调用__pskb_trim
+否则什么都不做
+
+可以处理非线性化的skb
+*/
 static inline int pskb_trim(struct sk_buff *skb, unsigned int len)
 {
 	return (len < skb->len) ? __pskb_trim(skb, len) : 0;
@@ -1479,6 +1645,10 @@ static inline int pskb_trim(struct sk_buff *skb, unsigned int len)
  *	the skb is not cloned so we should never get an error due to out-
  *	of-memory.
  */
+/*
+就是 pskb_trim，由调用者保证 skb 没被 clone，
+则不会出现需要重新分配数据区导致 out-of-memory 而造成pskb_trim 返回错误
+*/
 static inline void pskb_trim_unique(struct sk_buff *skb, unsigned int len)
 {
 	int err = pskb_trim(skb, len);
@@ -1677,6 +1847,15 @@ static inline int skb_cow_head(struct sk_buff *skb, unsigned int headroom)
  *	success. The skb is freed on error.
  */
  
+/*
+在skb尾部添加数据0，保证skb的数据长度至少达到@len
+如以太网中skb至少需要ETH_ZLEN的长度
+
+@skb    : 原skb
+@len    : skb的新长度，尾部填0
+
+返回0，表示成功
+*/
 static inline int skb_padto(struct sk_buff *skb, unsigned int len)
 {
 	unsigned int size = skb->len;
@@ -1717,6 +1896,10 @@ static inline int skb_can_coalesce(struct sk_buff *skb, int i,
 	return 0;
 }
 
+/*
+重新分配线性区，把paged data和frag_list复制到线性区buffer中
+即让@skb线性化
+*/
 static inline int __skb_linearize(struct sk_buff *skb)
 {
 	return __pskb_pull_tail(skb, skb->data_len) ? 0 : -ENOMEM;
@@ -1729,6 +1912,12 @@ static inline int __skb_linearize(struct sk_buff *skb)
  *	If there is no free memory -ENOMEM is returned, otherwise zero
  *	is returned and the old skb data released.
  */
+/*
+使@skb线性化
+
+返回0，说明skb是线性化的(原来就是线性化的，或已经成功线性化了)
+如果新的线性区申请失败，将返回-ENOMEM
+*/
 static inline int skb_linearize(struct sk_buff *skb)
 {
 	return skb_is_nonlinear(skb) ? __skb_linearize(skb) : 0;
@@ -1741,6 +1930,10 @@ static inline int skb_linearize(struct sk_buff *skb)
  *	If there is no free memory -ENOMEM is returned, otherwise zero
  *	is returned and the old skb data released.
  */
+/*
+skb_linearize_cow() 除了把 skb 线性化，而且保证 skb 的数据区可写
+（被 clone 了就调用 pskb_expand_head()复制一份数据区）
+*/
 static inline int skb_linearize_cow(struct sk_buff *skb)
 {
 	return skb_is_nonlinear(skb) || skb_cloned(skb) ?
@@ -1835,6 +2028,10 @@ static inline void skb_frag_add_head(struct sk_buff *skb, struct sk_buff *frag)
 	skb_shinfo(skb)->frag_list = frag;
 }
 
+/*
+遍历frag_list单链表
+用宏进行了封装
+*/
 #define skb_walk_frags(skb, iter)	\
 	for (iter = skb_shinfo(skb)->frag_list; iter; iter = iter->next)
 
@@ -1887,14 +2084,24 @@ extern int	       skb_shift(struct sk_buff *tgt, struct sk_buff *skb,
 
 extern struct sk_buff *skb_segment(struct sk_buff *skb, u32 features);
 
+/*
+从@skb的线性区中取一定长度数据的指针
+
+@offset	: 从skb->data开始后的錊offset起
+@len	: 待取数据长度
+@buffer	: 调用处提供的一个缓冲区
+*/
 static inline void *skb_header_pointer(const struct sk_buff *skb, int offset,
 				       int len, void *buffer)
 {
 	int hlen = skb_headlen(skb);
 
+	/* 如果线性区长度足够长，能够包含到@offset处长度@len的指针
+	   则直接返回@skb线性区中的对应位置指针 */
 	if (hlen - offset >= len)
 		return skb->data + offset;
 
+	/* 线性区未包含到@offset处长度@len指针，则将数据复制到@buffer内 */
 	if (skb_copy_bits(skb, offset, buffer, len) < 0)
 		return NULL;
 
@@ -1908,10 +2115,17 @@ static inline void skb_copy_from_linear_data(const struct sk_buff *skb,
 	memcpy(to, skb->data, len);
 }
 
+/*
+@skb    : 源skb
+@offset : 源skb的新长度，即在源skb线性区的分割点
+@to     : 目的指针
+@len    : 源skb线性区剩余长度
+*/
 static inline void skb_copy_from_linear_data_offset(const struct sk_buff *skb,
 						    const int offset, void *to,
 						    const unsigned int len)
 {
+	/* 把源skb线性区分割点后的长度@len内容复制到新skb线性区内 */
 	memcpy(to, skb->data + offset, len);
 }
 
