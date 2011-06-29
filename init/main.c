@@ -469,6 +469,7 @@ start_kernel()函数被调用，进入体系结构无关的内核部分。
 asmlinkage void __init start_kernel(void)
 {
 	char * command_line;
+	/* 引用2个内核符号，在链接脚本vmlinux.lds.h中定义的内核参数起始地址 */
 	extern const struct kernel_param __start___param[], __stop___param[];
 
 	smp_setup_processor_id();
@@ -496,6 +497,8 @@ asmlinkage void __init start_kernel(void)
  * Interrupts are still disabled. Do necessary setups, then
  * enable them
  */
+	/* 时钟中断初始化，向通知链clockevents_chain注册了tick_notifier
+	   回调函数tick_notify()处理时钟事件 */
 	tick_init();
 	boot_cpu_init();
 	/* 初始化页地址，使用链表将其链接起来 */
