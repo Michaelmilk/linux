@@ -617,16 +617,30 @@ static inline void INIT_HLIST_NODE(struct hlist_node *h)
 	h->pprev = NULL;
 }
 
+/*
+判断该@h结点是否已经加入了某个链表
+没加入则返回1
+*/
 static inline int hlist_unhashed(const struct hlist_node *h)
 {
 	return !h->pprev;
 }
 
+/*
+判断哈希链表头下面的first指针是否为空，空说明该链表下没有哈希结点
+空则返回1
+*/
 static inline int hlist_empty(const struct hlist_head *h)
 {
 	return !h->first;
 }
 
+/*
+要确保@n是链表中的结点，否则pprev为NULL，*pprev就出错了
+最好不要直接使用这个函数
+
+@n	: 链表中的结点
+*/
 static inline void __hlist_del(struct hlist_node *n)
 {
 	struct hlist_node *next = n->next;
@@ -636,6 +650,10 @@ static inline void __hlist_del(struct hlist_node *n)
 		next->pprev = pprev;
 }
 
+/*
+将@n结点移出链表，并设置指针为POISON
+这里也要确保@n是链表中的结点
+*/
 static inline void hlist_del(struct hlist_node *n)
 {
 	__hlist_del(n);
@@ -643,6 +661,10 @@ static inline void hlist_del(struct hlist_node *n)
 	n->pprev = LIST_POISON2;
 }
 
+/*
+把结点@n从链表中移出，并将指针初始化为NULL
+这里判断了@n是否在链表中，直接使用此函数比较安全
+*/
 static inline void hlist_del_init(struct hlist_node *n)
 {
 	if (!hlist_unhashed(n)) {
@@ -651,17 +673,37 @@ static inline void hlist_del_init(struct hlist_node *n)
 	}
 }
 
+/*
+@n会加在@h后，成为桶链表中的第一个节点
+
+@n	: 新结点
+@h	: 哈希桶的头结点
+*/
 static inline void hlist_add_head(struct hlist_node *n, struct hlist_head *h)
 {
 	struct hlist_node *first = h->first;
+	/* 使用next指针串入链表 */
 	n->next = first;
+	/* 原first结点的pprev记录新结点的next指针 */
 	if (first)
 		first->pprev = &n->next;
+	/* 头结点的first指向新的第一个结点 */
 	h->first = n;
+	/* 此时@n是hash表的第一个结点了
+	   因此它的pprev指向的是hash表头结点的first指针的地址 */
 	n->pprev = &h->first;
 }
 
+/*
+hlist_add_before()和hlist_add_after()两个函数
+中的参数顺序暗示说明了操作后结点在链表中的顺序
+*/
+
 /* next must be != NULL */
+/*
+@n		: 新结点
+@next 	: 一定不能为NULL，@n会加在@next前面
+*/
 static inline void hlist_add_before(struct hlist_node *n,
 					struct hlist_node *next)
 {
@@ -671,6 +713,12 @@ static inline void hlist_add_before(struct hlist_node *n,
 	*(n->pprev) = n;
 }
 
+/*
+将结点@next加在@n的后面
+
+@n		: 链表中原有的结点
+@next	: 新结点
+*/
 static inline void hlist_add_after(struct hlist_node *n,
 					struct hlist_node *next)
 {
@@ -717,6 +765,12 @@ static inline void hlist_move_list(struct hlist_head *old,
  * @head:	the head for your list.
  * @member:	the name of the hlist_node within the struct.
  */
+/*
+@tpos	: 容器结构指针，临时的局部变量
+@pos	: struct hlist_node指针，临时局部变量，相当于for中的i
+@head	: struct hlist_head指针，待遍历的桶头结点
+@member	: 容器结构中内嵌的struct hlist_node变量名称
+*/
 #define hlist_for_each_entry(tpos, pos, head, member)			 \
 	for (pos = (head)->first;					 \
 	     pos &&							 \
