@@ -227,6 +227,25 @@ struct hlist_head {
 	struct hlist_node *first;
 };
 
+/*
+pprev域被设计成hlist_node的二级指针，
+而且指向前一个节点的next域(或者对于第一个节点，指向表头的first域)
+为什么要设计成这样？
+考虑普通的单链表，如下：
+struct node {
+      struct node *next;
+};
+对于这样的链表，在指定节点(a)后插入节点(b)很容易：b->next = a->next; a->next = b;
+但是要在指定节点(a)前插入(b)则很麻烦：
+先通过while(i->next == a) i = i->next;
+得到a的前一个节点，然后再进行i->next = b; b->next = a;进行插入；
+这就花费一定的时间用来搜索a的前一个节点。
+linux要节省这部分时间。
+分析一下，搜索的目的是修改上一个节点的next域。
+为了省去搜索，hlist_node便增加了pprev域指向上一个节点的next域。
+要修改上一个节点的next，可以用*pprev = ? 快速的修改。
+总结一下，引入**pprev域是把单链表的前插操作最优。
+*/
 struct hlist_node {
 	struct hlist_node *next, **pprev;
 };
