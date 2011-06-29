@@ -420,8 +420,13 @@ void __init parse_early_param(void)
 
 static void __init boot_cpu_init(void)
 {
+	/* 取当前cpu，即当前运行在哪个核上 */
 	int cpu = smp_processor_id();
 	/* Mark the boot cpu "present", "online" etc for SMP and UP case */
+	/* SMP : symmetric multiple processor 对称多处理器
+	   UP : Uni processor 单处理器
+
+	   设置cpu对应的bit位 */
 	set_cpu_online(cpu, true);
 	set_cpu_active(cpu, true);
 	set_cpu_present(cpu, true);
@@ -453,6 +458,14 @@ static void __init mm_init(void)
 	vmalloc_init();
 }
 
+/*
+start_kernel()函数被调用，进入体系结构无关的内核部分。
+自此，内核的引导过程告一段落，进入内核的初始化过程。
+
+从start_kernel()函数开始，内核即进入了C语言部分，
+它完成了内核的大部分初始化工作。
+实际上，可以将start_kernel函数看做内核的main函数。
+*/
 asmlinkage void __init start_kernel(void)
 {
 	char * command_line;
@@ -470,10 +483,12 @@ asmlinkage void __init start_kernel(void)
 	/*
 	 * Set up the the initial canary ASAP:
 	 */
+	/* ASAP : as soon as possible */
 	boot_init_stack_canary();
 
 	cgroup_init_early();
 
+	/* 关闭当前CPU的中断 */
 	local_irq_disable();
 	early_boot_irqs_disabled = true;
 
@@ -483,21 +498,34 @@ asmlinkage void __init start_kernel(void)
  */
 	tick_init();
 	boot_cpu_init();
+	/* 初始化页地址，使用链表将其链接起来 */
 	page_address_init();
+	/* 打印linux内核版本信息 */
 	printk(KERN_NOTICE "%s", linux_banner);
+	/* 根据bios和boot loader传递的参数收集系统硬件信息
+	   设置与体系结构相关的环境
+
+       每种体系结构都有自己的setup_arch()函数，是体系结构相关的，
+       具体编译哪个体系结构的setup_arch()函数,
+       由源码树顶层目录下的Makefile中的ARCH变量决定 */
 	setup_arch(&command_line);
 	mm_init_owner(&init_mm, &init_task);
 	mm_init_cpumask(&init_mm);
+	/* 复制参数 */
 	setup_command_line(command_line);
 	setup_nr_cpu_ids();
+	/* 每个CPU分配pre-cpu结构内存，并复制.data.percpu段的数据 */
 	setup_per_cpu_areas();
 	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
 
 	build_all_zonelists(NULL);
 	page_alloc_init();
 
+	/* 在终端打印内核参数 */
 	printk(KERN_NOTICE "Kernel command line: %s\n", boot_command_line);
+	/* 处理内核参数 */
 	parse_early_param();
+	/* 对模块参数进行处理 */
 	parse_args("Booting kernel", static_command_line, __start___param,
 		   __stop___param - __start___param,
 		   &unknown_bootoption);
@@ -506,10 +534,14 @@ asmlinkage void __init start_kernel(void)
 	 * kmem_cache_init()
 	 */
 	setup_log_buf(0);
+	/* 初始化pid hash表，便于从进程的PID获得对应的进程描述符指针 */
 	pidhash_init();
+	/* 虚拟文件系统的初始化 */
 	vfs_caches_init_early();
 	sort_main_extable();
+	/* trap_init()函数完成对系统保留中断向量(异常、非屏蔽中断以及系统调用)的初始化 */
 	trap_init();
+	/* 内存管理相关初始化，设置内存上下界和页表项初始值 */
 	mm_init();
 
 	/*
@@ -517,12 +549,14 @@ asmlinkage void __init start_kernel(void)
 	 * timer interrupt). Full topology setup happens at smp_init()
 	 * time - but meanwhile we still have a functioning scheduler.
 	 */
+	/* 初始化进程调度模块 */
 	sched_init();
 	/*
 	 * Disable preemption - early bootup scheduling is extremely
 	 * fragile until we cpu_idle() for the first time.
 	 */
 	preempt_disable();
+	/* 检查中断是否已经打开，如果已经打开，则关闭中断 */
 	if (!irqs_disabled()) {
 		printk(KERN_WARNING "start_kernel(): bug: interrupts were "
 				"enabled *very* early, fixing it\n");
@@ -530,17 +564,24 @@ asmlinkage void __init start_kernel(void)
 	}
 	idr_init_cache();
 	perf_event_init();
+	/* 初始化RCU(Read-Copy Update)机制 */
 	rcu_init();
 	radix_tree_init();
 	/* init some links before init_ISA_irqs() */
 	early_irq_init();
+	/* init_IRQ()函数则完成其余中断向量(外部中断)的初始化 */
 	init_IRQ();
 	prio_tree_init();
+	/* 初始化定时器相关的数据结构 */
 	init_timers();
+	/* 对高精度时钟进行初始化 */
 	hrtimers_init();
+	/* 初始化TASKLET_SOFTIRQ和HI_SOFTIRQ */
 	softirq_init();
 	timekeeping_init();
+	/* 系统时钟相关初始化 */
 	time_init();
+	/* oprofile系统性能分析模块的初始化 */
 	profile_init();
 	if (!irqs_disabled())
 		printk(KERN_CRIT "start_kernel(): bug: interrupts were "
@@ -558,6 +599,7 @@ asmlinkage void __init start_kernel(void)
 	 * we've done PCI setups etc, and console_init() must be aware of
 	 * this. But we do want output early, in case something goes wrong.
 	 */
+	/* 控制台初始化 */
 	console_init();
 	if (panic_later)
 		panic(panic_later, panic_param);
@@ -587,9 +629,13 @@ asmlinkage void __init start_kernel(void)
 	kmemleak_init();
 	setup_per_cpu_pageset();
 	numa_policy_init();
+	/* 系统时钟相关初始化
+	   时间、定时器初始化(包括读取CMOS时钟、估测主频、初始化定时器中断等)
+	   对于x86,late_time_init在上面的函数time_init()中赋值为x86_late_time_init() */
 	if (late_time_init)
 		late_time_init();
 	sched_clock_init();
+	/* 延迟校准(获得时钟jiffies与CPU主频ticks的延迟) */
 	calibrate_delay();
 	pidmap_init();
 	anon_vma_init();
@@ -599,17 +645,21 @@ asmlinkage void __init start_kernel(void)
 #endif
 	thread_info_cache_init();
 	cred_init();
+	/* 根据物理内存大小计算允许创建进程的数量 */
 	fork_init(totalram_pages);
 	proc_caches_init();
+	/* 块设备读写缓冲区初始化(同时创建"buffer_head"cache用户加速访问) */
 	buffer_init();
 	key_init();
 	security_init();
 	dbg_late_init();
 	vfs_caches_init(totalram_pages);
+	/* 创建信号队列sigqueue_cachep */
 	signals_init();
 	/* rootfs populating might need page-writeback */
 	page_writeback_init();
 #ifdef CONFIG_PROC_FS
+	/* 初始化proc文件系统 */
 	proc_root_init();
 #endif
 	cgroup_init();
@@ -625,6 +675,7 @@ asmlinkage void __init start_kernel(void)
 	ftrace_init();
 
 	/* Do the rest non-__init'ed, we're now alive */
+	/* 建立2个内核线程继续对内核进行初始化 */
 	rest_init();
 }
 
