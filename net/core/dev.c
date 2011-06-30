@@ -1349,6 +1349,7 @@ void dev_disable_lro(struct net_device *dev)
 EXPORT_SYMBOL(dev_disable_lro);
 
 
+/* 设备启动阶段 */
 static int dev_boot_phase = 1;
 
 /**
@@ -5116,6 +5117,8 @@ int dev_ioctl(struct net *net, unsigned int cmd, void __user *arg)
  */
 static int dev_new_index(struct net *net)
 {
+	/* ifindex依然是个静态变量
+	   虽然有了net命名空间，但是设备的ifindex仍是唯一的 */
 	static int ifindex;
 	for (;;) {
 		if (++ifindex <= 0)
@@ -6251,20 +6254,28 @@ u32 netdev_increment_features(u32 all, u32 one, u32 mask)
 }
 EXPORT_SYMBOL(netdev_increment_features);
 
+/*
+创建哈希表
+*/
 static struct hlist_head *netdev_create_hash(void)
 {
 	int i;
 	struct hlist_head *hash;
 
+	/* 申请NETDEV_HASHENTRIES个struct hlist_head空间，作为哈希表的N个桶头 */
 	hash = kmalloc(sizeof(*hash) * NETDEV_HASHENTRIES, GFP_KERNEL);
 	if (hash != NULL)
 		for (i = 0; i < NETDEV_HASHENTRIES; i++)
+			/* 初始化桶头结点的first域为NULL */
 			INIT_HLIST_HEAD(&hash[i]);
 
 	return hash;
 }
 
 /* Initialize per network namespace state */
+/*
+初始化每个network命名空间的设备链表、设备名哈希表、设备索引哈希表
+*/
 static int __net_init netdev_init(struct net *net)
 {
 	INIT_LIST_HEAD(&net->dev_base_head);
@@ -6369,6 +6380,9 @@ define_netdev_printk_level(netdev_warn, KERN_WARNING);
 define_netdev_printk_level(netdev_notice, KERN_NOTICE);
 define_netdev_printk_level(netdev_info, KERN_INFO);
 
+/*
+释放由netdev_init()中动态申请的哈希表桶头数组
+*/
 static void __net_exit netdev_exit(struct net *net)
 {
 	kfree(net->dev_name_head);
@@ -6401,6 +6415,7 @@ static void __net_exit default_device_exit(struct net *net)
 			continue;
 
 		/* Push remaining network devices to init_net */
+		/* 使用ifindex生成新的设备名称，参考dev_new_index() */
 		snprintf(fb_name, IFNAMSIZ, "dev%d", dev->ifindex);
 		err = dev_change_net_namespace(dev, &init_net, fb_name);
 		if (err) {
@@ -6453,18 +6468,25 @@ static struct pernet_operations __net_initdata default_device_ops = {
  *       This is called single threaded during boot, so no need
  *       to take the rtnl semaphore.
  */
+/*
+网络设备的初始化中，一些重要的流程，如Traffic Control、单个CPU的输入列队等等，
+是在系统启动的时候由函数net_dev_init()来完成的
+*/
 static int __init net_dev_init(void)
 {
 	int i, rc = -ENOMEM;
 
+	/* 控制该函数只能在设备启动阶段运行1次 */
 	BUG_ON(!dev_boot_phase);
 
+	/* 初始化proc文件系统 */
 	if (dev_proc_init())
 		goto out;
 
 	if (netdev_kobject_init())
 		goto out;
 
+	/* 初始化ptype_all和ptype_base[]链表头 */
 	INIT_LIST_HEAD(&ptype_all);
 	for (i = 0; i < PTYPE_HASH_SIZE; i++)
 		INIT_LIST_HEAD(&ptype_base[i]);
@@ -6476,7 +6498,10 @@ static int __init net_dev_init(void)
 	 *	Initialise the packet receive queues.
 	 */
 
+    /* 遍历每一个CPU，取得它的softnet_data，并初始化相应字段
+       它是一个struct softnet_data的per_cpu变量 */
 	for_each_possible_cpu(i) {
+		/* 取得第i个cpu的softnet_data指针 */
 		struct softnet_data *sd = &per_cpu(softnet_data, i);
 
 		memset(sd, 0, sizeof(*sd));
@@ -6499,6 +6524,7 @@ static int __init net_dev_init(void)
 		sd->backlog.gro_count = 0;
 	}
 
+	/* 其他网络设备可以加载了，即接口函数可以调用了，比如register_netdevice()函数 */
 	dev_boot_phase = 0;
 
 	/* The loopback device is special if any other network devices
@@ -6516,10 +6542,14 @@ static int __init net_dev_init(void)
 	if (register_pernet_device(&default_device_ops))
 		goto out;
 
+	/* 注册发送软中断函数和接收软中断函数 */
 	open_softirq(NET_TX_SOFTIRQ, net_tx_action);
 	open_softirq(NET_RX_SOFTIRQ, net_rx_action);
 
+	/* 在通知链cpu_chain上注册回调函数dev_cpu_callback()
+	   以便在cpu移除时处理其上的per_cpu变量，如发送回收skb */
 	hotcpu_notifier(dev_cpu_callback, 0);
+	/* 在通知链netdev_chain上注册回调函数，处理邻居表和路由表 */
 	dst_init();
 	dev_mcast_init();
 	rc = 0;
