@@ -18,9 +18,18 @@
  */
 
 static LIST_HEAD(pernet_list);
+/*
+first_device指针指向链表中的第一个设备的pernet_operations.list
+初始值为指向pernet_list头结点
+在第一次调用register_pernet_device()时将其指向第一个设备的pernet_operations.list
+*/
 static struct list_head *first_device = &pernet_list;
 static DEFINE_MUTEX(net_mutex);
 
+/*
+struct net命名空间链表头
+所有的network命名空间实例都由内嵌的list变量加入此链表
+*/
 LIST_HEAD(net_namespace_list);
 EXPORT_SYMBOL_GPL(net_namespace_list);
 
@@ -68,6 +77,9 @@ assign:
 	return 0;
 }
 
+/*
+使用@ops提供的init方法初始化命名空间@net
+*/
 static int ops_init(const struct pernet_operations *ops, struct net *net)
 {
 	int err;
@@ -82,6 +94,8 @@ static int ops_init(const struct pernet_operations *ops, struct net *net)
 			return err;
 		}
 	}
+	/* 如果有init函数的话，则调用
+	   例如调用netdev_init()函数为此命名空间初始化哈希表 */
 	if (ops->init)
 		return ops->init(net);
 	return 0;
@@ -120,6 +134,9 @@ static void ops_free_list(const struct pernet_operations *ops,
 /*
  * setup_net runs the initializers for the network namespace object.
  */
+/*
+初始化network命名空间指针@net指向的一个实例对象
+*/
 static __net_init int setup_net(struct net *net)
 {
 	/* Must be called with net_mutex held */
@@ -162,6 +179,7 @@ out_undo:
 static struct net_generic *net_alloc_generic(void)
 {
 	struct net_generic *ng;
+	/* 为结构net_generic的0长度数组留空间 */
 	size_t generic_size = sizeof(struct net_generic) +
 		INITIAL_NET_GEN_PTRS * sizeof(void *);
 
@@ -371,6 +389,7 @@ static int __init net_ns_init(void)
 	struct net_generic *ng;
 
 #ifdef CONFIG_NET_NS
+	/* 建立struct net缓存 */
 	net_cachep = kmem_cache_create("net_namespace", sizeof(struct net),
 					SMP_CACHE_BYTES,
 					SLAB_PANIC, NULL);
@@ -388,10 +407,12 @@ static int __init net_ns_init(void)
 	rcu_assign_pointer(init_net.gen, ng);
 
 	mutex_lock(&net_mutex);
+	/* 初始化network命名空间init_net */
 	if (setup_net(&init_net))
 		panic("Could not setup the initial network namespace");
 
 	rtnl_lock();
+	/* 链入net_namespace_list */
 	list_add_tail_rcu(&init_net.list, &net_namespace_list);
 	rtnl_unlock();
 
@@ -408,11 +429,15 @@ static int __register_pernet_operations(struct list_head *list,
 {
 	struct net *net;
 	int error;
+	/* 记录已经调用了ops_init()的命名空间
+	   以便某链表中某个命名空间出错时进行清理工作 */
 	LIST_HEAD(net_exit_list);
 
 	list_add_tail(&ops->list, list);
 	if (ops->init || (ops->id && ops->size)) {
+		/* 遍历net_namespace_list链表，即所有的net命名空间实例 */
 		for_each_net(net) {
+			/* 在每一个命名空间上调用ops_init() */
 			error = ops_init(ops, net);
 			if (error)
 				goto out_undo;
@@ -443,6 +468,7 @@ static void __unregister_pernet_operations(struct pernet_operations *ops)
 
 #else
 
+/* 没有配置CONFIG_NET_NS的话，只需操作一个默认的命名空间init_net */
 static int __register_pernet_operations(struct list_head *list,
 					struct pernet_operations *ops)
 {
@@ -571,6 +597,7 @@ int register_pernet_device(struct pernet_operations *ops)
 	int error;
 	mutex_lock(&net_mutex);
 	error = register_pernet_operations(&pernet_list, ops);
+	/* first_device指针指向第一个设备的pernet_operations.list */
 	if (!error && (first_device == &pernet_list))
 		first_device = &ops->list;
 	mutex_unlock(&net_mutex);

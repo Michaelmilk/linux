@@ -48,6 +48,7 @@ struct net {
 #endif
 	spinlock_t		rules_mod_lock;
 
+	/* list链入全局链表net_namespace_list */
 	struct list_head	list;		/* list of network namespaces */
 	struct list_head	cleanup_list;	/* namespaces on death row */
 	struct list_head	exit_list;	/* Use only net_mutex */
@@ -62,8 +63,11 @@ struct net {
 	struct sock 		*rtnl;			/* rtnetlink socket */
 	struct sock		*genl_sock;
 
+	/* net_device设备链表 */
 	struct list_head 	dev_base_head;
+	/* dev_name_head指向一片hlist_head[]，设备名称的哈希表 */
 	struct hlist_head 	*dev_name_head;
+	/* dev_index_head指向一片hlist_head[]，设备索引的哈希表 */
 	struct hlist_head	*dev_index_head;
 
 	/* core fib_rules */
@@ -229,6 +233,11 @@ static inline struct net *read_pnet(struct net * const *pnet)
 
 #endif
 
+/*
+遍历net_namespace_list链表
+
+@VAR : 容器结构struct net的一个局部临时指针
+*/
 #define for_each_net(VAR)				\
 	list_for_each_entry(VAR, &net_namespace_list, list)
 
@@ -245,6 +254,10 @@ static inline struct net *read_pnet(struct net * const *pnet)
 #define __net_initdata	__initdata
 #endif
 
+/*
+每个net命名空间的操作函数
+该结构描述的实例包含的回调函数将会在每个命名空间里被调用
+*/
 struct pernet_operations {
 	struct list_head list;
 	int (*init)(struct net *net);
