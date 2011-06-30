@@ -223,6 +223,9 @@ struct list_head {
 	struct list_head *next, *prev;
 };
 
+/*
+哈希链表的桶头结点，相对hlist_node节省了一个指针空间
+*/
 struct hlist_head {
 	struct hlist_node *first;
 };
