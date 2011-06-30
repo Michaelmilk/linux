@@ -344,6 +344,8 @@ typedef unsigned char *sk_buff_data_t;
 
 struct sk_buff {
 	/* These two members must be first. */
+	/* 这2个指针必须在最前面，参考struct sk_buff_head
+	   可以由这2个指针链入sk_buff_head */
 	struct sk_buff		*next;
 	struct sk_buff		*prev;
 
