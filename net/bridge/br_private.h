@@ -58,16 +58,26 @@ struct br_ip
 	__be16		proto;
 };
 
+/*
+每一个 MAC地址--端口 对应着一个fdb项
+内核中使用哈希链表来组织，使用net_bridge_fdb_entry类型
+*/
 struct net_bridge_fdb_entry
 {
+	/* 用于CAM表连接的哈希链表节点 */
 	struct hlist_node		hlist;
+	/* 对应的描述接口设备的指针，其中包含一个net_device的指针指向该接口 */
 	struct net_bridge_port		*dst;
 
 	struct rcu_head			rcu;
 	unsigned long			updated;
+	/* 当前引用计数 */
 	unsigned long			used;
+	/* mac地址 */
 	mac_addr			addr;
+	/* 标明是否为本机MAC地址 */
 	unsigned char			is_local;
+	/* 标明是否为静态地址项 */
 	unsigned char			is_static;
 };
 
@@ -106,18 +116,26 @@ struct net_bridge_mdb_htable
 	u32				ver;
 };
 
+/*
+描述网桥设备下接口的数据结构
+*/
 struct net_bridge_port
 {
+	/* 从属的网桥设备，接口到网桥的反向指针 */
 	struct net_bridge		*br;
+	/* 实际的接口设备，物理接口或者是一个虚拟接口 */
 	struct net_device		*dev;
 	struct list_head		list;
 
 	/* STP */
+	/* STP协议的相关参数 */
 	u8				priority;
 	u8				state;
+	/* 本端口在网桥中的编号 */
 	u16				port_no;
 	unsigned char			topology_change_ack;
 	unsigned char			config_pending;
+	/* 端口的ID，在从端口发出的BPDU中，会将这个端口的ID存入BPDU中 */
 	port_id				port_id;
 	port_id				designated_port;
 	bridge_id			designated_root;
@@ -125,6 +143,7 @@ struct net_bridge_port
 	u32				path_cost;
 	u32				designated_cost;
 
+	/* STP控制超时的一些定时器链表 */
 	struct timer_list		forward_delay_timer;
 	struct timer_list		hold_timer;
 	struct timer_list		message_age_timer;
@@ -174,14 +193,28 @@ struct br_cpu_netstats {
 	struct u64_stats_sync	syncp;
 };
 
+/*
+一个net_bridge结构描述了一个桥设备
+*/
 struct net_bridge
 {
+	/* 网桥的锁 */
 	spinlock_t			lock;
+	/* 桥组中的端口列表 net_bridge_port */
 	struct list_head		port_list;
+	/* 网桥会建立一个虚拟设备来进行管理，这个设备的MAC地址是动态指定的，
+	   通常就是桥组中一个物理端口的MAC地址
+       网桥对应的设备，如:br0 */
 	struct net_device		*dev;
 
+	/* 网桥中虚拟网卡的统计数据，指向每cpu变量
+	   br_dev_init()初始化时会为每个cpu分配一个统计结构实例 */
 	struct br_cpu_netstats __percpu *stats;
+	/* 哈希表的锁 */
 	spinlock_t			hash_lock;
+	/* 存放的是net_bridge_fdb_entry的哈希表，实际上就是mac和port的对应表
+       实际上在内核中，整个CAM表是用net_bridge->hash[]这个数组来存储的，
+       其哈希值是使用MAC地址进行哈希运算得到的一个值 */
 	struct hlist_head		hash[BR_HASH_SIZE];
 #ifdef CONFIG_BRIDGE_NETFILTER
 	struct rtable 			fake_rtable;
@@ -193,7 +226,10 @@ struct net_bridge
 #define BR_SET_MAC_ADDR		0x00000001
 
 	/* STP */
+	/* 与STP协议对应的一些数据 */
+	/* 网络中根桥的ID */
 	bridge_id			designated_root;
+	/* 网桥本身的ID */
 	bridge_id			bridge_id;
 	u32				root_path_cost;
 	unsigned long			max_age;
@@ -244,6 +280,7 @@ struct net_bridge
 	struct timer_list		multicast_query_timer;
 #endif
 
+	/* STP使用的一些定时器链表 */
 	struct timer_list		hello_timer;
 	struct timer_list		tcn_timer;
 	struct timer_list		topology_change_timer;

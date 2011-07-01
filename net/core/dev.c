@@ -3076,6 +3076,14 @@ out:
  *
  *	For a general description of rx_handler, see enum rx_handler_result.
  */
+/*
+为从属设备接口@dev注册处理函数
+目前内核中有以下几种模型的回调函数
+
+br_handle_frame()
+bond_handle_frame()
+macvlan_handle_frame()
+*/
 int netdev_rx_handler_register(struct net_device *dev,
 			       rx_handler_func_t *rx_handler,
 			       void *rx_handler_data)
@@ -3172,6 +3180,8 @@ another_round:
 ncls:
 #endif
 
+	/* 内核中由netdev_rx_handler_register()为不同模型注册了以下几个函数
+	   br_handle_frame() bond_handle_frame() macvlan_handle_frame() */
 	rx_handler = rcu_dereference(skb->dev->rx_handler);
 	if (rx_handler) {
 		if (pt_prev) {
@@ -4310,6 +4320,9 @@ static int __init dev_proc_init(void)
  *	a negative errno code is returned. On success the reference counts
  *	are adjusted and the function returns zero.
  */
+/*
+设置该从属设备@slave的master指针
+*/
 int netdev_set_master(struct net_device *slave, struct net_device *master)
 {
 	struct net_device *old = slave->master;

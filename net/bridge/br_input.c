@@ -144,12 +144,16 @@ rx_handler_result_t br_handle_frame(struct sk_buff **pskb)
 {
 	struct net_bridge_port *p;
 	struct sk_buff *skb = *pskb;
+	/* 源skb报文的目的mac */
 	const unsigned char *dest = eth_hdr(skb)->h_dest;
 	br_should_route_hook_t *rhook;
 
+	/* 不处理PACKET_LOOPBACK */
 	if (unlikely(skb->pkt_type == PACKET_LOOPBACK))
 		return RX_HANDLER_PASS;
 
+    /* 检测源mac合法性，源mac不可为全0、多播或广播地址
+	   即源mac只能为确定的L2单播地址 */
 	if (!is_valid_ether_addr(eth_hdr(skb)->h_source))
 		goto drop;
 

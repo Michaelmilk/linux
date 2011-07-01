@@ -143,6 +143,9 @@ static void vlan_set_encap_proto(struct sk_buff *skb, struct vlan_hdr *vhdr)
 		skb->protocol = htons(ETH_P_802_2);
 }
 
+/*
+去掉vlan报文的vlan头，vlanid提取出来后保存在skb->vlan_tci字段
+*/
 struct sk_buff *vlan_untag(struct sk_buff *skb)
 {
 	struct vlan_hdr *vhdr;

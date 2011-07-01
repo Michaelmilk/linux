@@ -312,6 +312,10 @@ u32 br_features_recompute(struct net_bridge *br, u32 features)
 }
 
 /* called with RTNL */
+/*
+@br		: 描述网桥的结构实例
+@dev	: 待加入网桥的从属设备接口
+*/
 int br_add_if(struct net_bridge *br, struct net_device *dev)
 {
 	struct net_bridge_port *p;
@@ -319,28 +323,36 @@ int br_add_if(struct net_bridge *br, struct net_device *dev)
 	bool changed_addr;
 
 	/* Don't allow bridging non-ethernet like devices */
+	/* 有IFF_LOOPBACK标记的设备
+	   或非以太网设备
+	   或地址长度不是以太网地址长度的接口不能加入网桥 */
 	if ((dev->flags & IFF_LOOPBACK) ||
 	    dev->type != ARPHRD_ETHER || dev->addr_len != ETH_ALEN)
 		return -EINVAL;
 
 	/* No bridging of bridges */
+	/* 不能将某个网桥加入另一个网桥 */
 	if (dev->netdev_ops->ndo_start_xmit == br_dev_xmit)
 		return -ELOOP;
 
 	/* Device is already being bridged */
+	/* 不能把已经属于某个网桥的接口加入另一个网桥 */
 	if (br_port_exists(dev))
 		return -EBUSY;
 
 	/* No bridging devices that dislike that (e.g. wireless) */
+	/* 设备私有标记IFF_DONT_BRIDGE表示不允许将该设备加入网桥 */
 	if (dev->priv_flags & IFF_DONT_BRIDGE)
 		return -EOPNOTSUPP;
 
+	/* 创建net_bridge_port结构实例描述该从属设备 */
 	p = new_nbp(br, dev);
 	if (IS_ERR(p))
 		return PTR_ERR(p);
 
 	call_netdevice_notifiers(NETDEV_JOIN, dev);
 
+	/* 将该从属设备设置为混杂模式 */
 	err = dev_set_promiscuity(dev, 1);
 	if (err)
 		goto put_back;
@@ -350,6 +362,7 @@ int br_add_if(struct net_bridge *br, struct net_device *dev)
 	if (err)
 		goto err0;
 
+	/* 在该网桥的哈希表中加入一项对应关系记录 */
 	err = br_fdb_insert(br, p, dev->dev_addr);
 	if (err)
 		goto err1;

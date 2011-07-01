@@ -274,11 +274,19 @@ void br_netpoll_disable(struct net_bridge_port *p)
 
 #endif
 
+/*
+为网桥增加从属设备
+
+@dev		: 某网桥接口的虚拟设备接口
+@slave_dev	: 准备加入@dev的设备接口
+*/
 static int br_add_slave(struct net_device *dev, struct net_device *slave_dev)
 
 {
+	/* 从私有数据区取得描述网桥接口的结构 */
 	struct net_bridge *br = netdev_priv(dev);
 
+	/* 把@slave_dev加入网桥结构 */
 	return br_add_if(br, slave_dev);
 }
 
