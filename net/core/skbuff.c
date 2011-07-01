@@ -435,7 +435,9 @@ static void skb_release_all(struct sk_buff *skb)
 
 void __kfree_skb(struct sk_buff *skb)
 {
+	/* 检查，释放数据区 */
 	skb_release_all(skb);
+	/* 释放@skb结构本身，缓存回收 */
 	kfree_skbmem(skb);
 }
 EXPORT_SYMBOL(__kfree_skb);
@@ -447,13 +449,18 @@ EXPORT_SYMBOL(__kfree_skb);
  *	Drop a reference to the buffer and free it if the usage count has
  *	hit zero.
  */
-/* 释放一个skb缓冲区。kfree_skb被内核内部使用 */
+/*
+释放一个skb缓冲区。__kfree_skb被内核内部使用。
+*/
 void kfree_skb(struct sk_buff *skb)
 {
+	/* @skb已经为NULL了，直接返回 */
 	if (unlikely(!skb))
 		return;
+	/* 如果@skb自身的引用为1的话，则可以进行释放 */
 	if (likely(atomic_read(&skb->users) == 1))
 		smp_rmb();
+	/* 否则将@skb自身的引用计数减1后，返回 */
 	else if (likely(!atomic_dec_and_test(&skb->users)))
 		return;
 	trace_kfree_skb(skb, __builtin_return_address(0));
