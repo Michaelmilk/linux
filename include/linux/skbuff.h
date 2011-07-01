@@ -419,7 +419,8 @@ struct sk_buff {
 				nfctinfo:3;
 	/* 根据mac标记该数据包的类型
        PACKET_HOST, PACKET_OTHERHOST, PACKET_BROADCAST等
-       表示根据 L2的目的mac地址得到的包类型 */
+       表示根据 L2的目的mac地址得到的包类型
+	   参考eth_type_trans()函数 */
 	__u8			pkt_type:3,
 	/* fast clone
        通过fclone 参数选择从skbuff_head_cache或者skbuff_fclone_cache 中分配
@@ -480,6 +481,7 @@ struct sk_buff {
 		__u32		dropcount;
 	};
 
+	/* 记录skb的vlanid */
 	__u16			vlan_tci;
 
 	/* L4传输层头部指针，ip_local_deliver_finish() 里初始化 */
@@ -847,6 +849,12 @@ static inline int skb_shared(const struct sk_buff *skb)
  *
  *	NULL is returned on a memory allocation failure.
  */
+/*
+如果@skb结构自身是共享的，则进行clone，分配一个新的skb
+然后将原@skb的引用计数减1，返回新的skb，clone失败的话会返回NULL
+
+否则返回原@skb
+*/
 static inline struct sk_buff *skb_share_check(struct sk_buff *skb,
 					      gfp_t pri)
 {
