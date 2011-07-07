@@ -209,6 +209,9 @@ typedef u32 phys_addr_t;
 
 typedef phys_addr_t resource_size_t;
 
+/*
+原子类型，用结构体简单封装的一个整型变量
+*/
 typedef struct {
 	int counter;
 } atomic_t;

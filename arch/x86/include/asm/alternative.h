@@ -27,6 +27,13 @@
  * and size information.  That keeps the table sizes small.
  */
 
+/*
+lock汇编指令前缀。
+使得后继的操作在芯片级上为原子的。
+任何一个这样的操作都必须为单个指令执行，中间不能被中断。
+当CPU中的控制器检测到这个前缀时候，就会锁定内存总线，
+一直到该条指令执行完毕，在此期间其它的CPU不能访问这条指令所访问的内存单元。
+*/
 #ifdef CONFIG_SMP
 #define LOCK_PREFIX_HERE \
 		".section .smp_locks,\"a\"\n"	\

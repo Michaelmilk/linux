@@ -74,6 +74,35 @@ static inline void atomic_sub(int i, atomic_t *v)
  * true if the result is zero, or false for all
  * other cases.
  */
+/*
+SETE/SETZ - Set if Equal / Set if Zero (386+)
+
+Usage:  SETE    dest
+		SETZ    dest
+
+Sets the byte in the operand to 1 if the Zero Flag is set,
+otherwise sets the operand to 0.
+
+1.sete/setz当ZF=1，即：等于0或相等时，置OPRD为1。 
+  sete/setz OPRD 
+  OPRD: 只能是8位寄存器或存储单元，用于存放测试的结果。
+  故这里用unsigned char c;来作为OPRD。 
+2.%0: v->counter
+  %1: c
+  %2: i
+  从输出部开始，依次往后%0, %1, %2... ... 
+3.q:表示为EAX,EBX,ECX,EDX之一 
+4.subl %2,%0; =======> subl i,v->counter; 
+  sete %1;    =======> sete c; 
+5.memory :强制cpu认为内存单元都被修改过，若某寄存器的内容来自于某内存单元，
+  这时该内存单元可能已经被修改了，两者可能不一致了。这里的memory为损坏部。 
+  (先是指令部：输出部：输入部：损坏部)
+*/
+/*
+从@v中减去@i
+若@v值变为了0，则返回true
+其他情况均返回false
+*/
 static inline int atomic_sub_and_test(int i, atomic_t *v)
 {
 	unsigned char c;
@@ -116,10 +145,16 @@ static inline void atomic_dec(atomic_t *v)
  * returns true if the result is 0, or false for all other
  * cases.
  */
+/*
+如果@v->counter减1后为0了，则返回真
+不为0则返回假
+*/
 static inline int atomic_dec_and_test(atomic_t *v)
 {
 	unsigned char c;
 
+	/* 锁总线，然后将@v->counter减1
+	   如果@v->counter变为0了，则将临时变量c置为1 */
 	asm volatile(LOCK_PREFIX "decl %0; sete %1"
 		     : "+m" (v->counter), "=qm" (c)
 		     : : "memory");
@@ -170,6 +205,10 @@ static inline int atomic_add_negative(int i, atomic_t *v)
  *
  * Atomically adds @i to @v and returns @i + @v
  */
+/*
+把@i的值加到@v
+返回@i+@v的值，即返回@v的新值
+*/
 static inline int atomic_add_return(int i, atomic_t *v)
 {
 	int __i;
@@ -186,6 +225,9 @@ static inline int atomic_add_return(int i, atomic_t *v)
 	return i + __i;
 
 #ifdef CONFIG_M386
+/*
+xadd 交换加指令，为80486新增加的指令
+*/
 no_xadd: /* Legacy 386 processor */
 	raw_local_irq_save(flags);
 	__i = atomic_read(v);
@@ -204,6 +246,7 @@ no_xadd: /* Legacy 386 processor */
  */
 static inline int atomic_sub_return(int i, atomic_t *v)
 {
+	/* 代码重用，取-i */
 	return atomic_add_return(-i, v);
 }
 
@@ -229,6 +272,10 @@ static inline int atomic_xchg(atomic_t *v, int new)
  * Atomically adds @a to @v, so long as @v was not already @u.
  * Returns non-zero if @v was not @u, and zero otherwise.
  */
+/*
+如果@v的值不等于@u，就加@a，返回1。表示加了。
+如果@v的值等于@u，则@v的值不变，返回0。表示没加。
+*/
 static inline int atomic_add_unless(atomic_t *v, int a, int u)
 {
 	int c, old;
@@ -236,6 +283,7 @@ static inline int atomic_add_unless(atomic_t *v, int a, int u)
 	for (;;) {
 		if (unlikely(c == (u)))
 			break;
+		/* 如果v的值等于c就加a，old=c。如果v的值不等于c，old=v的值 */
 		old = atomic_cmpxchg((v), c, c + (a));
 		if (likely(old == c))
 			break;
@@ -298,10 +346,16 @@ static inline void atomic_or_long(unsigned long *v1, unsigned long v2)
 #endif
 
 /* These are x86-specific, used by some header files */
+/*
+将@mask中对应的一些bit位置0
+*/
 #define atomic_clear_mask(mask, addr)				\
 	asm volatile(LOCK_PREFIX "andl %0,%1"			\
 		     : : "r" (~(mask)), "m" (*(addr)) : "memory")
 
+/*
+将@mask中对应的一些bit位置1
+*/
 #define atomic_set_mask(mask, addr)				\
 	asm volatile(LOCK_PREFIX "orl %0,%1"			\
 		     : : "r" ((unsigned)(mask)), "m" (*(addr))	\
