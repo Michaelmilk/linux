@@ -82,9 +82,14 @@
 
 #define IPV4_BEET_PHMAXLEN 8
 
+/*
+IP头结构
+*/
 struct iphdr {
 #if defined(__LITTLE_ENDIAN_BITFIELD)
+	/* IP头长度，占4个bit，最小值5，最大值15，4字节为单位 */
 	__u8	ihl:4,
+	/* IP协议版本号，占4个bit，值固定为4 */
 		version:4;
 #elif defined (__BIG_ENDIAN_BITFIELD)
 	__u8	version:4,
@@ -92,7 +97,9 @@ struct iphdr {
 #else
 #error	"Please fix <asm/byteorder.h>"
 #endif
+	/* type of service 服务器类型 */
 	__u8	tos;
+	/* IP数据的总长度，包含头部长度和负载长度 */
 	__be16	tot_len;
 	__be16	id;
 	__be16	frag_off;

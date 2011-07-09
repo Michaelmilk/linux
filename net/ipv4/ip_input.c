@@ -372,6 +372,15 @@ drop:
 /*
  * 	Main IP Receive routine.
  */
+/*
+对传递上来的IP协议报文做一些基本的检查工作
+
+首先进入netfilter框架下IP层的NF_IP_PRE_ROUTING的hook点
+调用所有在该点注册的hook函数
+例如conntrack
+
+最后会调用ip_rcv_finish()
+*/
 int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt, struct net_device *orig_dev)
 {
 	const struct iphdr *iph;
@@ -386,14 +395,21 @@ int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt, 
 
 	IP_UPD_PO_STATS_BH(dev_net(dev), IPSTATS_MIB_IN, skb->len);
 
+	/* 如果skb->users!=1，则clone一个skb
+	   如果该skb被ptype_all链上注册的ETH_P_ALL类型回调函数处理过
+	   或是被同类型的回调函数处理过，则该skb是共享的
+	   在deliver_skb()中增加了users计数 */
 	if ((skb = skb_share_check(skb, GFP_ATOMIC)) == NULL) {
 		IP_INC_STATS_BH(dev_net(dev), IPSTATS_MIB_INDISCARDS);
 		goto out;
 	}
 
+	/* 数据至少要达到IP头的长度
+	   如果是非线性的，则会把数据提取到线性区 */
 	if (!pskb_may_pull(skb, sizeof(struct iphdr)))
 		goto inhdr_error;
 
+	/* 取IP头指针 */
 	iph = ip_hdr(skb);
 
 	/*
@@ -407,17 +423,22 @@ int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt, 
 	 *	4.	Doesn't have a bogus length
 	 */
 
+	/* IP头中携带的数据检查 */
 	if (iph->ihl < 5 || iph->version != 4)
 		goto inhdr_error;
 
+	/* 数据内容要达到IP头中所指示的长度 */
 	if (!pskb_may_pull(skb, iph->ihl*4))
 		goto inhdr_error;
 
+	/* pskb_may_pull()中很可能会改变IP头指针的位置，重新取下IP头指针 */
 	iph = ip_hdr(skb);
 
+	/* IP头校验和检查 */
 	if (unlikely(ip_fast_csum((u8 *)iph, iph->ihl)))
 		goto inhdr_error;
 
+	/* IP数据总长度检查 */
 	len = ntohs(iph->tot_len);
 	if (skb->len < len) {
 		IP_INC_STATS_BH(dev_net(dev), IPSTATS_MIB_INTRUNCATEDPKTS);
@@ -429,17 +450,28 @@ int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt, 
 	 * is IP we can trim to the true length of the frame.
 	 * Note this now means skb->len holds ntohs(iph->tot_len).
 	 */
+	/* 去掉尾部可能多余的部分，只取IP真正需要的数据即可
+	   例如以太网负载最小46字节，IP数据可能并没有那么长
+	   但是以太网发送帧前需要补足，附加的pad数据就不是IP需要关心的数据了 */
 	if (pskb_trim_rcsum(skb, len)) {
 		IP_INC_STATS_BH(dev_net(dev), IPSTATS_MIB_INDISCARDS);
 		goto drop;
 	}
 
 	/* Remove any debris in the socket control block */
+	/* debris:碎片
+	   cb[]字段在前面的处理中可能被使用过，这里清0 */
 	memset(IPCB(skb), 0, sizeof(struct inet_skb_parm));
 
 	/* Must drop socket now because of tproxy. */
+	/* tproxy:透明(transparence)代理
+	   使此skb脱离socket */
 	skb_orphan(skb);
 
+	/* ip_sabotage_in() NF_IP_PRI_FIRST
+	   ipv4_conntrack_defrag() NF_IP_PRI_CONNTRACK_DEFRAG
+	   ipv4_conntrack_in() NF_IP_PRI_CONNTRACK
+	   nf_nat_in() NF_IP_PRI_NAT_DST */
 	return NF_HOOK(NFPROTO_IPV4, NF_INET_PRE_ROUTING, skb, dev, NULL,
 		       ip_rcv_finish);
 

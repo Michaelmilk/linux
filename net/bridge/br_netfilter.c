@@ -654,6 +654,10 @@ static unsigned int br_nf_pre_routing(unsigned int hook, struct sk_buff *skb,
 	store_orig_dstaddr(skb);
 	skb->protocol = htons(ETH_P_IP);
 
+	/* ip_sabotage_in() NF_IP_PRI_FIRST
+	   ipv4_conntrack_defrag() NF_IP_PRI_CONNTRACK_DEFRAG
+	   ipv4_conntrack_in() NF_IP_PRI_CONNTRACK
+	   nf_nat_in() NF_IP_PRI_NAT_DST */
 	NF_HOOK(NFPROTO_IPV4, NF_INET_PRE_ROUTING, skb, skb->dev, NULL,
 		br_nf_pre_routing_finish);
 
@@ -871,6 +875,13 @@ static unsigned int br_nf_post_routing(unsigned int hook, struct sk_buff *skb,
 /* IP/SABOTAGE *****************************************************/
 /* Don't hand locally destined packets to PF_INET(6)/PRE_ROUTING
  * for the second time. */
+/*
+sabotage:破坏
+如果在网桥中已经走过了IP层的hook，则停止，不再继续进行IP层的netfilter
+
+参考br_nf_pre_routing()和br_nf_pre_routing_finish()函数
+这两个函数中会设置和清除BRNF_NF_BRIDGE_PREROUTING标记
+*/
 static unsigned int ip_sabotage_in(unsigned int hook, struct sk_buff *skb,
 				   const struct net_device *in,
 				   const struct net_device *out,
@@ -878,9 +889,11 @@ static unsigned int ip_sabotage_in(unsigned int hook, struct sk_buff *skb,
 {
 	if (skb->nf_bridge &&
 	    !(skb->nf_bridge->mask & BRNF_NF_BRIDGE_PREROUTING)) {
+		/* 停止hook */
 		return NF_STOP;
 	}
 
+	/* 继续走hook点，如果有的话 */
 	return NF_ACCEPT;
 }
 

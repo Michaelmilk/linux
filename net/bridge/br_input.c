@@ -197,6 +197,8 @@ forward:
 		if (!compare_ether_addr(p->br->dev->dev_addr, dest))
 			skb->pkt_type = PACKET_HOST;
 
+		/* ebt_nat_in() NF_BR_PRI_NAT_DST_BRIDGED
+		   br_nf_pre_routing() NF_BR_PRI_BRNF */
 		NF_HOOK(NFPROTO_BRIDGE, NF_BR_PRE_ROUTING, skb, skb->dev, NULL,
 			br_handle_frame_finish);
 		break;

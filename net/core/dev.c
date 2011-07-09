@@ -1541,10 +1541,15 @@ int dev_forward_skb(struct net_device *dev, struct sk_buff *skb)
 }
 EXPORT_SYMBOL_GPL(dev_forward_skb);
 
+/*
+调用注册的packet_type中的回调函数，向上层递送skb
+简单的内联封装
+*/
 static inline int deliver_skb(struct sk_buff *skb,
 			      struct packet_type *pt_prev,
 			      struct net_device *orig_dev)
 {
+	/* 增加skb自身的引用计数，标记该skb为共享的 */
 	atomic_inc(&skb->users);
 	return pt_prev->func(skb, skb->dev, pt_prev, orig_dev);
 }
@@ -3117,8 +3122,20 @@ void netdev_rx_handler_unregister(struct net_device *dev)
 }
 EXPORT_SYMBOL_GPL(netdev_rx_handler_unregister);
 
+/*
+__netif_receive_skb()为网络层接收skb做一些准备工作
+例如设置network_header指针，mac_len长度等
+
+在上交给网络层前，会先处理注册在接口是的回调函数
+如果配置了网桥，则会先由网桥模块进行处理
+
+最后会根据以太网头中携带的网络层协议类型，上交给对应协议回调函数进行处理
+例如IP协议，则会调用注册的处理函数ip_rcv()
+*/
 static int __netif_receive_skb(struct sk_buff *skb)
 {
+	/* ptype用于遍历的临时变量
+	   pt_prev记录遍历时的上一个变量 */
 	struct packet_type *ptype, *pt_prev;
 	rx_handler_func_t *rx_handler;
 	struct net_device *orig_dev;
@@ -3136,12 +3153,17 @@ static int __netif_receive_skb(struct sk_buff *skb)
 	if (netpoll_receive_skb(skb))
 		return NET_RX_DROP;
 
+	/* 记录最初接收该skb的接口的ifindex，该字段在内核随后的处理中不会改变 */
 	if (!skb->skb_iif)
 		skb->skb_iif = skb->dev->ifindex;
+	/* 记录初始接收的接口，在此后可能的网桥等处理中dev字段会随之改变 */
 	orig_dev = skb->dev;
 
+	/* 根据驱动传递上来时设置的data指针位置
+	   设置network_header和transport_header指针值 */
 	skb_reset_network_header(skb);
 	skb_reset_transport_header(skb);
+	/* 设置链路层头的长度字段mac_len的值 */
 	skb_reset_mac_len(skb);
 
 	pt_prev = NULL;
@@ -3150,8 +3172,10 @@ static int __netif_receive_skb(struct sk_buff *skb)
 
 another_round:
 
+	/* 统计当前核处理的包数 */
 	__this_cpu_inc(softnet_data.processed);
 
+	/* 如果是vlan报文，则先提取vlanid，去掉vlan头 */
 	if (skb->protocol == cpu_to_be16(ETH_P_8021Q)) {
 		skb = vlan_untag(skb);
 		if (unlikely(!skb))
@@ -3165,7 +3189,11 @@ another_round:
 	}
 #endif
 
+	/* 遍历ptype_all链表，注册协议类型为ETH_P_ALL
+	   一些抓包软件会使用此类型，应用层也可以用来实现对这个帧的处理
+	   参考文档(Documentation\networking\packet_mmap.txt) */
 	list_for_each_entry_rcu(ptype, &ptype_all, list) {
+		/* 接口匹配 */
 		if (!ptype->dev || ptype->dev == skb->dev) {
 			if (pt_prev)
 				ret = deliver_skb(skb, pt_prev, orig_dev);
@@ -3181,7 +3209,8 @@ ncls:
 #endif
 
 	/* 内核中由netdev_rx_handler_register()为不同模型注册了以下几个函数
-	   br_handle_frame() bond_handle_frame() macvlan_handle_frame() */
+	   br_handle_frame() bond_handle_frame() macvlan_handle_frame()
+	   有了这个接口，便可以很容易的在接口上对数据进行一些特殊处理 */
 	rx_handler = rcu_dereference(skb->dev->rx_handler);
 	if (rx_handler) {
 		if (pt_prev) {
@@ -3217,7 +3246,10 @@ ncls:
 	/* deliver only exact match when indicated */
 	null_or_dev = deliver_exact ? skb->dev : NULL;
 
+	/* protocol为网络字节序，参考eth_type_trans() */
 	type = skb->protocol;
+	/* 遍历ptype_base[]对应哈希链下已经注册的协议类型
+	   使用pt_prev记录找到的匹配协议类型 */
 	list_for_each_entry_rcu(ptype,
 			&ptype_base[ntohs(type) & PTYPE_HASH_MASK], list) {
 		if (ptype->type == type &&
@@ -3229,9 +3261,12 @@ ncls:
 		}
 	}
 
+	/* 如果有匹配的协议类型，则调用相应协议的回调函数处理报文
+	   例如ip_rcv() ipv6_rcv() arp_rcv()等 */
 	if (pt_prev) {
 		ret = pt_prev->func(skb, skb->dev, pt_prev, orig_dev);
 	} else {
+	/* 如果没有注册对应的协议处理该报文，就只能丢弃了 */
 		atomic_long_inc(&skb->dev->rx_dropped);
 		kfree_skb(skb);
 		/* Jamal, now you will not able to escape explaining
@@ -3260,6 +3295,10 @@ out:
  *	NET_RX_SUCCESS: no congestion
  *	NET_RX_DROP: packet was dropped
  */
+/*
+为了实现RPS机制，对原来的netif_receive_skb()进行了封装
+相同的工作现由__netif_receive_skb()处理
+*/
 int netif_receive_skb(struct sk_buff *skb)
 {
 	if (netdev_tstamp_prequeue)

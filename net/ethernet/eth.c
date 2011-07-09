@@ -155,6 +155,9 @@ EXPORT_SYMBOL(eth_rebuild_header);
  * assume 802.3 if the type field is short enough to be a length.
  * This is normal practice and works for any 'now in use' protocol.
  */
+/*
+返回协议类型，网络字节序
+*/
 __be16 eth_type_trans(struct sk_buff *skb, struct net_device *dev)
 {
 	struct ethhdr *eth;
@@ -195,6 +198,8 @@ __be16 eth_type_trans(struct sk_buff *skb, struct net_device *dev)
 	if (netdev_uses_trailer_tags(dev))
 		return htons(ETH_P_TRAILER);
 
+	/* 根据以太网协议的定义，其值都是大于以太网可能的最大长度的
+	   据此返回帧头中的协议类型(网络字节序)，如cpu_to_be16(ETH_P_IP) */
 	if (ntohs(eth->h_proto) >= 1536)
 		return eth->h_proto;
 

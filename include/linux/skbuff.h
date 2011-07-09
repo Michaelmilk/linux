@@ -1354,8 +1354,10 @@ static inline unsigned char *pskb_pull(struct sk_buff *skb, unsigned int len)
 */
 static inline int pskb_may_pull(struct sk_buff *skb, unsigned int len)
 {
+	/* 要pull的长度小于线性区数据长度，可以直接pull操作线性区，返回1 */
 	if (likely(len <= skb_headlen(skb)))
 		return 1;
+	/* 要pull的长度超过了skb所有数据的长度，无法满足pull的长度要求，返回0 */
 	if (unlikely(len > skb->len))
 		return 0;
 	/* 调用__pskb_pull_tail()进行线性区补充 */

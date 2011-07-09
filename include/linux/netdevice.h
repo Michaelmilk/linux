@@ -438,6 +438,10 @@ enum rx_handler_result {
 	RX_HANDLER_PASS,
 };
 typedef enum rx_handler_result rx_handler_result_t;
+/*
+接口的回调函数类型
+为接口注册此回调函数可以在该接口上针对skb做一些特殊处理
+*/
 typedef rx_handler_result_t rx_handler_func_t(struct sk_buff **pskb);
 
 extern void __napi_schedule(struct napi_struct *n);
@@ -889,11 +893,17 @@ struct netdev_tc_txq {
  *
  */
 #define HAVE_NET_DEVICE_OPS
+/*
+从struct net_device中分离出来的操作函数指针集合
+*/
 struct net_device_ops {
 	int			(*ndo_init)(struct net_device *dev);
 	void			(*ndo_uninit)(struct net_device *dev);
 	int			(*ndo_open)(struct net_device *dev);
 	int			(*ndo_stop)(struct net_device *dev);
+    /* 如果发送成功，ndo_start_xmit方法里回收sk_buff，返回NETDEV_TX_OK
+       如果设备暂时无法处理，比如硬件忙，则返回NETDEV_TX_BUSY
+	   例如igb驱动的发送函数igb_xmit_frame_adv() */
 	netdev_tx_t		(*ndo_start_xmit) (struct sk_buff *skb,
 						   struct net_device *dev);
 	u16			(*ndo_select_queue)(struct net_device *dev,
@@ -997,11 +1007,15 @@ struct net_device {
 	 * (i.e. as seen by users in the "Space.c" file).  It is the name
 	 * of the interface.
 	 */
+	/* 接口名称，例如eth0
+	   如果不指定，则在alloc_etherdev_mqs()里会定义为格式"eth%d"
+	   然后注册接口时使用dev_get_valid_name()解析"%" */
 	char			name[IFNAMSIZ];
 
 	struct pm_qos_request_list pm_qos_req;
 
 	/* device name hash chain */
+	/* 链入该接口所在的网络命名空间struct net下的dev_name_head哈希表 */
 	struct hlist_node	name_hlist;
 	/* snmp alias */
 	char 			*ifalias;
@@ -1020,6 +1034,7 @@ struct net_device {
 	 *	part of the usual set specified in Space.c.
 	 */
 
+	/* 接口的状态信息 */
 	unsigned long		state;
 
 	struct list_head	dev_list;
@@ -1037,6 +1052,7 @@ struct net_device {
 
 	/* Net device feature bits; if you change something,
 	 * also update netdev_features_strings[] in ethtool.c */
+	/* 接口上所支持的特性定义，标记物理硬件设备所支持的一些特性 */
 
 #define NETIF_F_SG		1	/* Scatter/gather IO. */
 #define NETIF_F_IP_CSUM		2	/* Can checksum TCP/UDP over IPv4. */
@@ -1120,7 +1136,12 @@ struct net_device {
 #define NETIF_F_SOFT_FEATURES	(NETIF_F_GSO | NETIF_F_GRO)
 
 	/* Interface index. Unique device identifier	*/
+	/* 接口的唯一数字标识，参考dev_new_index()函数 */
 	int			ifindex;
+	/* 对于真实的物理设备，iflink与ifindex应该是一致的
+       对于虚拟设备，iflink应该等于此虚拟设备关联的物理设备的ifindex
+	   字面上也是if link链接的意思
+       例如vlan_dev_init()中就使用此字段记录虚拟的vlan接口所依存的物理设备接口 */
 	int			iflink;
 
 	struct net_device_stats	stats;
@@ -1136,6 +1157,7 @@ struct net_device {
 	struct iw_public_data *	wireless_data;
 #endif
 	/* Management operations */
+	/* 抽象出该接口所支持的一些操作的函数指针集合 */
 	const struct net_device_ops *netdev_ops;
 	const struct ethtool_ops *ethtool_ops;
 
@@ -1165,6 +1187,7 @@ struct net_device {
 	unsigned short		needed_tailroom;
 
 	/* Interface address info. */
+	/* 从网卡eeprom内读出的永久硬件地址 */
 	unsigned char		perm_addr[MAX_ADDR_LEN]; /* permanent hw address */
 	unsigned char		addr_assign_type; /* hw address assignment type */
 	unsigned char		addr_len;	/* hardware address length	*/
@@ -1239,7 +1262,11 @@ struct net_device {
 #endif
 #endif
 
+	/* 该接口上接收数据的回调函数，在netdev_rx_handler_register()中注册
+	   在__netif_receive_skb()中会调用以对接口上接收的数据进行特殊处理
+	   例如br_handle_frame() */
 	rx_handler_func_t __rcu	*rx_handler;
+	/* 回调函数所关心的数据 */
 	void __rcu		*rx_handler_data;
 
 	struct netdev_queue __rcu *ingress_queue;
@@ -1282,6 +1309,7 @@ struct net_device {
 	/* delayed register/unregister */
 	struct list_head	todo_list;
 	/* device index hash chain */
+	/* 链入该接口所在的网络命名空间struct net下的dev_index_head哈希表 */
 	struct hlist_node	index_hlist;
 
 	struct list_head	link_watch_list;
@@ -1325,6 +1353,7 @@ struct net_device {
 	struct garp_port __rcu	*garp_port;
 
 	/* class/net/name entry */
+	/* 内嵌的device结构，以便加入设备模型 */
 	struct device		dev;
 	/* space for optional device, statistics, and wireless sysfs groups */
 	const struct attribute_group *sysfs_groups[4];
@@ -1546,9 +1575,19 @@ struct napi_gro_cb {
 
 #define NAPI_GRO_CB(skb) ((struct napi_gro_cb *)(skb)->cb)
 
+/*
+数据包类型
+网络层协议的描述结构
+*/
 struct packet_type {
+	/* 网络层协议类型，在L2头中携带
+	   由数据类型的定义__be16知type为网络字节序
+	   参考ip_packet_type实例的定义 */
 	__be16			type;	/* This is really htons(ether_type). */
+	/* NULL表示适用于所有网络接口
+	   也可以指定该协议只在哪个接口上生效 */
 	struct net_device	*dev;	/* NULL is wildcarded here	     */
+	/* 该协议的接收处理函数，例如ip_rcv() arp_rcv()等 */
 	int			(*func) (struct sk_buff *,
 					 struct net_device *,
 					 struct packet_type *,
@@ -1559,7 +1598,10 @@ struct packet_type {
 	struct sk_buff		**(*gro_receive)(struct sk_buff **head,
 					       struct sk_buff *skb);
 	int			(*gro_complete)(struct sk_buff *skb);
+	/* 该协议私有数据 */
 	void			*af_packet_priv;
+	/* 链表节点，用于组织链入ptype_base ptype_all
+	   参考dev_add_pack()函数 */
 	struct list_head	list;
 };
 
