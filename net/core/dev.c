@@ -3126,10 +3126,10 @@ EXPORT_SYMBOL_GPL(netdev_rx_handler_unregister);
 __netif_receive_skb()为网络层接收skb做一些准备工作
 例如设置network_header指针，mac_len长度等
 
-在上交给网络层前，会先处理注册在接口是的回调函数
-如果配置了网桥，则会先由网桥模块进行处理
+在上交给网络层前，会先处理注册在接口上的回调函数
+例如:如果配置了网桥，则会先由网桥模块进行处理
 
-最后会根据以太网头中携带的网络层协议类型，上交给对应协议回调函数进行处理
+最后会根据以太网头中携带的网络层协议类型，上交给对应协议的回调函数进行处理
 例如IP协议，则会调用注册的处理函数ip_rcv()
 */
 static int __netif_receive_skb(struct sk_buff *skb)

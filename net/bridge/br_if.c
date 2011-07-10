@@ -382,6 +382,7 @@ int br_add_if(struct net_bridge *br, struct net_device *dev)
 	if (err)
 		goto err4;
 
+	/* 置网桥接口的私有标记 */
 	dev->priv_flags |= IFF_BRIDGE_PORT;
 
 	dev_disable_lro(dev);

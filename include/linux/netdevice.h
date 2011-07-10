@@ -1266,7 +1266,9 @@ struct net_device {
 	   在__netif_receive_skb()中会调用以对接口上接收的数据进行特殊处理
 	   例如br_handle_frame() */
 	rx_handler_func_t __rcu	*rx_handler;
-	/* 回调函数所关心的数据 */
+	/* 回调函数所关心的数据
+	   例如在br_add_if()中调用netdev_rx_handler_register()注册时
+	   rx_handler_data指向描述网桥接口的struct net_bridge_port实例 */
 	void __rcu		*rx_handler_data;
 
 	struct netdev_queue __rcu *ingress_queue;

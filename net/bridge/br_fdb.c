@@ -66,6 +66,9 @@ static inline int has_expired(const struct net_bridge *br,
 		time_before_eq(fdb->updated + hold_time(br), jiffies);
 }
 
+/*
+根据mac计算哈希值
+*/
 static inline int br_mac_hash(const unsigned char *mac)
 {
 	/* use 1 byte of OUI cnd 3 bytes of NIC */
@@ -320,6 +323,9 @@ static struct net_bridge_fdb_entry *fdb_find(struct hlist_head *head,
 	return NULL;
 }
 
+/*
+遍历对应的哈希链@head，寻找匹配的@addr项
+*/
 static struct net_bridge_fdb_entry *fdb_find_rcu(struct hlist_head *head,
 						 const unsigned char *addr)
 {
@@ -394,9 +400,17 @@ int br_fdb_insert(struct net_bridge *br, struct net_bridge_port *source,
 	return ret;
 }
 
+/*
+根据源mac来更新转发表
+
+@br		: 接收skb的设备所在的网桥
+@source	: 描述接收skb的设备
+@addr	: skb的源mac
+*/
 void br_fdb_update(struct net_bridge *br, struct net_bridge_port *source,
 		   const unsigned char *addr)
 {
+	/* 取对应哈希链表的头节点 */
 	struct hlist_head *head = &br->hash[br_mac_hash(addr)];
 	struct net_bridge_fdb_entry *fdb;
 

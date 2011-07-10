@@ -173,9 +173,14 @@ struct net_bridge_port
 
 #define br_port_exists(dev) (dev->priv_flags & IFF_BRIDGE_PORT)
 
+/*
+取@dev对应的net_bridge_port描述结构实例
+*/
 static inline struct net_bridge_port *br_port_get_rcu(const struct net_device *dev)
 {
 	struct net_bridge_port *port = rcu_dereference(dev->rx_handler_data);
+	/* 检查接口的私有标记是否含有IFF_BRIDGE_PORT
+	   有则说明此@dev注册在了某网桥下，参考函数br_add_if() */
 	return br_port_exists(dev) ? port : NULL;
 }
 

@@ -62,6 +62,10 @@ static int brnf_filter_pppoe_tagged __read_mostly = 0;
 #define brnf_filter_pppoe_tagged 0
 #endif
 
+/*
+取vlan头中封装的协议类型
+返回的是网络字节序，由返回值类型__be16亦知
+*/
 static inline __be16 vlan_proto(const struct sk_buff *skb)
 {
 	if (vlan_tx_tag_present(skb))
@@ -158,6 +162,7 @@ static inline struct net_device *bridge_parent(const struct net_device *dev)
 static inline struct nf_bridge_info *nf_bridge_alloc(struct sk_buff *skb)
 {
 	skb->nf_bridge = kzalloc(sizeof(struct nf_bridge_info), GFP_ATOMIC);
+	/* 分配成功，引用计数置为1 */
 	if (likely(skb->nf_bridge))
 		atomic_set(&(skb->nf_bridge->use), 1);
 
@@ -197,6 +202,9 @@ static inline void nf_bridge_pull_encap_header(struct sk_buff *skb)
 	skb->network_header += len;
 }
 
+/*
+network_header指针后移，以便跳过L2的封装头
+*/
 static inline void nf_bridge_pull_encap_header_rcsum(struct sk_buff *skb)
 {
 	unsigned int len = nf_bridge_encap_header_len(skb);
@@ -237,6 +245,7 @@ static int br_parse_ip_options(struct sk_buff *skb)
 	opt = &(IPCB(skb)->opt);
 
 	/* Basic sanity checks */
+	/* 对IPv4报文的基本检查，与ip_rcv()中的一样 */
 	if (iph->ihl < 5 || iph->version != 4)
 		goto inhdr_error;
 
@@ -260,6 +269,7 @@ static int br_parse_ip_options(struct sk_buff *skb)
 	}
 
 	memset(IPCB(skb), 0, sizeof(struct inet_skb_parm));
+	/* 等于5说明没有options */
 	if (iph->ihl == 5)
 		return 0;
 
@@ -417,6 +427,8 @@ static int br_nf_pre_routing_finish(struct sk_buff *skb)
 		skb->pkt_type = PACKET_OTHERHOST;
 		nf_bridge->mask ^= BRNF_PKT_TYPE;
 	}
+	/* 去掉由br_nf_pre_routing()调用setup_pre_routing()时设置的标志
+	   控制ip_sabotage_in() */
 	nf_bridge->mask ^= BRNF_NF_BRIDGE_PREROUTING;
 	if (dnat_took_place(skb)) {
 		if ((err = ip_route_input(skb, iph->daddr, iph->saddr, iph->tos, dev))) {
@@ -471,9 +483,14 @@ bridged_dnat:
 		skb_dst_set_noref(skb, &rt->dst);
 	}
 
+	/* 改回skb的dev，参考setup_pre_routing() */
 	skb->dev = nf_bridge->physindev;
 	nf_bridge_update_protocol(skb);
 	nf_bridge_push_encap_header(skb);
+	/* 再次进入网桥的NF_BR_PRE_ROUTING钩子点
+	   不过这里只调用优先级数值上大于等于1的hook函数，参考nf_iterate()
+	   因此不会重复进入br_nf_pre_routing()
+	   因为br_nf_pre_routing()的优先级为NF_BR_PRI_BRNF */
 	NF_HOOK_THRESH(NFPROTO_BRIDGE, NF_BR_PRE_ROUTING, skb, skb->dev, NULL,
 		       br_handle_frame_finish, 1);
 
@@ -481,6 +498,9 @@ bridged_dnat:
 }
 
 /* Some common code for IPv4/IPv6 */
+/*
+设置网桥信息
+*/
 static struct net_device *setup_pre_routing(struct sk_buff *skb)
 {
 	struct nf_bridge_info *nf_bridge = skb->nf_bridge;
@@ -491,7 +511,9 @@ static struct net_device *setup_pre_routing(struct sk_buff *skb)
 	}
 
 	nf_bridge->mask |= BRNF_NF_BRIDGE_PREROUTING;
+	/* 记录原始的物理接口 */
 	nf_bridge->physindev = skb->dev;
+	/* skb的dev指向了其所属网桥的接口，如br0 */
 	skb->dev = bridge_parent(skb->dev);
 	if (skb->protocol == htons(ETH_P_8021Q))
 		nf_bridge->mask |= BRNF_8021Q;
@@ -615,6 +637,8 @@ static unsigned int br_nf_pre_routing(unsigned int hook, struct sk_buff *skb,
 {
 	struct net_bridge_port *p;
 	struct net_bridge *br;
+	/* 对于VLAN协议，如果内核支持VLAN模块
+	   则在__netif_receive_skb()时已经去掉了vlan头 */
 	__u32 len = nf_bridge_encap_header_len(skb);
 
 	if (unlikely(!pskb_may_pull(skb, len)))
@@ -625,6 +649,7 @@ static unsigned int br_nf_pre_routing(unsigned int hook, struct sk_buff *skb,
 		return NF_DROP;
 	br = p->br;
 
+	/* IPv6则由br_nf_pre_routing_ipv6()进行处理 */
 	if (skb->protocol == htons(ETH_P_IPV6) || IS_VLAN_IPV6(skb) ||
 	    IS_PPPOE_IPV6(skb)) {
 		if (!brnf_call_ip6tables && !br->nf_call_ip6tables)
@@ -637,6 +662,7 @@ static unsigned int br_nf_pre_routing(unsigned int hook, struct sk_buff *skb,
 	if (!brnf_call_iptables && !br->nf_call_iptables)
 		return NF_ACCEPT;
 
+	/* 不是IPv4则返回不处理 */
 	if (skb->protocol != htons(ETH_P_IP) && !IS_VLAN_IP(skb) &&
 	    !IS_PPPOE_IP(skb))
 		return NF_ACCEPT;
@@ -651,6 +677,7 @@ static unsigned int br_nf_pre_routing(unsigned int hook, struct sk_buff *skb,
 		return NF_DROP;
 	if (!setup_pre_routing(skb))
 		return NF_DROP;
+	/* 记录原目的ip */
 	store_orig_dstaddr(skb);
 	skb->protocol = htons(ETH_P_IP);
 
@@ -661,6 +688,10 @@ static unsigned int br_nf_pre_routing(unsigned int hook, struct sk_buff *skb,
 	NF_HOOK(NFPROTO_IPV4, NF_INET_PRE_ROUTING, skb, skb->dev, NULL,
 		br_nf_pre_routing_finish);
 
+	/* 这里使用的是NF_STOLEN
+	   即这条路径在回到br_handle_frame()中的NF_HOOK时
+	   不会再走那里的br_handle_frame_finish()了
+	   因为上面的br_nf_pre_routing_finish()最终也可能会调用br_handle_frame_finish() */
 	return NF_STOLEN;
 }
 

@@ -57,6 +57,8 @@ int br_handle_frame_finish(struct sk_buff *skb)
 		goto drop;
 
 	/* insert into forwarding database after filtering to avoid spoofing */
+	/* spoofing:欺骗
+	   在netfilter后才记录转发表，以避免记录假报文 */
 	br = p->br;
 	br_fdb_update(br, p, eth_hdr(skb)->h_source);
 
@@ -140,6 +142,12 @@ static inline int is_link_local(const unsigned char *dest)
  * Return NULL if skb is handled
  * note: already called with rcu_read_lock
  */
+/*
+参数传的是二级指针
+因为在skb的共享性检查中，可能会分配新的skb
+以便通过二级指针修改目标skb
+在返回RX_HANDLER_PASS前，通过*pskb = skb修改目标skb
+*/
 rx_handler_result_t br_handle_frame(struct sk_buff **pskb)
 {
 	struct net_bridge_port *p;
@@ -157,6 +165,7 @@ rx_handler_result_t br_handle_frame(struct sk_buff **pskb)
 	if (!is_valid_ether_addr(eth_hdr(skb)->h_source))
 		goto drop;
 
+	/* 检查skb的共享性，参考__netif_receive_skb()中对deliver_skb()的调用 */
 	skb = skb_share_check(skb, GFP_ATOMIC);
 	if (!skb)
 		return RX_HANDLER_CONSUMED;
@@ -172,6 +181,8 @@ rx_handler_result_t br_handle_frame(struct sk_buff **pskb)
 		if (p->br->stp_enabled == BR_NO_STP && dest[5] == 0)
 			goto forward;
 
+		/* ebt_in_hook() NF_BR_PRI_FILTER_BRIDGED
+		   br_nf_local_in() NF_BR_PRI_BRNF */
 		if (NF_HOOK(NFPROTO_BRIDGE, NF_BR_LOCAL_IN, skb, skb->dev,
 			    NULL, br_handle_local_finish)) {
 			return RX_HANDLER_CONSUMED; /* consumed by filter */
@@ -184,6 +195,7 @@ rx_handler_result_t br_handle_frame(struct sk_buff **pskb)
 forward:
 	switch (p->state) {
 	case BR_STATE_FORWARDING:
+		/* 调用函数ebt_broute()，见ebtable_broute_init()若加载的话 */
 		rhook = rcu_dereference(br_should_route_hook);
 		if (rhook) {
 			if ((*rhook)(skb)) {
@@ -194,6 +206,8 @@ forward:
 		}
 		/* fall through */
 	case BR_STATE_LEARNING:
+		/* 接收的skb目的mac为网桥接口，标记为PACKET_HOST
+		   如桥br0上配置了IP地址进行通信时 */
 		if (!compare_ether_addr(p->br->dev->dev_addr, dest))
 			skb->pkt_type = PACKET_HOST;
 

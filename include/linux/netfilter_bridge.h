@@ -56,6 +56,10 @@ static inline int nf_bridge_maybe_copy_header(struct sk_buff *skb)
   	return 0;
 }
 
+/*
+取L2封装的协议头长度
+例如L2携带的是VLAN协议，则封装头长度为4个字节
+*/
 static inline unsigned int nf_bridge_encap_header_len(const struct sk_buff *skb)
 {
 	switch (skb->protocol) {
