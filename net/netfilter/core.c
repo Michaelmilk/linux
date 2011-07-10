@@ -128,15 +128,20 @@ unsigned int nf_iterate(struct list_head *head,
 	list_for_each_continue_rcu(*i, head) {
 		struct nf_hook_ops *elem = (struct nf_hook_ops *)*i;
 
+		/* 优先级小于@hook_thresh的则跳过
+		   只执行优先级大于等于@hook_thresh的hook函数 */
 		if (hook_thresh > elem->priority)
 			continue;
 
 		/* Optimization: we don't need to hold module
 		   reference here, since function can't sleep. --RR */
 repeat:
+		/* 调用hook函数 */
 		verdict = elem->hook(hook, skb, indev, outdev, okfn);
+		/* @skb没有通过该hook函数 */
 		if (verdict != NF_ACCEPT) {
 #ifdef CONFIG_NETFILTER_DEBUG
+			/* 返回值有效性判断 */
 			if (unlikely((verdict & NF_VERDICT_MASK)
 							> NF_MAX_VERDICT)) {
 				NFDEBUG("Evil return from %p(%u).\n",
@@ -144,11 +149,16 @@ repeat:
 				continue;
 			}
 #endif
+			/* 不是NF_ACCEPT，也不是NF_REPEAT，则停止遍历，返回hook函数的返回值
+			   可能是NF_DROP NF_STOLEN NF_QUEUE NF_STOP */
 			if (verdict != NF_REPEAT)
 				return verdict;
+			/* 某个hook函数返回NF_REPEAT，则再次调用该hook函数 */
 			goto repeat;
 		}
+		/* hook函数返回值为NF_ACCEPT，继续遍历 */
 	}
+	/* 所有的hook函数都通过，返回NF_ACCEPT */
 	return NF_ACCEPT;
 }
 
@@ -162,19 +172,26 @@ int nf_hook_slow(u_int8_t pf, unsigned int hook, struct sk_buff *skb,
 		 int hook_thresh)
 {
 	struct list_head *elem;
+	/* verdict:裁决，即hook函数的返回值，用来判定包的去向 */
 	unsigned int verdict;
 	int ret = 0;
 
 	/* We may already have this, but read-locks nest anyway */
+	/* 调用路径可能已经持有该锁，但是允许嵌套 */
 	rcu_read_lock();
 
+	/* 协议@pf下对应@hook点的链头 */
 	elem = &nf_hooks[pf][hook];
 next_hook:
+	/* 遍历该@hook点下的链表 */
 	verdict = nf_iterate(&nf_hooks[pf][hook], skb, hook, indev,
 			     outdev, &elem, okfn, hook_thresh);
+	/* 该链表下所有的hook函数都通过，或是停止了链表的遍历
+	   则返回1，调用@okfn() */
 	if (verdict == NF_ACCEPT || verdict == NF_STOP) {
 		ret = 1;
 	} else if ((verdict & NF_VERDICT_MASK) == NF_DROP) {
+	/* hook函数返回了NF_DROP，则丢弃报文 */
 		kfree_skb(skb);
 		ret = NF_DROP_GETERR(verdict);
 		if (ret == 0)
@@ -192,6 +209,7 @@ next_hook:
 		}
 		ret = 0;
 	}
+	/* hook函数返回NF_STOLEN时，ret = 0 */
 	rcu_read_unlock();
 	return ret;
 }

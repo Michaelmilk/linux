@@ -180,6 +180,7 @@ static inline int nf_hook_thresh(u_int8_t pf, unsigned int hook,
 				 int (*okfn)(struct sk_buff *), int thresh)
 {
 #ifndef CONFIG_NETFILTER_DEBUG
+	/* hook空，即没有为该@pf下的@hook点注册钩子函数，返回1，调用okfn(skb) */
 	if (list_empty(&nf_hooks[pf][hook]))
 		return 1;
 #endif
@@ -216,6 +217,7 @@ NF_HOOK_THRESH(uint8_t pf, unsigned int hook, struct sk_buff *skb,
 	       int (*okfn)(struct sk_buff *), int thresh)
 {
 	int ret = nf_hook_thresh(pf, hook, skb, in, out, okfn, thresh);
+	/* 当对应hook链表下相应的一些hook函数处理完，并返回1时，才继续调用@okfn() */
 	if (ret == 1)
 		ret = okfn(skb);
 	return ret;
@@ -239,6 +241,7 @@ NF_HOOK(uint8_t pf, unsigned int hook, struct sk_buff *skb,
 	struct net_device *in, struct net_device *out,
 	int (*okfn)(struct sk_buff *))
 {
+	/* 传的优先级INT_MIN最小，表示将调用对应链表下的所有hook函数 */
 	return NF_HOOK_THRESH(pf, hook, skb, in, out, okfn, INT_MIN);
 }
 
