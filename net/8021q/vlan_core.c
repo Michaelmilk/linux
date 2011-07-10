@@ -113,6 +113,9 @@ static struct sk_buff *vlan_reorder_header(struct sk_buff *skb)
 	return skb;
 }
 
+/*
+去掉了VLAN头后，修改skb->protocol字段记录的协议为原VLAN头封装的协议类型
+*/
 static void vlan_set_encap_proto(struct sk_buff *skb, struct vlan_hdr *vhdr)
 {
 	__be16 proto;
@@ -166,6 +169,8 @@ struct sk_buff *vlan_untag(struct sk_buff *skb)
 	if (unlikely(!pskb_may_pull(skb, VLAN_HLEN)))
 		goto err_free;
 
+	/* vlan_hdr指针从data域开始转换
+	   所以在调用vlan_untag()函数时要注意skb已经pull过ETH_HLEN */
 	vhdr = (struct vlan_hdr *) skb->data;
 	vlan_tci = ntohs(vhdr->h_vlan_TCI);
 	__vlan_hwaccel_put_tag(skb, vlan_tci);

@@ -103,6 +103,7 @@ struct nf_conntrack {
 
 #ifdef CONFIG_BRIDGE_NETFILTER
 struct nf_bridge_info {
+	/* 该结构实例的引用计数 */
 	atomic_t use;
 	struct net_device *physindev;
 	struct net_device *physoutdev;
@@ -444,6 +445,8 @@ struct sk_buff {
 	struct sk_buff		*nfct_reasm;
 #endif
 #ifdef CONFIG_BRIDGE_NETFILTER
+	/* 记录网桥接口信息，空间由nf_bridge_alloc()分配
+	   参考函数br_nf_pre_routing() */
 	struct nf_bridge_info	*nf_bridge;
 #endif
 
@@ -481,7 +484,8 @@ struct sk_buff {
 		__u32		dropcount;
 	};
 
-	/* 记录skb的vlanid */
+	/* 记录skb的优先级和vlanid，参考VLAN_PRIO_MASK等宏定义
+	   参考结构struct vlan_hdr，函数vlan_untag() */
 	__u16			vlan_tci;
 
 	/* L4传输层头部指针，ip_local_deliver_finish() 里初始化 */

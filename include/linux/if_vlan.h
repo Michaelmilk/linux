@@ -23,12 +23,22 @@
 					 */
 #define VLAN_ETH_ALEN	6		/* Octets in one ethernet addr	 */
 #define VLAN_ETH_HLEN	18		/* Total octets in header.	 */
+/*
+sans:无，没有
+以太网最小长度60字节，带vlan头后加4，所以带vlan帧的最小长度为64字节
+*/
 #define VLAN_ETH_ZLEN	64		/* Min. octets in frame sans FCS */
 
 /*
  * According to 802.3ac, the packet can be 4 bytes longer. --Klika Jan
  */
+/*
+负载数据最大长度1500，与以太网一致
+*/
 #define VLAN_ETH_DATA_LEN	1500	/* Max. octets in payload	 */
+/*
+头部多了4字节vlan头，帧最大长度为1514+4
+*/
 #define VLAN_ETH_FRAME_LEN	1518	/* Max. octets in frame sans FCS */
 
 /*
@@ -59,15 +69,29 @@ struct vlan_ethhdr {
 
 #include <linux/skbuff.h>
 
+/*
+辅助函数，用于从mac_header指针进行强制类型转换
+*/
 static inline struct vlan_ethhdr *vlan_eth_hdr(const struct sk_buff *skb)
 {
 	return (struct vlan_ethhdr *)skb_mac_header(skb);
 }
 
+/*
+高3bit表示优先级，0-7
+*/
 #define VLAN_PRIO_MASK		0xe000 /* Priority Code Point */
 #define VLAN_PRIO_SHIFT		13
+/*
+第13bit表示CFI，规范格式指示符
+照目前内核代码的实现，该bit用于表示是否含有vlanid，1表示低12bit含有vlanid
+*/
 #define VLAN_CFI_MASK		0x1000 /* Canonical Format Indicator */
 #define VLAN_TAG_PRESENT	VLAN_CFI_MASK
+/*
+低12bit表示vlanid
+取值范围在0-4095之间，不包含0和4095，英文文档使用"between"一词
+*/
 #define VLAN_VID_MASK		0x0fff /* VLAN Identifier */
 #define VLAN_N_VID		4096
 
@@ -289,6 +313,8 @@ static inline struct sk_buff *__vlan_put_tag(struct sk_buff *skb, u16 vlan_tci)
 static inline struct sk_buff *__vlan_hwaccel_put_tag(struct sk_buff *skb,
 						     u16 vlan_tci)
 {
+	/* 使用VLAN_TAG_PRESENT位标记含有vlanid
+	   使用vlan_tci字段记录优先级和vlanid */
 	skb->vlan_tci = VLAN_TAG_PRESENT | vlan_tci;
 	return skb;
 }
