@@ -143,6 +143,17 @@ void ftrace_likely_update(struct ftrace_branch_data *f, int val, int expect);
 #endif /* CONFIG_PROFILE_ALL_BRANCHES */
 
 #else
+/*
+__builtin_expect(EXP, C)
+内建函数 __builtin_expect 用于为编译器提供分支预测信息，
+其返回值是整数表达式 EXP 的值，C 的值必须是编译时常数。
+
+likely和unlikely不是指令,它只是给编译器看的，
+编译器看到后可以合理地安排指令的先后顺序。
+指明__builtin_expect()用于编译器的分支预测。
+此处的x取值受限，只能为整数。
+对于判断表达式x，即其值为1或0。使用!!进行转换。
+*/
 # define likely(x)	__builtin_expect(!!(x), 1)
 # define unlikely(x)	__builtin_expect(!!(x), 0)
 #endif

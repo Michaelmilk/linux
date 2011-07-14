@@ -7,6 +7,20 @@
 #define notrace __attribute__((no_instrument_function))
 
 #ifdef CONFIG_X86_32
+/*
+__attribute__是关键字，是gcc的C语言扩展
+
+regparm(0)表示不从寄存器传递参数
+regparm(3)表示调用函数的时候参数不是通过栈传递，
+而是直接放到寄存器里，被调用函数直接从寄存器取参数
+
+函数定义前加宏asmlinkage表示这些函数通过堆栈而不是通过寄存器传递参数。
+
+gcc编译器在汇编过程中调用c语言函数时传递参数有两种方法：
+一种是通过堆栈，另一种是通过寄存器。缺省时采用寄存器
+假如你要在你的汇编过程中调用c语言函数，并且想通过堆栈传递参数，
+你定义的c函数时要在函数前加上宏asmlinkage
+*/
 #define asmlinkage CPP_ASMLINKAGE __attribute__((regparm(0)))
 
 /*
