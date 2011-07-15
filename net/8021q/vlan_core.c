@@ -4,6 +4,10 @@
 #include <linux/netpoll.h>
 #include "vlan.h"
 
+/*
+由vlan接口接收此skb
+参数为2级指针，因为共享性检查中和插入vlanid时可能会分配新的skb
+*/
 bool vlan_do_receive(struct sk_buff **skbp)
 {
 	struct sk_buff *skb = *skbp;
@@ -11,22 +15,30 @@ bool vlan_do_receive(struct sk_buff **skbp)
 	struct net_device *vlan_dev;
 	struct vlan_pcpu_stats *rx_stats;
 
+	/* 查找虚拟vlan接口 */
 	vlan_dev = vlan_find_dev(skb->dev, vlan_id);
 	if (!vlan_dev) {
 		if (vlan_id)
 			skb->pkt_type = PACKET_OTHERHOST;
+		/* 没有对应vlan_id的虚拟接口，而该帧又是vlan帧
+		   则标记为PACKET_OTHERHOST，返回false，表示本机vlan未做处理 */
 		return false;
 	}
 
+	/* 检查skb的共享性
+	   参考__netif_receive_skb()中调用vlan_do_receive()前的deliver_skb()*/
 	skb = *skbp = skb_share_check(skb, GFP_ATOMIC);
 	if (unlikely(!skb))
 		return false;
 
+	/* 接收接口改为虚拟的vlan接口 */
 	skb->dev = vlan_dev;
 	if (skb->pkt_type == PACKET_OTHERHOST) {
 		/* Our lower layer thinks this is not local, let's make sure.
 		 * This allows the VLAN to have a different MAC than the
 		 * underlying device, and still route correctly. */
+		/* 修正底层协议栈对目的mac的检查
+		   主要是驱动中使用eth_type_trans()的结果 */
 		if (!compare_ether_addr(eth_hdr(skb)->h_dest,
 					vlan_dev->dev_addr))
 			skb->pkt_type = PACKET_HOST;
@@ -49,6 +61,8 @@ bool vlan_do_receive(struct sk_buff **skbp)
 	}
 
 	skb->priority = vlan_get_ingress_priority(vlan_dev, skb->vlan_tci);
+	/* 记录的vlanid清0，因为已经选择到了对应的虚拟vlan接口
+	   该虚拟的vlan接口所对应的vlanid是已知的 */
 	skb->vlan_tci = 0;
 
 	rx_stats = this_cpu_ptr(vlan_dev_info(vlan_dev)->vlan_pcpu_stats);
@@ -60,6 +74,7 @@ bool vlan_do_receive(struct sk_buff **skbp)
 		rx_stats->rx_multicast++;
 	u64_stats_update_end(&rx_stats->syncp);
 
+	/* 返回true，表示该vlan报文成功处理，将会重进协议栈 */
 	return true;
 }
 

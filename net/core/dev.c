@@ -3210,7 +3210,7 @@ ncls:
 
 	/* 内核中由netdev_rx_handler_register()为不同模型注册了以下几个函数
 	   br_handle_frame() bond_handle_frame() macvlan_handle_frame()
-	   有了这个接口，便可以很容易的在接口上对数据进行一些特殊处理 */
+	   有了这个函数指针接口，便可以很容易的在接口上对数据进行一些特殊处理 */
 	rx_handler = rcu_dereference(skb->dev->rx_handler);
 	if (rx_handler) {
 		if (pt_prev) {
@@ -3237,9 +3237,13 @@ ncls:
 			pt_prev = NULL;
 		}
 		if (vlan_do_receive(&skb)) {
+			/* vlan报文成功接收，skb的接收接口已经变为虚拟的vlan接口
+			   skb使用该虚拟的vlan接口做为接收接口重进协议栈 */
 			ret = __netif_receive_skb(skb);
 			goto out;
 		} else if (unlikely(!skb))
+			/* vlan_do_receive()中的
+			   skb_share_check()或vlan_insert_tag()失败 */
 			goto out;
 	}
 
@@ -3296,6 +3300,15 @@ out:
  *	NET_RX_DROP: packet was dropped
  */
 /*
+网络层接口接收skb
+
+因为是网络层接收函数，所以在调用此函数前，skb->data指针应指向网络层数据
+通常驱动中都会使用eth_type_trans()来完成data指针的移动工作
+
+@skb可能会因拥塞控制或协议层处理而被丢弃释放
+此函数只应该在软中断上下文调用，并且是开中断的
+一般不处理其返回值
+
 为了实现RPS机制，对原来的netif_receive_skb()进行了封装
 相同的工作现由__netif_receive_skb()处理
 */

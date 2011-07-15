@@ -115,6 +115,9 @@ struct vlan_group {
 	struct rcu_head		rcu;
 };
 
+/*
+取@vlan_id对应的虚拟接口
+*/
 static inline struct net_device *vlan_group_get_device(struct vlan_group *vg,
 						       u16 vlan_id)
 {
@@ -144,6 +147,9 @@ static inline int is_vlan_dev(struct net_device *dev)
 
 #if defined(CONFIG_VLAN_8021Q) || defined(CONFIG_VLAN_8021Q_MODULE)
 /* Must be invoked with rcu_read_lock or with RTNL. */
+/*
+根据@vlan_id到此真实设备@real_dev下的vlan组中查找对应的虚拟vlan接口
+*/
 static inline struct net_device *vlan_find_dev(struct net_device *real_dev,
 					       u16 vlan_id)
 {
@@ -261,6 +267,12 @@ static inline int vlan_hwaccel_receive_skb(struct sk_buff *skb,
  *
  * Does not change skb->protocol so this function can be used during receive.
  */
+/*
+该函数假定@skb->data指向mac header，调用时需注意
+
+如果申请新skb失败的话，原skb会被释放，所以调用者不用为释放原skb而担心
+不会改变skb->protocol域的值，所以接收时也可使用该函数
+*/
 static inline struct sk_buff *vlan_insert_tag(struct sk_buff *skb, u16 vlan_tci)
 {
 	struct vlan_ethhdr *veth;
