@@ -31,9 +31,31 @@ struct address_space;
  * a page, though if it is a pagecache page, rmap structures can tell us
  * who is mapping it.
  */
+/*
+系统中的每一个物理页都会有一个page结构与其对应，以便跟踪当前该物理页的用途
+根据该page结构无法跟踪当前是哪个进程正在使用它，即使该物理页是页缓存
+可以通过一些映射结构知道哪个虚拟页映射了该物理页
+
+内核用struct page结构表示系统中的每个物理页
+
+必须要了解的一点是page结构与物理页相关，而并非与虚拟页相关。
+因此，该结构对物理页的描述只是短暂的。
+即使页中所包含的数据继续存在，但是由于交换等原因，
+它们可能并不再和同一个page结构相关联。
+内核仅仅用这个数据结构来描述当前时刻在相关的物理页中存放的东西。
+这种数据结构的目的在于描述物理内存本身，而不是描述包含在其中的数据。
+*/
 struct page {
+    /* flag域用来存放页的状态。这些状态包括页是不是脏的，是不是被锁定在内存中等等。
+	   flag的每一个bit位单独表示一种状态，它至少可以同时表示出32种不同状态。
+	   这些标志定义在<linux/page-flags.h>中 */
 	unsigned long flags;		/* Atomic flags, some possibly
 					 * updated asynchronously */
+	/* _count域存放页的引用计数--也就是这一页被引用了多少次。
+	   当计数器变为0时，就说明当前没有引用这一页，于是，在新的分配中可以使用它。
+	   内核代码不应直接检查该域，而是调用page_count()函数进行检查，
+	   该函数唯一的参数就是page结构指针。
+	   返回0表示页空闲，返回一个正整数表示页在使用。 */
 	atomic_t _count;		/* Usage count, see below. */
 	union {
 		atomic_t _mapcount;	/* Count of ptes mapped in mms,
@@ -54,6 +76,8 @@ struct page {
 						 * indicates order in the buddy
 						 * system if PG_buddy is set.
 						 */
+		/* 一个页可以作为页缓存使用（这时，mapping指向和这个页关联的address_space对象），
+		   或者作为私有数据（由private指向），或者作为进程页表的映射。 */
 		struct address_space *mapping;	/* If low bit clear, points to
 						 * inode address_space, or NULL.
 						 * If page mapped as anonymous
@@ -86,6 +110,7 @@ struct page {
 	 * WANT_PAGE_VIRTUAL in asm/page.h
 	 */
 #if defined(WANT_PAGE_VIRTUAL)
+    /* virtual域是页的虚拟地址。通常情况下，它就是页在虚拟内存中的地址。 */
 	void *virtual;			/* Kernel virtual address (NULL if
 					   not kmapped, ie. highmem) */
 #endif /* WANT_PAGE_VIRTUAL */
