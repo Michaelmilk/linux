@@ -24,7 +24,9 @@
 */
 #define LIST_HEAD_INIT(name) { &(name), &(name) }
 
-/* 声明并初始化一个以@name为名称的list_head头节点 */
+/*
+声明并初始化一个以@name为名称的list_head头节点
+*/
 #define LIST_HEAD(name) \
 	struct list_head name = LIST_HEAD_INIT(name)
 
@@ -47,6 +49,11 @@ static inline void INIT_LIST_HEAD(struct list_head *list)
  * the prev/next entries already!
  */
 #ifndef CONFIG_DEBUG_LIST
+/*
+consecutive:连续的
+
+把@new节点加在已知的连续的两个节点@prev和@next之间
+*/
 static inline void __list_add(struct list_head *new,
 			      struct list_head *prev,
 			      struct list_head *next)
@@ -70,6 +77,9 @@ extern void __list_add(struct list_head *new,
  * Insert a new entry after the specified head.
  * This is good for implementing stacks.
  */
+/*
+加在@head节点的后面，即@new成为@head的next节点
+*/
 static inline void list_add(struct list_head *new, struct list_head *head)
 {
 	__list_add(new, head, head->next);
@@ -84,6 +94,9 @@ static inline void list_add(struct list_head *new, struct list_head *head)
  * Insert a new entry before the specified head.
  * This is useful for implementing queues.
  */
+/*
+加在@head的前面，即@new成为链表的尾节点(如果@head是链表头的话)
+*/
 static inline void list_add_tail(struct list_head *new, struct list_head *head)
 {
 	/* 加在head节点的前面，即加在了整个链表的最后面，因为这是一个双向循环链表 */
@@ -97,6 +110,9 @@ static inline void list_add_tail(struct list_head *new, struct list_head *head)
  * This is only for internal list manipulation where we know
  * the prev/next entries already!
  */
+/*
+将@prev和@next之间的节点从链表中移出
+*/
 static inline void __list_del(struct list_head * prev, struct list_head * next)
 {
 	next->prev = prev;
@@ -110,11 +126,19 @@ static inline void __list_del(struct list_head * prev, struct list_head * next)
  * in an undefined state.
  */
 #ifndef CONFIG_DEBUG_LIST
+/*
+将节点@entry从其所在的链表中移出
+但是此时@entry的前后指针域依然在链表中
+*/
 static inline void __list_del_entry(struct list_head *entry)
 {
 	__list_del(entry->prev, entry->next);
 }
 
+/*
+将节点@entry从其所在的链表中移出
+并将前后指针域置为POISON
+*/
 static inline void list_del(struct list_head *entry)
 {
 	__list_del(entry->prev, entry->next);
@@ -133,6 +157,10 @@ extern void list_del(struct list_head *entry);
  *
  * If @old was empty, it will be overwritten.
  */
+/*
+使用@new节点替换@old节点在其原链表中的位置
+但是此时@old结点的前后指针域还在链表中
+*/
 static inline void list_replace(struct list_head *old,
 				struct list_head *new)
 {
@@ -142,6 +170,10 @@ static inline void list_replace(struct list_head *old,
 	new->prev->next = new;
 }
 
+/*
+使用@new节点替换@old节点在其原链表中的位置
+并将@old节点的前后指针域指向自身
+*/
 static inline void list_replace_init(struct list_head *old,
 					struct list_head *new)
 {
@@ -153,6 +185,10 @@ static inline void list_replace_init(struct list_head *old,
  * list_del_init - deletes entry from list and reinitialize it.
  * @entry: the element to delete from the list.
  */
+/*
+将节点@enrty从其所在的链表移出
+并将@entry的前后域指向自身
+*/
 static inline void list_del_init(struct list_head *entry)
 {
 	__list_del_entry(entry);
@@ -164,6 +200,10 @@ static inline void list_del_init(struct list_head *entry)
  * @list: the entry to move
  * @head: the head that will precede our entry
  */
+/*
+将节点@list从其原来所在的链表中移出
+然后将其加入到以@head为头节点的链表中
+*/
 static inline void list_move(struct list_head *list, struct list_head *head)
 {
 	__list_del_entry(list);
@@ -175,6 +215,10 @@ static inline void list_move(struct list_head *list, struct list_head *head)
  * @list: the entry to move
  * @head: the head that will follow our entry
  */
+/*
+将节点@list从其原来所在的链表中移出
+然后将其加入到以@head为头节点的链表尾部，成为@head的尾节点
+*/
 static inline void list_move_tail(struct list_head *list,
 				  struct list_head *head)
 {
@@ -187,6 +231,9 @@ static inline void list_move_tail(struct list_head *list,
  * @list: the entry to test
  * @head: the head of the list
  */
+/*
+判断@list节点是否是以@head为链头的链表中的最后一个节点
+*/
 static inline int list_is_last(const struct list_head *list,
 				const struct list_head *head)
 {
@@ -197,7 +244,10 @@ static inline int list_is_last(const struct list_head *list,
  * list_empty - tests whether a list is empty
  * @head: the list to test.
  */
-/* list_head的判空条件即next指针又指向了头节点本身 */
+/*
+list_head的判空条件即next指针又指向了头节点本身
+判断以@head为头节点的链表是否为空
+*/
 static inline int list_empty(const struct list_head *head)
 {
 	return head->next == head;
@@ -226,6 +276,10 @@ static inline int list_empty_careful(const struct list_head *head)
  * list_rotate_left - rotate the list to the left
  * @head: the head of the list
  */
+/*
+链表左旋
+把以@head为头的链表的第一个节点移为尾节点
+*/
 static inline void list_rotate_left(struct list_head *head)
 {
 	struct list_head *first;
@@ -240,6 +294,9 @@ static inline void list_rotate_left(struct list_head *head)
  * list_is_singular - tests whether a list has just one entry.
  * @head: the list to test.
  */
+/*
+检查以@head为链头节点的链表是否只含有一个节点元素
+*/
 static inline int list_is_singular(const struct list_head *head)
 {
 	return !list_empty(head) && (head->next == head->prev);
