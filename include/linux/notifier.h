@@ -15,6 +15,9 @@
 #include <linux/srcu.h>
 
 /*
+通知链的4种类型
+*/
+/*
  * Notifier chains are of four types:
  *
  *	Atomic notifier chains: Chain callbacks run in interrupt/atomic
@@ -47,26 +50,49 @@
  * runtime initialization.
  */
 
+/*
+通知链中的元素，记录了当发出通知时，应该执行的操作（即回调函数）
+*/
 struct notifier_block {
 	int (*notifier_call)(struct notifier_block *, unsigned long, void *);
 	struct notifier_block __rcu *next;
+	/* 优先级数值大的先被调用 */
 	int priority;
 };
 
+/*
+原子通知链(Atomic notifier chains)
+通知链元素的回调函数(当事件发生时要执行的函数)只能在中断上下文中运行，不允许阻塞
+*/
 struct atomic_notifier_head {
+	/* 使用自旋锁控制对该链的并发操作 */
 	spinlock_t lock;
 	struct notifier_block __rcu *head;
 };
 
+/*
+可阻塞通知链(Blocking notifier chains)
+通知链元素的回调函数在进程上下文中运行，允许阻塞
+*/
 struct blocking_notifier_head {
+	/* 因为允许阻塞，故使用读写信号量控制并发 */
 	struct rw_semaphore rwsem;
 	struct notifier_block __rcu *head;
 };
 
+/*
+原始通知链(Raw notifier chains)
+对通知链元素的回调函数没有任何限制，所有锁和保护机制都由调用者维护
+*/
 struct raw_notifier_head {
+	/* 链本身没有锁，故由调用者控制并发 */
 	struct notifier_block __rcu *head;
 };
 
+/*
+SRCU通知链(SRCU notifier chains)
+可阻塞通知链的一种变体
+*/
 struct srcu_notifier_head {
 	struct mutex mutex;
 	struct srcu_struct srcu;
