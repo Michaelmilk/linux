@@ -222,6 +222,14 @@ typedef struct {
 } atomic64_t;
 #endif
 
+/*
+链表节点
+其他结构体通过内嵌该链表节点结构，从而实现链表的操作
+通过container_of宏实现容器结构的反向定位
+
+两个指针就像人的两只胳膊
+牵到了手便找到了左右的人，也就自然能够找到人本身
+*/
 struct list_head {
 	struct list_head *next, *prev;
 };
