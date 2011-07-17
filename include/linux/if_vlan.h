@@ -47,6 +47,8 @@ sans:无，没有
  *	@h_vlan_encapsulated_proto: packet type ID or len
  */
 struct vlan_hdr {
+	/* Tag Control Information
+	   包括高3bit优先级和低12bit的vlanid */
 	__be16	h_vlan_TCI;
 	__be16	h_vlan_encapsulated_proto;
 };
@@ -102,15 +104,30 @@ extern void vlan_ioctl_set(int (*hook)(struct net *, void __user *));
  * depends on completely exhausting the VLAN identifier space.  Thus
  * it gives constant time look-up, but in many cases it wastes memory.
  */
+/*
+上面的注释是针对最初struct vlan_group中直接使用4096个struct net_device指针的情况
+那样对vlan虚拟接口的查找是线性的，不过的确浪费了很多的指针空间
+
+作为优化，将4096个vlan划分为8个区域
+在struct vlan_group使用2级指针定位不同的区域，在对应区域的vlan没有使用时
+潜在的便可以节约其余的7/8指针空间
+*/
 #define VLAN_GROUP_ARRAY_SPLIT_PARTS  8
+/*
+每个区域的vlan个数，512
+*/
 #define VLAN_GROUP_ARRAY_PART_LEN     (VLAN_N_VID/VLAN_GROUP_ARRAY_SPLIT_PARTS)
 
 struct vlan_group {
+	/* 该虚拟vlan接口组所依附的接口
+	   可能是真实的物理接口，也完全有可能是另一个虚拟接口，比如bond接口 */
 	struct net_device	*real_dev; /* The ethernet(like) device
 					    * the vlan is attached to.
 					    */
+	/* 记录使用的vlan个数 */
 	unsigned int		nr_vlans;
 	struct hlist_node	hlist;	/* linked list */
+	/* 虚拟vlan接口数组 */
 	struct net_device **vlan_devices_arrays[VLAN_GROUP_ARRAY_SPLIT_PARTS];
 	struct rcu_head		rcu;
 };
@@ -122,10 +139,17 @@ static inline struct net_device *vlan_group_get_device(struct vlan_group *vg,
 						       u16 vlan_id)
 {
 	struct net_device **array;
+	/* 先定位该@vlan_id所在的区域 */
 	array = vg->vlan_devices_arrays[vlan_id / VLAN_GROUP_ARRAY_PART_LEN];
+	/* 有描述该@vlan_id的虚拟vlan接口，则将其返回
+	   否则返回NULL，说明并未在该@vg组中注册此@vlan_id */
 	return array ? array[vlan_id % VLAN_GROUP_ARRAY_PART_LEN] : NULL;
 }
 
+/*
+将对应@vlan_id的虚拟vlan接口@dev加入到@vg组中
+当@dev为NULL时，表示从@vg中移除该@vlan_id
+*/
 static inline void vlan_group_set_device(struct vlan_group *vg,
 					 u16 vlan_id,
 					 struct net_device *dev)
@@ -133,16 +157,28 @@ static inline void vlan_group_set_device(struct vlan_group *vg,
 	struct net_device **array;
 	if (!vg)
 		return;
+	/* 先定位该@vlan_id所在的区域 */
 	array = vg->vlan_devices_arrays[vlan_id / VLAN_GROUP_ARRAY_PART_LEN];
+	/* 记录该虚拟vlan接口@dev */
 	array[vlan_id % VLAN_GROUP_ARRAY_PART_LEN] = dev;
 }
 
+/*
+根据@dev的私有标记，判断此接口是否是一个虚拟vlan接口
+生成新的虚拟vlan接口时，在vlan_setup()中会添加此标记
+*/
 static inline int is_vlan_dev(struct net_device *dev)
 {
         return dev->priv_flags & IFF_802_1Q_VLAN;
 }
 
+/*
+根据高第4bit位判断是否带有vlan
+*/
 #define vlan_tx_tag_present(__skb)	((__skb)->vlan_tci & VLAN_TAG_PRESENT)
+/*
+取TCI，skb->vlan_tci字段是包括优先级和vlanid的
+*/
 #define vlan_tx_tag_get(__skb)		((__skb)->vlan_tci & ~VLAN_TAG_PRESENT)
 
 #if defined(CONFIG_VLAN_8021Q) || defined(CONFIG_VLAN_8021Q_MODULE)
@@ -203,6 +239,7 @@ static inline int __vlan_hwaccel_rx(struct sk_buff *skb, struct vlan_group *grp,
 
 static inline bool vlan_do_receive(struct sk_buff **skb)
 {
+	/* 内核没有配置支持vlan时，带vlan的报文认为是其他主机的，不应做处理 */
 	if ((*skb)->vlan_tci & VLAN_VID_MASK)
 		(*skb)->pkt_type = PACKET_OTHERHOST;
 	return false;
@@ -251,6 +288,7 @@ static inline int vlan_hwaccel_receive_skb(struct sk_buff *skb,
 					   struct vlan_group *grp,
 					   u16 vlan_tci)
 {
+	/* 封装函数，1表示处于polling模式 */
 	return __vlan_hwaccel_rx(skb, grp, vlan_tci, 1);
 }
 
@@ -307,6 +345,10 @@ static inline struct sk_buff *vlan_insert_tag(struct sk_buff *skb, u16 vlan_tci)
  * Following the skb_unshare() example, in case of error, the calling function
  * doesn't have to worry about freeing the original skb.
  */
+/*
+对vlan_insert_tag()进行一次封装
+该函数修改skb->protocol字段
+*/
 static inline struct sk_buff *__vlan_put_tag(struct sk_buff *skb, u16 vlan_tci)
 {
 	skb = vlan_insert_tag(skb, vlan_tci);
@@ -341,10 +383,15 @@ static inline struct sk_buff *__vlan_hwaccel_put_tag(struct sk_buff *skb,
  * Assumes skb->dev is the target that will xmit this frame.
  * Returns a VLAN tagged skb.
  */
+/*
+根据接口特性将@vlan_tci信息添加到@skb中
+*/
 static inline struct sk_buff *vlan_put_tag(struct sk_buff *skb, u16 vlan_tci)
 {
+	/* 硬件支持发送时添加vlan，则只需将vlan信息标记在skb->vlan_tci字段 */
 	if (skb->dev->features & NETIF_F_HW_VLAN_TX) {
 		return __vlan_hwaccel_put_tag(skb, vlan_tci);
+	/* 否则需要在软件层将以太网头前移，把vlan信息添加到帧中 */
 	} else {
 		return __vlan_put_tag(skb, vlan_tci);
 	}
@@ -359,12 +406,14 @@ static inline struct sk_buff *vlan_put_tag(struct sk_buff *skb, u16 vlan_tci)
  */
 static inline int __vlan_get_tag(const struct sk_buff *skb, u16 *vlan_tci)
 {
+	/* 注意是从skb->data指针开始解析 */
 	struct vlan_ethhdr *veth = (struct vlan_ethhdr *)skb->data;
 
 	if (veth->h_vlan_proto != htons(ETH_P_8021Q)) {
 		return -EINVAL;
 	}
 
+	/* 保存vlan信息，包含优先级和vlanid */
 	*vlan_tci = ntohs(veth->h_vlan_TCI);
 	return 0;
 }
@@ -376,6 +425,9 @@ static inline int __vlan_get_tag(const struct sk_buff *skb, u16 *vlan_tci)
  *
  * Returns error if @skb->vlan_tci is not set correctly
  */
+/*
+从@skb->vlan_tci字段提取vlan信息
+*/
 static inline int __vlan_hwaccel_get_tag(const struct sk_buff *skb,
 					 u16 *vlan_tci)
 {
@@ -397,6 +449,9 @@ static inline int __vlan_hwaccel_get_tag(const struct sk_buff *skb,
  *
  * Returns error if the skb is not VLAN tagged
  */
+/*
+封装函数，根据硬件特性提取vlan信息
+*/
 static inline int vlan_get_tag(const struct sk_buff *skb, u16 *vlan_tci)
 {
 	if (skb->dev->features & NETIF_F_HW_VLAN_TX) {
@@ -413,6 +468,9 @@ static inline int vlan_get_tag(const struct sk_buff *skb, u16 *vlan_tci)
  * Returns the EtherType of the packet, regardless of whether it is
  * vlan encapsulated (normal or hardware accelerated) or not.
  */
+/*
+取vlan头中封装的以太网协议类型
+*/
 static inline __be16 vlan_get_protocol(const struct sk_buff *skb)
 {
 	__be16 protocol = 0;
