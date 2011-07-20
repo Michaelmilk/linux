@@ -116,6 +116,10 @@ EXPORT_SYMBOL(system_state);
 
 extern void time_init(void);
 /* Default late time init is NULL. archs can override this later. */
+/*
+函数指针late_time_init在time_init()里赋值
+架构相关的
+*/
 void (*__initdata late_time_init)(void);
 extern void softirq_init(void);
 
@@ -126,7 +130,13 @@ char *saved_command_line;
 /* Command line for parameter parsing */
 static char *static_command_line;
 
+/*
+将会指向引导参数"init="
+*/
 static char *execute_command;
+/*
+将会指向引导参数"rdinit="
+*/
 static char *ramdisk_execute_command;
 
 /*
@@ -275,6 +285,9 @@ static int __init unknown_bootoption(char *param, char *val)
 int __read_mostly debug_pagealloc_enabled = 0;
 #endif
 
+/*
+init_setup()函数使用静态全局变量execute_command指向该参数的值
+*/
 static int __init init_setup(char *str)
 {
 	unsigned int i;
@@ -290,6 +303,9 @@ static int __init init_setup(char *str)
 		argv_init[i] = NULL;
 	return 1;
 }
+/*
+注册init=X的内核命令行参数处理函数为init_setup()
+*/
 __setup("init=", init_setup);
 
 static int __init rdinit_setup(char *str)
@@ -500,6 +516,7 @@ asmlinkage void __init start_kernel(void)
 	/* 时钟中断初始化，向通知链clockevents_chain注册了tick_notifier
 	   回调函数tick_notify()处理时钟事件 */
 	tick_init();
+	/* 激活引导cpu，即设置当前cpu所对应的几个bit位 */
 	boot_cpu_init();
 	/* 初始化页地址，使用链表将其链接起来 */
 	page_address_init();
