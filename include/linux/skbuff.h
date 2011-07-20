@@ -356,6 +356,7 @@ struct sk_buff {
        不需要时，调用net_disable_timestamp() 。 */
 	ktime_t			tstamp;
 
+	/* 该sk_buff属于哪个sock */
 	struct sock		*sk;
 	/* 接收或者发送该数据包的网络设备，跟踪与packet相关的device */
 	struct net_device	*dev;

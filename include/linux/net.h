@@ -212,6 +212,7 @@ struct proto_ops {
 	type dst = ({ __sockaddr_check_size(sizeof(*dst)); (type) src; })
 
 struct net_proto_family {
+	/* 协议族，如:PF_INET，include/linux/socket.h */
 	int		family;
 	int		(*create)(struct net *net, struct socket *sock,
 				  int protocol, int kern);

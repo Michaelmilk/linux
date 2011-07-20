@@ -229,6 +229,9 @@ void in_dev_finish_destroy(struct in_device *idev)
 }
 EXPORT_SYMBOL(in_dev_finish_destroy);
 
+/*
+为接口@dev分配IPv4关心的数据部分空间，由@dev->ip_ptr指针记录
+*/
 static struct in_device *inetdev_init(struct net_device *dev)
 {
 	struct in_device *in_dev;
@@ -1147,6 +1150,11 @@ static void inetdev_send_gratuitous_arp(struct net_device *dev,
 
 /* Called only under RTNL semaphore */
 
+/*
+@this	: 指向注册节点ip_netdev_notifier自身
+@event	: 通知事件
+@ptr	: 指向关心的参数，这里是struct net_device *
+*/
 static int inetdev_event(struct notifier_block *this, unsigned long event,
 			 void *ptr)
 {
@@ -1829,6 +1837,8 @@ void __init devinet_init(void)
 	register_pernet_subsys(&devinet_ops);
 
 	register_gifconf(PF_INET, inet_gifconf);
+	/* 在原始通知链netdev_chain上注册ip_netdev_notifier
+	   以便IPv4感知到一些接口状态的变化 */
 	register_netdevice_notifier(&ip_netdev_notifier);
 
 	rtnl_af_register(&inet_af_ops);

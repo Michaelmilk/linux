@@ -204,6 +204,10 @@ static __inline__ int bad_mask(__be32 mask, __be32 addr)
 
 #define endfor_ifa(in_dev) }
 
+/*
+È¡ip_ptrÖ¸Õë
+²Î¿¼inetdev_event() => inetdev_init()
+*/
 static inline struct in_device *__in_dev_get_rcu(const struct net_device *dev)
 {
 	return rcu_dereference(dev->ip_ptr);

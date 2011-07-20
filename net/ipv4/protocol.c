@@ -28,6 +28,10 @@
 #include <linux/spinlock.h>
 #include <net/protocol.h>
 
+/*
+传输层协议数组
+每一项指向一个传输层协议实例，如tcp_protocol
+*/
 const struct net_protocol __rcu *inet_protos[MAX_INET_PROTOS] __read_mostly;
 
 /*
@@ -38,6 +42,8 @@ int inet_add_protocol(const struct net_protocol *prot, unsigned char protocol)
 {
 	int hash = protocol & (MAX_INET_PROTOS - 1);
 
+	/* 同一位置上只能记录一种协议，传输层协议编号不能重复
+	   参考IPPROTO_TCP等的枚举值 */
 	return !cmpxchg((const struct net_protocol **)&inet_protos[hash],
 			NULL, prot) ? 0 : -1;
 }

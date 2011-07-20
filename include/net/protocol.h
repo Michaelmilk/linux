@@ -29,6 +29,10 @@
 #include <linux/ipv6.h>
 #endif
 
+/*
+必须是2的幂次
+可以在计算哈希值时使用-1位与的方式
+*/
 #define MAX_INET_PROTOS	256		/* Must be a power of 2		*/
 
 

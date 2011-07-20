@@ -2250,6 +2250,10 @@ void sk_common_release(struct sock *sk)
 EXPORT_SYMBOL(sk_common_release);
 
 static DEFINE_RWLOCK(proto_list_lock);
+/*
+所有通过proto_register()注册的L4协议链表头
+如@tcp_prot实例通过内嵌的node链入该链表
+*/
 static LIST_HEAD(proto_list);
 
 #ifdef CONFIG_PROC_FS
@@ -2353,6 +2357,13 @@ static inline void release_proto_idx(struct proto *prot)
 }
 #endif
 
+/*
+L4协议注册函数
+将L4协议注册给传输层接口socket使用
+
+@prot		: L4协议实例指针，如&tcp_prot
+@alloc_slab	: 是否使用slab高速缓存分配器
+*/
 int proto_register(struct proto *prot, int alloc_slab)
 {
 	if (alloc_slab) {

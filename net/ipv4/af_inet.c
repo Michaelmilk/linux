@@ -1630,6 +1630,9 @@ static struct packet_type ip_packet_type __read_mostly = {
 	.gro_complete = inet_gro_complete,
 };
 
+/*
+IPv4网络子系统的初始化函数
+*/
 static int __init inet_init(void)
 {
 	struct sk_buff *dummy_skb;
@@ -1637,6 +1640,8 @@ static int __init inet_init(void)
 	struct list_head *r;
 	int rc = -EINVAL;
 
+	/* IP层在接收skb时，ip_rcv_options()中使用cb[]字段保存option信息
+	   因此要确保cb[]能够容纳struct inet_skb_parm */
 	BUILD_BUG_ON(sizeof(struct inet_skb_parm) > sizeof(dummy_skb->cb));
 
 	sysctl_local_reserved_ports = kzalloc(65536 / 8, GFP_KERNEL);
@@ -1663,6 +1668,7 @@ static int __init inet_init(void)
 	 *	Tell SOCKET that we are alive...
 	 */
 
+	/* 让socket接口感知IPv4 */
 	(void)sock_register(&inet_family_ops);
 
 #ifdef CONFIG_SYSCTL
@@ -1741,6 +1747,8 @@ static int __init inet_init(void)
 
 	ipfrag_init();
 
+	/* 将IPv4协议类型注册到ptype_base
+	   以便__netif_receive_skb()中可以处理IPv4报文 */
 	dev_add_pack(&ip_packet_type);
 
 	rc = 0;

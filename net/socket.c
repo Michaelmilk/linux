@@ -156,6 +156,10 @@ static const struct file_operations socket_file_ops = {
  */
 
 static DEFINE_SPINLOCK(net_family_lock);
+/*
+网络层协议族指针数组
+记录由sock_register()注册给socket的网络层协议族
+*/
 static const struct net_proto_family __rcu *net_families[NPROTO] __read_mostly;
 
 /*
@@ -2448,6 +2452,9 @@ SYSCALL_DEFINE2(socketcall, int, call, unsigned long __user *, args)
  *	socket interface. The value ops->family coresponds to the
  *	socket system call protocol family.
  */
+/*
+将网络层协议族实例@ops注册给socket，保存在数组net_families[]中
+*/
 int sock_register(const struct net_proto_family *ops)
 {
 	int err;
