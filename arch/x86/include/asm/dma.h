@@ -77,6 +77,10 @@
 
 #ifdef CONFIG_X86_32
 /* The maximum address that we can perform a DMA transfer to on this platform */
+/*
+DMA最大地址，为虚拟地址
+传统DMA区域为物理内存前16M，加上PAGE_OFFSET转换为虚拟地址
+*/
 #define MAX_DMA_ADDRESS      (PAGE_OFFSET + 0x1000000)
 #else
 /* Compat define for old dma zone */

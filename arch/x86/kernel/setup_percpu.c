@@ -33,7 +33,11 @@ EXPORT_PER_CPU_SYMBOL(cpu_number);
 DEFINE_PER_CPU(unsigned long, this_cpu_off) = BOOT_PERCPU_OFFSET;
 EXPORT_PER_CPU_SYMBOL(this_cpu_off);
 
+/*
+使用一个数组，来记录对于每个特定的CPU的变量的地址偏移量
+*/
 unsigned long __per_cpu_offset[NR_CPUS] __read_mostly = {
+	/* 将数组中所有项初始化为BOOT_PERCPU_OFFSET */
 	[0 ... NR_CPUS-1] = BOOT_PERCPU_OFFSET,
 };
 EXPORT_SYMBOL(__per_cpu_offset);
@@ -98,6 +102,7 @@ static bool __init pcpu_need_numa(void)
 static void * __init pcpu_alloc_bootmem(unsigned int cpu, unsigned long size,
 					unsigned long align)
 {
+	/* 从DMA后开始申请，物理地址16M(32位机)后开始 */
 	const unsigned long goal = __pa(MAX_DMA_ADDRESS);
 #ifdef CONFIG_NEED_MULTIPLE_NODES
 	int node = early_cpu_to_node(cpu);

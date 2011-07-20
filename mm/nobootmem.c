@@ -32,6 +32,9 @@ unsigned long max_low_pfn;
 unsigned long min_low_pfn;
 unsigned long max_pfn;
 
+/*
+返回虚拟地址
+*/
 static void * __init __alloc_memory_core_early(int nid, u64 size, u64 align,
 					u64 goal, u64 limit)
 {
@@ -46,14 +49,19 @@ static void * __init __alloc_memory_core_early(int nid, u64 size, u64 align,
 	if (addr == MEMBLOCK_ERROR)
 		return NULL;
 
+	/* 转换为虚拟地址 */
 	ptr = phys_to_virt(addr);
+	/* 清0 */
 	memset(ptr, 0, size);
+	/* 计入引导内存区 */
 	memblock_x86_reserve_range(addr, addr + size, "BOOTMEM");
 	/*
 	 * The min_count is set to 0 so that bootmem allocated blocks
 	 * are never reported as leaks.
 	 */
+	/* 调试记录 */
 	kmemleak_alloc(ptr, size, 0, 0);
+	/* 返回虚拟地址 */
 	return ptr;
 }
 
@@ -190,6 +198,14 @@ void __init free_bootmem(unsigned long addr, unsigned long size)
 	memblock_x86_free_range(addr, addr + size);
 }
 
+/*
+@size	: 要分配的内存大小
+@align	: 边界以多数字节对齐
+@goal	: 内存申请的起始地址，物理地址
+@limit	: 上限
+
+返回虚拟地址
+*/
 static void * __init ___alloc_bootmem_nopanic(unsigned long size,
 					unsigned long align,
 					unsigned long goal,
@@ -207,6 +223,7 @@ restart:
 	if (ptr)
 		return ptr;
 
+	/* 申请失败，回绕从0开始再尝试申请 */
 	if (goal != 0) {
 		goal = 0;
 		goto restart;
@@ -228,9 +245,17 @@ restart:
  *
  * Returns NULL on failure.
  */
+/*
+@size	: 要分配的内存大小
+@align	: 边界以多数字节对齐
+@goal	: 内存申请的起始地址，物理地址
+
+申请失败会回滚到@goal以前
+*/
 void * __init __alloc_bootmem_nopanic(unsigned long size, unsigned long align,
 					unsigned long goal)
 {
+	/* 为无符号数初始化为-1，即赋值为最大值 */
 	unsigned long limit = -1UL;
 
 	return ___alloc_bootmem_nopanic(size, align, goal, limit);

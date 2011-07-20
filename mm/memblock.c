@@ -146,6 +146,10 @@ static phys_addr_t __init_memblock memblock_find_base(phys_addr_t size,
 /*
  * Find a free area with specified alignment in a specific range.
  */
+/*
+@start	: 物理页框地址
+@end	: 物理页框地址
+*/
 u64 __init_memblock memblock_find_in_range(u64 start, u64 end, u64 size, u64 align)
 {
 	return memblock_find_base(size, align, start, end);

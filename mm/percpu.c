@@ -1344,6 +1344,9 @@ int __init pcpu_setup_first_chunk(const struct pcpu_alloc_info *ai,
 
 #ifdef CONFIG_SMP
 
+/*
+×Ö·û´®Ãû³Æ
+*/
 const char *pcpu_fc_names[PCPU_FC_NR] __initdata = {
 	[PCPU_FC_AUTO]	= "auto",
 	[PCPU_FC_EMBED]	= "embed",

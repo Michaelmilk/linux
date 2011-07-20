@@ -3854,6 +3854,9 @@ static int __meminit previous_active_region_index_in_nid(int index, int nid)
 	for (i = last_active_region_index_in_nid(nid); i != -1; \
 				i = previous_active_region_index_in_nid(i, nid))
 
+/*
+返回物理地址
+*/
 u64 __init find_memory_core_early(int nid, u64 size, u64 align,
 					u64 goal, u64 limit)
 {
@@ -3865,11 +3868,13 @@ u64 __init find_memory_core_early(int nid, u64 size, u64 align,
 		u64 ei_start, ei_last;
 		u64 final_start, final_end;
 
+		/* 取起止物理页框号，左移PAGE_SHIFT转换为页框地址 */
 		ei_last = early_node_map[i].end_pfn;
 		ei_last <<= PAGE_SHIFT;
 		ei_start = early_node_map[i].start_pfn;
 		ei_start <<= PAGE_SHIFT;
 
+		/* 取大于@goal和小于@limit的起止页框地址，即可用的页框地址范围 */
 		final_start = max(ei_start, goal);
 		final_end = min(ei_last, limit);
 

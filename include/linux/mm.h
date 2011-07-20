@@ -355,6 +355,9 @@ static inline struct page *compound_head(struct page *page)
 	return page;
 }
 
+/*
+该函数唯一的参数就是page结构。返回0表示物理页空闲，返回一个正整数表示页在使用。
+*/
 static inline int page_count(struct page *page)
 {
 	return atomic_read(&compound_head(page)->_count);

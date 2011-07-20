@@ -306,6 +306,9 @@ EXPORT_SYMBOL(kunmap_high);
 /*
  * Describes one page->virtual association
  */
+/*
+描述page到虚拟地址的映射关系
+*/
 struct page_address_map {
 	struct page *page;
 	void *virtual;
@@ -415,6 +418,11 @@ done:
 
 static struct page_address_map page_address_maps[LAST_PKMAP];
 
+/*
+初始化page_address_pool链表头，并将数组page_address_maps中的元素组织在链表内
+初始化page_address_pool链表的锁
+初始化page_address_htable哈希表
+*/
 void __init page_address_init(void)
 {
 	int i;

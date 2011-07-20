@@ -100,11 +100,15 @@ struct pcpu_alloc_info {
 	struct pcpu_group_info	groups[];
 };
 
+/*
+per-cpu first chunk
+*/
 enum pcpu_fc {
 	PCPU_FC_AUTO,
 	PCPU_FC_EMBED,
 	PCPU_FC_PAGE,
 
+	/* 枚举值个数 */
 	PCPU_FC_NR,
 };
 extern const char *pcpu_fc_names[PCPU_FC_NR];
