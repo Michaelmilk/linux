@@ -91,6 +91,12 @@ u16 vlan_dev_vlan_id(const struct net_device *dev)
 EXPORT_SYMBOL(vlan_dev_vlan_id);
 
 /* VLAN rx hw acceleration helper.  This acts like netif_{rx,receive_skb}(). */
+/*
+网卡硬件支持加减vlan的时候
+在接收时已经将vlanid从帧中剥除，由驱动将vlan信息添加到skb->vlan_tci字段
+
+@polling	: 根据接收模式调用不同的接收函数，NAPI或non-NAPI
+*/
 int __vlan_hwaccel_rx(struct sk_buff *skb, struct vlan_group *grp,
 		      u16 vlan_tci, int polling)
 {
