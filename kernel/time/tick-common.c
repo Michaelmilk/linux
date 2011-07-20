@@ -413,7 +413,12 @@ static struct notifier_block tick_notifier = {
  *
  * Register the notifier with the clockevents framework
  */
+/*
+时钟初始化
+*/
 void __init tick_init(void)
 {
+	/* 向通知链clockevents_chain注册了tick_notifier
+	   回调函数tick_notify()处理时钟事件 */
 	clockevents_register_notifier(&tick_notifier);
 }

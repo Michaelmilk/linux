@@ -26,9 +26,15 @@ static LIST_HEAD(clockevent_devices);
 static LIST_HEAD(clockevents_released);
 
 /* Notification for clock events */
+/*
+时钟事件通知链链头
+*/
 static RAW_NOTIFIER_HEAD(clockevents_chain);
 
 /* Protection for the above */
+/*
+时钟事件通知链为原始通知链，故定义一个自旋锁来保护
+*/
 static DEFINE_RAW_SPINLOCK(clockevents_lock);
 
 /**
@@ -135,12 +141,17 @@ int clockevents_program_event(struct clock_event_device *dev, ktime_t expires,
 /**
  * clockevents_register_notifier - register a clock events change listener
  */
+/*
+向时钟事件通知链clockevents_chain注册@nb
+*/
 int clockevents_register_notifier(struct notifier_block *nb)
 {
 	unsigned long flags;
 	int ret;
 
+	/* 原始通知链的锁保护由调用者完成 */
 	raw_spin_lock_irqsave(&clockevents_lock, flags);
+	/* 注册原始通知链 */
 	ret = raw_notifier_chain_register(&clockevents_chain, nb);
 	raw_spin_unlock_irqrestore(&clockevents_lock, flags);
 
