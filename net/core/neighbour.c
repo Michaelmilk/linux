@@ -60,6 +60,9 @@ static void __neigh_notify(struct neighbour *n, int type, int flags);
 static void neigh_update_notify(struct neighbour *neigh);
 static int pneigh_ifdown(struct neigh_table *tbl, struct net_device *dev);
 
+/*
+所有的网络邻居解析表链表
+*/
 static struct neigh_table *neigh_tables;
 #ifdef CONFIG_PROC_FS
 static const struct file_operations neigh_stat_seq_fops;
@@ -121,13 +124,20 @@ static void neigh_cleanup_and_release(struct neighbour *neigh)
 
 unsigned long neigh_rand_reach_time(unsigned long base)
 {
+    /* base右移了1位，即取其一半
+       然后加上一个随机值对base的取模
+	   即时间间隔在(1/2)*base ... (3/2)*base之间 */
 	return base ? (net_random() % base) + (base >> 1) : 0;
 }
 EXPORT_SYMBOL(neigh_rand_reach_time);
 
 
+/*
+强制释放
+*/
 static int neigh_forced_gc(struct neigh_table *tbl)
 {
+	/* shrunk:收缩 */
 	int shrunk = 0;
 	int i;
 	struct neigh_hash_table *nht;
@@ -169,6 +179,7 @@ static int neigh_forced_gc(struct neigh_table *tbl)
 
 	write_unlock_bh(&tbl->lock);
 
+	/* 返回1说明有部分邻居表项被回收 */
 	return shrunk;
 }
 
@@ -272,31 +283,44 @@ int neigh_ifdown(struct neigh_table *tbl, struct net_device *dev)
 }
 EXPORT_SYMBOL(neigh_ifdown);
 
+/*
+创建一个 neighbour，并初始化，它只被  neigh_create() 调用
+*/
 static struct neighbour *neigh_alloc(struct neigh_table *tbl)
 {
 	struct neighbour *n = NULL;
 	unsigned long now = jiffies;
 	int entries;
 
+	/* 表中已有邻居表数目 */
 	entries = atomic_inc_return(&tbl->entries) - 1;
+		/* 已达上限 */
 	if (entries >= tbl->gc_thresh3 ||
+		/* 或者表中数据达到回收阈值，并且已经有5HZ未刷新邻居表了 */
 	    (entries >= tbl->gc_thresh2 &&
 	     time_after(now, tbl->last_flush + 5 * HZ))) {
+		/* 则释放过时的邻居
+		   如果回收失败并且达到邻居表上限，则不创建新的表项 */
 		if (!neigh_forced_gc(tbl) &&
 		    entries >= tbl->gc_thresh3)
 			goto out_entries;
 	}
 
+	/* 从cache中创建新的表项
+	   在arp_init() => neigh_table_init() => neigh_table_init_no_netlink()中分配 */
 	n = kmem_cache_zalloc(tbl->kmem_cachep, GFP_ATOMIC);
 	if (!n)
 		goto out_entries;
 
+	/* 当邻居的地址尚未解析时，发向该邻居的skb包缓冲在该队列中 */
 	skb_queue_head_init(&n->arp_queue);
 	rwlock_init(&n->lock);
 	seqlock_init(&n->ha_lock);
 	n->updated	  = n->used = now;
 	n->nud_state	  = NUD_NONE;
+	/* 初始输出函数，黑洞，直接释放skb */
 	n->output	  = neigh_blackhole;
+	/* 继承邻居表的参数 */
 	n->parms	  = neigh_parms_clone(&tbl->parms);
 	setup_timer(&n->timer, neigh_timer_handler, (unsigned long)n);
 
@@ -312,18 +336,25 @@ out_entries:
 	goto out;
 }
 
+/*
+@entries	: 邻居表的条数
+*/
 static struct neigh_hash_table *neigh_hash_alloc(unsigned int entries)
 {
+	/* 桶头指针 */
 	size_t size = entries * sizeof(struct neighbour *);
 	struct neigh_hash_table *ret;
 	struct neighbour __rcu **buckets;
 
+	/* 分配一个neigh_hash_table结构 */
 	ret = kmalloc(sizeof(*ret), GFP_ATOMIC);
 	if (!ret)
 		return NULL;
 	if (size <= PAGE_SIZE)
+		/* 桶头节点指针数组在一页以内，直接分配 */
 		buckets = kzalloc(size, GFP_ATOMIC);
 	else
+		/* 超过一页则需分配连续的物理页 */
 		buckets = (struct neighbour __rcu **)
 			  __get_free_pages(GFP_ATOMIC | __GFP_ZERO,
 					   get_order(size));
@@ -337,6 +368,10 @@ static struct neigh_hash_table *neigh_hash_alloc(unsigned int entries)
 	return ret;
 }
 
+/*
+由rcu进行回收的回调函数
+释放桶头节点和表结构
+*/
 static void neigh_hash_free_rcu(struct rcu_head *head)
 {
 	struct neigh_hash_table *nht = container_of(head,
@@ -345,6 +380,7 @@ static void neigh_hash_free_rcu(struct rcu_head *head)
 	size_t size = (nht->hash_mask + 1) * sizeof(struct neighbour *);
 	struct neighbour __rcu **buckets = nht->hash_buckets;
 
+	/* 释放与申请一致，参考neigh_hash_alloc() */
 	if (size <= PAGE_SIZE)
 		kfree(buckets);
 	else
@@ -352,6 +388,12 @@ static void neigh_hash_free_rcu(struct rcu_head *head)
 	kfree(nht);
 }
 
+/*
+动态增长哈希表桶的个数
+
+@tbl			: 目标邻居表，如arp_tbl
+@new_entries	: 哈希表需容纳的新的邻居节点条数
+*/
 static struct neigh_hash_table *neigh_hash_grow(struct neigh_table *tbl,
 						unsigned long new_entries)
 {
@@ -360,13 +402,16 @@ static struct neigh_hash_table *neigh_hash_grow(struct neigh_table *tbl,
 
 	NEIGH_CACHE_STAT_INC(tbl, hash_grows);
 
+	/* @new_entries需要是2的幂次 */
 	BUG_ON(!is_power_of_2(new_entries));
 	old_nht = rcu_dereference_protected(tbl->nht,
 					    lockdep_is_held(&tbl->lock));
 	new_nht = neigh_hash_alloc(new_entries);
+	/* 增长失败，则先返回老的哈希表 */
 	if (!new_nht)
 		return old_nht;
 
+	/* 将老的哈希表中的节点转移到新的哈希表中 */
 	for (i = 0; i <= old_nht->hash_mask; i++) {
 		struct neighbour *n, *next;
 
@@ -374,9 +419,11 @@ static struct neigh_hash_table *neigh_hash_grow(struct neigh_table *tbl,
 						   lockdep_is_held(&tbl->lock));
 		     n != NULL;
 		     n = next) {
+			/* 使用新的随机数计算哈希值 */
 			hash = tbl->hash(n->primary_key, n->dev,
 					 new_nht->hash_rnd);
 
+			/* 位与掩码，不能超过桶下标 */
 			hash &= new_nht->hash_mask;
 			next = rcu_dereference_protected(n->next,
 						lockdep_is_held(&tbl->lock));
@@ -385,15 +432,23 @@ static struct neigh_hash_table *neigh_hash_grow(struct neigh_table *tbl,
 					   rcu_dereference_protected(
 						new_nht->hash_buckets[hash],
 						lockdep_is_held(&tbl->lock)));
+			/* 原节点加入新桶 */
 			rcu_assign_pointer(new_nht->hash_buckets[hash], n);
 		}
 	}
 
 	rcu_assign_pointer(tbl->nht, new_nht);
+	/* 回收老的哈希表中桶头节点的空间 */
 	call_rcu(&old_nht->rcu, neigh_hash_free_rcu);
+	/* 返回新的哈希表 */
 	return new_nht;
 }
 
+/*
+@tbl 	: 在哪张表中进行查询，如arp_tbl
+@pkey	: 指向关键字的指针，为发送者ip
+@dev	: 接收该arp报文的接口
+*/
 struct neighbour *neigh_lookup(struct neigh_table *tbl, const void *pkey,
 			       struct net_device *dev)
 {
@@ -406,11 +461,14 @@ struct neighbour *neigh_lookup(struct neigh_table *tbl, const void *pkey,
 
 	rcu_read_lock_bh();
 	nht = rcu_dereference_bh(tbl->nht);
+	/* 计算哈希值，如arp_hash() */
 	hash_val = tbl->hash(pkey, dev, nht->hash_rnd) & nht->hash_mask;
 
+	/* 遍历对应哈希桶下的链表 */
 	for (n = rcu_dereference_bh(nht->hash_buckets[hash_val]);
 	     n != NULL;
 	     n = rcu_dereference_bh(n->next)) {
+		/* 根据入口设备和关键字(ip地址)寻找匹配项 */
 		if (dev == n->dev && !memcmp(n->primary_key, pkey, key_len)) {
 			if (!atomic_inc_not_zero(&n->refcnt))
 				n = NULL;
@@ -455,6 +513,14 @@ struct neighbour *neigh_lookup_nodev(struct neigh_table *tbl, struct net *net,
 }
 EXPORT_SYMBOL(neigh_lookup_nodev);
 
+/*
+调用 neigh_alloc() 分配一个 neighbour ，
+然后进一步调用具体协议的构造函数，以及具体设备的特殊的设置函数；
+最后，将此 neighbour 加入 neighbour table 中
+它主要被  __neigh_lookup() 调用，
+也就是说，当在 neighbour table 中找不到 neighbour 的时候，
+调用此函数来创建一个新的 neighbour
+*/
 struct neighbour *neigh_create(struct neigh_table *tbl, const void *pkey,
 			       struct net_device *dev)
 {
@@ -469,11 +535,15 @@ struct neighbour *neigh_create(struct neigh_table *tbl, const void *pkey,
 		goto out;
 	}
 
+	/* 记录关键字，ip地址
+	   该字段为0长度数组，arp_tbl的entry_size里留了4个字节 */
 	memcpy(n->primary_key, pkey, key_len);
 	n->dev = dev;
 	dev_hold(dev);
 
 	/* Protocol specific setup. */
+	/* 调用构造函数，为该表项准备参数信息、发送函数等
+	   对于arp_tbl即arp_constructor() */
 	if (tbl->constructor &&	(error = tbl->constructor(n)) < 0) {
 		rc = ERR_PTR(error);
 		goto out_neigh_release;
@@ -514,6 +584,7 @@ struct neighbour *neigh_create(struct neigh_table *tbl, const void *pkey,
 		}
 	}
 
+	/* 置0激活 */
 	n->dead = 0;
 	neigh_hold(n);
 	rcu_assign_pointer(n->next,
@@ -702,6 +773,7 @@ void neigh_destroy(struct neighbour *neigh)
 	if (neigh_del_timer(neigh))
 		printk(KERN_WARNING "Impossible event.\n");
 
+	/* 清除网络邻居的帧头缓冲 */
 	while ((hh = neigh->hh) != NULL) {
 		neigh->hh = hh->hh_next;
 		hh->hh_next = NULL;
@@ -712,6 +784,7 @@ void neigh_destroy(struct neighbour *neigh)
 		hh_cache_put(hh);
 	}
 
+	/* 清除邻居的IP包(skb)缓冲队列 */
 	skb_queue_purge(&neigh->arp_queue);
 
 	dev_put(neigh->dev);
@@ -867,6 +940,9 @@ static void neigh_invalidate(struct neighbour *neigh)
 
 /* Called when a timer expires for a neighbour entry. */
 
+/*
+这是一个定时器处理函数。当某个 neighbour 超时后，由此函数处理。
+*/
 static void neigh_timer_handler(unsigned long arg)
 {
 	unsigned long now, next;
@@ -880,6 +956,7 @@ static void neigh_timer_handler(unsigned long arg)
 	now = jiffies;
 	next = now + HZ;
 
+	/* 不在定时器函数处理的状态范围内 */
 	if (!(state & NUD_IN_TIMER)) {
 #ifndef CONFIG_SMP
 		printk(KERN_WARNING "neigh: timer & !nud_in_timer\n");
@@ -928,6 +1005,7 @@ static void neigh_timer_handler(unsigned long arg)
 	}
 
 	if ((neigh->nud_state & (NUD_INCOMPLETE | NUD_PROBE)) &&
+		/* 探测失败 */
 	    atomic_read(&neigh->probes) >= neigh_max_probes(neigh)) {
 		neigh->nud_state = NUD_FAILED;
 		notify = 1;
@@ -946,6 +1024,9 @@ static void neigh_timer_handler(unsigned long arg)
 		if (skb)
 			skb = skb_copy(skb, GFP_ATOMIC);
 		write_unlock(&neigh->lock);
+		/* 发送arp探测请求
+		   参考neigh_create() => arp_constructor()中为neigh->ops注册的操作函数
+		   通常solicit是arp_solicit() */
 		neigh->ops->solicit(neigh, skb);
 		atomic_inc(&neigh->probes);
 		kfree_skb(skb);
@@ -1198,6 +1279,12 @@ out:
 }
 EXPORT_SYMBOL(neigh_update);
 
+/*
+@tbl		: 在哪张表中进行查询，通常都是arp_tbl
+@lladdr		: 发送者的链路层地址
+@saddr		: 发送者的ip地址
+@dev		: 接收该arp报文的接口
+*/
 struct neighbour *neigh_event_ns(struct neigh_table *tbl,
 				 u8 *lladdr, void *saddr,
 				 struct net_device *dev)
@@ -1260,9 +1347,12 @@ static void neigh_hh_init(struct neighbour *n, struct dst_entry *dst,
 		goto end;
 	}
 
+	/* 如果设备地址有效 */
 	if (n->nud_state & NUD_CONNECTED)
+		/* 继承邻居的帧头缓冲输出 */
 		hh->hh_output = n->ops->hh_output;
 	else
+		/* 继承邻居的输出 */
 		hh->hh_output = n->ops->output;
 
 	hh->hh_next = n->hh;
@@ -1308,6 +1398,7 @@ int neigh_resolve_output(struct sk_buff *skb)
 
 	__skb_pull(skb, skb_network_offset(skb));
 
+	/* 调用neigh_event_send() 来触发状态转换 */
 	if (!neigh_event_send(neigh, skb)) {
 		int err;
 		struct net_device *dev = neigh->dev;
@@ -1525,6 +1616,7 @@ void neigh_table_init_no_netlink(struct neigh_table *tbl)
 	tbl->parms.reachable_time =
 			  neigh_rand_reach_time(tbl->parms.base_reachable_time);
 
+	/* 建立网络邻居信息结构内存分配器 */
 	if (!tbl->kmem_cachep)
 		tbl->kmem_cachep =
 			kmem_cache_create(tbl->id, tbl->entry_size, 0,
@@ -1540,6 +1632,7 @@ void neigh_table_init_no_netlink(struct neigh_table *tbl)
 		panic("cannot create neighbour proc dir entry");
 #endif
 
+	/* 哈希表初始桶个数为8 */
 	RCU_INIT_POINTER(tbl->nht, neigh_hash_alloc(8));
 
 	phsize = (PNEIGH_HASHMASK + 1) * sizeof(struct pneigh_entry *);
@@ -1560,6 +1653,17 @@ void neigh_table_init_no_netlink(struct neigh_table *tbl)
 }
 EXPORT_SYMBOL(neigh_table_init_no_netlink);
 
+/*
+每个主协议簇都可以提供它自己的地址解析服务和邻居表
+
+IPv4 ARP 的初始化：
+    调用neigh_table_init(&arp_tbl) 对 arp_tbl 初始化
+    调用dev_add_pack(&arp_packet_type) ，注册 ARP 包接收函数
+
+IPv6 Neighborour Discovery 的初始化：
+    调用 neigh_table_init(&nd_tbl) 对 nd_tbl 初始化
+    IPv6 通过 ICMPv6 来处理 ND 的包，没有专门的 ARP包类型。
+*/
 void neigh_table_init(struct neigh_table *tbl)
 {
 	struct neigh_table *tmp;

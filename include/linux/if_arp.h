@@ -25,6 +25,9 @@
 
 #include <linux/netdevice.h>
 
+/*
+定义了ARP能处理的各种物理设备的标志
+*/
 /* ARP protocol HARDWARE identifiers. */
 #define ARPHRD_NETROM	0		/* from KA9Q: NET/ROM pseudo	*/
 #define ARPHRD_ETHER 	1		/* Ethernet 10Mbps		*/

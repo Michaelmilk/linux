@@ -1176,6 +1176,7 @@ struct net_device {
 	unsigned char		dma;		/* DMA channel		*/
 
 	unsigned int		mtu;	/* interface MTU value		*/
+	/* 例如ether_setup()中为以太网接口设置为ARPHRD_ETHER */
 	unsigned short		type;	/* interface hardware type	*/
 	unsigned short		hard_header_len;	/* hardware hdr length	*/
 
@@ -1210,6 +1211,8 @@ struct net_device {
 	void			*dsa_ptr;	/* dsa specific data */
 #endif
 	void 			*atalk_ptr;	/* AppleTalk link 	*/
+	/* IPv4关心的数据
+	   由通知链在inetdev_event()中调用inetdev_init()进行空间分配 */
 	struct in_device __rcu	*ip_ptr;	/* IPv4 specific data	*/
 	struct dn_dev __rcu     *dn_ptr;        /* DECnet specific data */
 	struct inet6_dev __rcu	*ip6_ptr;       /* IPv6 specific data */
@@ -1762,6 +1765,8 @@ static inline int dev_hard_header(struct sk_buff *skb, struct net_device *dev,
 	if (!dev->header_ops || !dev->header_ops->create)
 		return 0;
 
+	/* 对于以太网接口，将会调用eth_header()
+	   参考ether_setup() */
 	return dev->header_ops->create(skb, dev, type, daddr, saddr, len);
 }
 
