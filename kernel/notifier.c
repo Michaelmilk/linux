@@ -18,9 +18,14 @@ BLOCKING_NOTIFIER_HEAD(reboot_notifier_list);
  *	are layered on top of these, with appropriate locking added.
  */
 
+/*
+最基本的通知链注册函数
+下面的其他封装函数都是基于此，进行了一些适当的锁控制
+*/
 static int notifier_chain_register(struct notifier_block **nl,
 		struct notifier_block *n)
 {
+	/* 优先级数值大的靠近链头，回调函数将先被执行 */
 	while ((*nl) != NULL) {
 		if (n->priority > (*nl)->priority)
 			break;
@@ -341,6 +346,12 @@ EXPORT_SYMBOL_GPL(blocking_notifier_call_chain);
  *
  *	Currently always returns zero.
  */
+/*
+原始通知链注册函数，不含锁控制，锁的使用由调用者完成
+
+@nh	: 原始通知链头节点
+@n	: 新节点
+*/
 int raw_notifier_chain_register(struct raw_notifier_head *nh,
 		struct notifier_block *n)
 {

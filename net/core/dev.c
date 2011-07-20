@@ -264,6 +264,9 @@ static void unlist_netdevice(struct net_device *dev)
  *	Our notifier list
  */
 
+/*
+原始通知链头节点netdev_chain
+*/
 static RAW_NOTIFIER_HEAD(netdev_chain);
 
 /*
@@ -404,7 +407,10 @@ static inline struct list_head *ptype_head(const struct packet_type *pt)
  */
 
 /*
-dev_add_pack()是将一个协议类型结构链入某一个链表， 
+dev_add_pack()是链路层提供给网络层的协议注册接口
+L3协议使用该接口以使__netif_receive_skb()感知，进而选用正确的L3接收函数
+
+dev_add_pack()是将一个网络层协议类型结构链入某一个链表， 
 当协议类型为ETH_P_ALL时，它将被链入ptype_all链表，
 这个链表是用于sniffer这样一些程序的，它接收所有NIC收到的包。
 一个双向的链表。
@@ -1366,6 +1372,9 @@ static int dev_boot_phase = 1;
  *	view of the network device list.
  */
 
+/*
+向原始通知链netdev_chain注册新的通知节点
+*/
 int register_netdevice_notifier(struct notifier_block *nb)
 {
 	struct net_device *dev;
@@ -1374,13 +1383,18 @@ int register_netdevice_notifier(struct notifier_block *nb)
 	int err;
 
 	rtnl_lock();
+	/* 将新节点@nb加入通知链netdev_chain */
 	err = raw_notifier_chain_register(&netdev_chain, nb);
 	if (err)
 		goto unlock;
 	if (dev_boot_phase)
 		goto unlock;
+	/* 遍历现有的net命名空间 */
 	for_each_net(net) {
+		/* 遍历所有的设备 */
 		for_each_netdev(net, dev) {
+			/* 调用新节点@nb，以事件NETDEV_REGISTER触发回调函数
+			   让新节点感知到所有已经存在的接口 */
 			err = nb->notifier_call(nb, NETDEV_REGISTER, dev);
 			err = notifier_to_errno(err);
 			if (err)
@@ -1389,6 +1403,7 @@ int register_netdevice_notifier(struct notifier_block *nb)
 			if (!(dev->flags & IFF_UP))
 				continue;
 
+			/* 接口为IFF_UP，则以事件NETDEV_UP触发回调函数 */
 			nb->notifier_call(nb, NETDEV_UP, dev);
 		}
 	}
@@ -1397,13 +1412,16 @@ unlock:
 	rtnl_unlock();
 	return err;
 
+/* 出错则回滚已经进行的操作 */
 rollback:
+	/* 记录最后一个通知设备，作为遍历结束条件 */
 	last = dev;
 	for_each_net(net) {
 		for_each_netdev(net, dev) {
 			if (dev == last)
 				break;
 
+			/* 以上面的逆事件进行回滚操作 */
 			if (dev->flags & IFF_UP) {
 				nb->notifier_call(nb, NETDEV_GOING_DOWN, dev);
 				nb->notifier_call(nb, NETDEV_DOWN, dev);
