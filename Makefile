@@ -4,6 +4,8 @@ SUBLEVEL = 0
 EXTRAVERSION = -rc3
 NAME = Sneaky Weasel
 
+	# 内核版本信息
+
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
 # More info can be located in ./README
@@ -16,11 +18,24 @@ NAME = Sneaky Weasel
 # o  print "Entering directory ...";
 MAKEFLAGS += -rR --no-print-directory
 
+	# 在执行make时的命令行选项参数通过变量 “MAKEFLAGS”传递给子目录下的make程序。
+	#
+	# 对于这个变量除非使用指示符“unexport”对它们进行声明，
+	# 它们在整个make的执行过程中始终被自动的传递给所有的子make。
+	# 还有个特殊变量SHELL与MAKEFLAGS一样，
+	# 默认情况（没有用“unexport”声明）下在整个make的执行过程中被自动的传递给所有的子make。
+
+	# -r disable the built-in impilict rules.
+	# -R disable the built-in variable setttings.
+	# --no-print-directory 不打印进出目录信息
+
 # Avoid funny character set dependencies
 unexport LC_ALL
 LC_COLLATE=C
 LC_NUMERIC=C
 export LC_COLLATE LC_NUMERIC
+
+	# collate : 校对
 
 # We are using a recursive build, so we need to do a little thinking
 # to get the ordering right.
@@ -41,9 +56,27 @@ export LC_COLLATE LC_NUMERIC
 # To put more focus on warnings, be less verbose as default
 # Use 'make V=1' to see the full commands
 
+	# 函数origin并不操作变量的值，只是告诉这个变量是哪里来的。
+	# 语法是： $(origin <variable>;)
+	# origin函数的返回值有：
+	# “undefined”从来没有定义过、
+	# “default”是一个默认的定义、
+	# “environment”是一个环境变量、
+	# “file”这个变量被定义在Makefile中、
+	# “command line”这个变量是被命令行定义的、
+	# “override”是被override指示符重新定义的、
+	# “automatic”是一个命令运行中的自动化变量
+
+	# KBUILD_VERBOSE的值根据在命令行中是否定义了变量V，
+	# 当没有定义时，默认为V＝0，输出为short version；
+	# 可以用make V=1 来输出编译时全部的命令。
+
 ifeq ("$(origin V)", "command line")
   KBUILD_VERBOSE = $(V)
 endif
+
+	# 命令行没有定义变量V，则变量KBUILD_VERBOSE默认值为0
+
 ifndef KBUILD_VERBOSE
   KBUILD_VERBOSE = 0
 endif
@@ -68,13 +101,24 @@ endif
 # Use make M=dir to specify directory of external module to build
 # Old syntax make ... SUBDIRS=$PWD is still supported
 # Setting the environment variable KBUILD_EXTMOD take precedence
+
+	# 使用?=为KBUILD_EXTMOD，如果KBUILD_EXTMOD已经有值的话，则不会将SUBDIRS的值赋给它
+	# 所以环境变量KBUILD_EXTMOD中设置的值优先级高于SUBDIRS
+
 ifdef SUBDIRS
   KBUILD_EXTMOD ?= $(SUBDIRS)
 endif
 
+	# KBUILD_EXTMOD用于编译外部模块时指定模块代码所在目录绝对路径
+	# 参考Documentation/kbuild/kbuild.txt
+	# 编译外部模块时，其命令中通常使用M=`pwd`取模块代码所在目录
+
 ifeq ("$(origin M)", "command line")
   KBUILD_EXTMOD := $(M)
 endif
+
+	# 内核编译的时候可以将输出文件保存到另外的目录
+	# 使用O=或者设置环境变量KBUILD_OUTPUT
 
 # kbuild supports saving output files in a separate directory.
 # To locate output files in a separate directory two syntaxes are supported.
@@ -92,15 +136,29 @@ endif
 # variable.
 
 
+	# KBUILD_SRC会在使用了KBUILD_OUTPUT时，由sub-make目标的命令中赋值
+	# 这样在进入KBUILD_OUTPUT目录中使用-f参数再次使用本Makefile时便跳过下面一段了
+	# 暂不考虑命令行中主动为KBUILD_SRC赋值的情况
+
 # KBUILD_SRC is set on invocation of make in OBJ directory
 # KBUILD_SRC is not intended to be used by the regular user (for now)
 ifeq ($(KBUILD_SRC),)
 
+	# 如果KBUILD_SRC为空的话，说明是在内核源码目录下使用make
+	# 或者是使用外部目录时第一次进入
+
 # OK, Make called in directory where kernel src resides
 # Do we want to locate output files in a separate directory?
+
+	# 如果命令行使用了O=指定输出目录的话
+	# 使用KBUILD_OUTPUT变量记录下目标目录
+	# 因此O=会覆盖环境变量KBUILD_OUTPUT，O=的优先级高于环境变量
+
 ifeq ("$(origin O)", "command line")
   KBUILD_OUTPUT := $(O)
 endif
+
+	# 如果命令行使用了W=则使能gcc的扩展检查
 
 ifeq ("$(origin W)", "command line")
   export KBUILD_ENABLE_EXTRA_GCC_CHECKS := $(W)
@@ -110,21 +168,84 @@ endif
 PHONY := _all
 _all:
 
+	# 定义两个Makefile伪目标，命令为空，以避免隐式规则检查
+
 # Cancel implicit rules on top Makefile
 $(CURDIR)/Makefile Makefile: ;
 
+	# GNU make把CURDIR设为当前工作目录，即当前内核源码目录，因为KBUILD_SRC为空
+
 ifneq ($(KBUILD_OUTPUT),)
+
+	# 如果命令行使用了O=或设置了环境变量KBUILD_OUTPUT
+
 # Invoke a second make in the output directory, passing relevant variables
 # check that the output directory actually exists
+
+	# 记录输出目录
+
 saved-output := $(KBUILD_OUTPUT)
+
+	# 函数shell是make与外部环境的通讯工具，它用于命令的扩展。
+	# shell函数起着调用shell命令（cd $(KBUILD_OUTPUT) && /bin/pwd）和返回命令输出结果的参数的作用。
+	# Make仅仅处理返回结果，再返回结果替换调用点之前，make将每一个换行符或者一对回车/换行符处理为单个空格；
+	# 如果返回结果最后是换行符（和回车符），make将把它们去掉。
+	# 通过shell命令cd切换目录，如果成功则执行pwd，将新的目录赋给KBUILD_OUTPUT
+	# 如果cd不成功则KBUILD_OUTPUT为空
+
 KBUILD_OUTPUT := $(shell cd $(KBUILD_OUTPUT) && /bin/pwd)
+
+	# 判断KBUILD_OUTPUT是否为空，即判断先前的输出目录是否存在
+	# 不存在则打印错误信息，退出make
+
 $(if $(KBUILD_OUTPUT),, \
      $(error output directory "$(saved-output)" does not exist))
 
+	# 函数if对在函数上下文中扩展条件提供了支持（相对于GNU make makefile文件中的条件语句，例如ifeq指令。）
+	# if函数的语法是：$(if <condition>,<then-part>) 或是 $(if <condition>,<then-part>,<else-part>)。
+	# 如果条件$(KBUILD_OUTPUT)为真（非空字符串），
+	# 那么两个逗号之间的空字符（注意连续两个逗号的作用）将会是整个函数的返回值，
+	# 如果$(KBUILD_OUTPUT)为假（空字符串），
+	# 那么$(error output directory "$(saved-output)" does not exist）会是整个函数的返回值，
+	# 此时如果<else-part>没有被定义，那么，整个函数返回空字串。
+	#
+	# 函数error的语法是：$(error <text ...>;)
+	# 函数error的功能是：产生一个致命的错误，output directory "$(saved-output)" does not exist是错误信息。
+	# 注意，error函数不会在一被使用就会产生错误信息，
+	# 所以如果你把其定义在某个变量中，并在后续的脚本中使用这个变量，那么也是可以的。
+	#
+	# 命令“$(if $(KBUILD_OUTPUT),, \”中最后的“\”的作用是：紧接在“\”下面的“哪一行”的命令是“\”所在行的命令的延续。
+	# 如果要让前一个命令的参数等应用与下一个命令，那么这两个命令应该写在同一行，
+	# 如果一行写不下两个命令，可以在第一行末尾添上符号"\"，然后在下一行接着写。
+	# 如果是几个命令写在同一行，那么后面的命令是在前面命令的基础上执行。
+	# 如 cd /   ls 这两个命令写在同一行，那么ls显示的是根目录/下的文件和文件夹。
+
 PHONY += $(MAKECMDGOALS) sub-make
+
+	# make在执行时设置一个特殊变量“MAKECMDGOALS”，
+	# 此变量记录了命令行参数指定的终极目标列表，
+	# 没有通过参数指定终极目标时此变量为空。
+	# 注意：此变量仅用在特殊的场合（比如判断），在Makeifle中不要对它进行重新定义！
 
 $(filter-out _all sub-make $(CURDIR)/Makefile, $(MAKECMDGOALS)) _all: sub-make
 	$(Q)@:
+
+	# 反过滤函数——filter-out，语法是：$(filter-out <pattern...>;,<text>;)
+	# 函数filter-out的功能是：去掉$(MAKECMDGOALS）中符合规则_all的所有字符串后，剩下的作为返回值。
+	# 函数filter-out调用与伪目标_all在同一行。
+	# 伪目标_all下面的以tab开头的三行是命令，因为每行最后都有"\"，
+	# 所以这三行命令应该是写在同一行的，即后面的命令要受到处于它之前的那些命令的影响。
+	#
+	# $(if $(KBUILD_VERBOSE:1=),@) 含义是如果$(KBUILD_VERBOSE:1=) 不为空，则等于$@ 
+	# 自动化变量"$@"表示规则中的目标文件集，在模式规则中，如果有多个目标，那么，"$@"就是匹配于目标中模式定义的集合。
+	# 自动化变量还有"$<"、"$%"、"$<"等。
+	#
+	# 宏变量$（MAKE）的值为make命令和参数（参数可省）。 
+	#
+	# 执行命令KBUILD_SRC=$(CURDIR)的结果是把变量CURDIR的值赋给变量KBUILD_SRC。
+	# CURDIR这个变量是Makefile提供的,代表了make当前的工作路径。
+
+	# 使用FORCE，该规则下的命令总是会被执行
 
 sub-make: FORCE
 	$(if $(KBUILD_VERBOSE:1=),@)$(MAKE) -C $(KBUILD_OUTPUT) \
@@ -132,10 +253,30 @@ sub-make: FORCE
 	KBUILD_EXTMOD="$(KBUILD_EXTMOD)" -f $(CURDIR)/Makefile \
 	$(filter-out _all sub-make,$(MAKECMDGOALS))
 
+	# $(if $(KBUILD_VERBOSE:1=),@) 含义是如果$(KBUILD_VERBOSE:1=) 不为空，则等于$@ 
+	# 自动化变量"$@"表示规则中的目标文件集，在模式规则中，如果有多个目标，那么，"$@"就是匹配于目标中模式定义的集合。
+	# 自动化变量还有"$<"、"$%"、"$<"等。
+	#
+	# 宏变量$（MAKE）的值为make命令和参数（参数可省）。
+	#
+	# -C指定读取Makefile的目录，make将切入-C参数指定的目录
+	# -f指定要执行的Makefile
+
 # Leave processing to above invocation of make
+
+	# 将skip-makefile变量赋值为1
+
 skip-makefile := 1
 endif # ifneq ($(KBUILD_OUTPUT),)
 endif # ifeq ($(KBUILD_SRC),)
+
+	# =========================================================================
+
+	# 如果KBUILD_SRC为空
+	# 并且make命令行指定了O=或环境变量使用了KBUILD_OUTPUT
+	# 则上面会将skip-makefile赋值为1
+	# 第一层的Makefile便不会再继续调用下面的内容了
+	# 随后由上面的sub-make目标下的命令中再次调用make则解析使用下面的内容
 
 # We process the rest of the Makefile if this is the final invocation of make
 ifeq ($(skip-makefile),)
@@ -143,18 +284,41 @@ ifeq ($(skip-makefile),)
 # If building an external module we do not care about the all: rule
 # but instead _all depend on modules
 PHONY += all
+
+	# 默认目标_all
+	# 在下面的include $(srctree)/arch/$(SRCARCH)/Makefile时
+	# all目标即对应架构下的Makefile中的all目标
+	# 当编译外部模块时，则目标为modules
+
 ifeq ($(KBUILD_EXTMOD),)
 _all: all
 else
 _all: modules
 endif
 
+	# 为srctree赋值，如果KBUILD_SRC有值的话则使用KBUILD_SRC的值
+	# 因为如果上面使用了KBUILD_OUTPUT的话，此时make是在KBUILD_OUTPUT目录中
+	# sub-make的命令中使用KBUILD_SRC记录了内核源码目录
+	# 通常情况下直接在内核源码目录中make，则直接使用CURDIR为srctree变量的值
+	#
+	# 为objtree赋值，即目标对象所在目录，KBUILD_OUTPUT指定的目录或内核源码目录
+
 srctree		:= $(if $(KBUILD_SRC),$(KBUILD_SRC),$(CURDIR))
 objtree		:= $(CURDIR)
 src		:= $(srctree)
 obj		:= $(objtree)
 
+	# 为变量VPATH追加变量VPATH的值
+	# “VPATH”是Makefile文件中的特殊变量。
+	# 如果没有指明这个变量，make只会在当前的目录中去找寻依赖文件和目标文件。
+	# 如果定义了这个变量，那么，make就会在当当前目录找不到的情况下，到所指定的目录中去找寻文件了。
+	# make使用“VPATH”变量来指定“依赖文件”的搜索路径。
+
 VPATH		:= $(srctree)$(if $(KBUILD_EXTMOD),:$(KBUILD_EXTMOD))
+
+	# 关键词export用来声明变量，被声明的变量要被传递到下级Makefile中。
+	# export srctree objtree VPATH TOPDIR声明了四个变量，
+	# 这四个变量在make嵌套时都将被传递到下级Makefile。
 
 export srctree objtree VPATH
 
@@ -171,6 +335,13 @@ SUBARCH := $(shell uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ \
 				  -e s/ppc.*/powerpc/ -e s/mips.*/mips/ \
 				  -e s/sh[234].*/sh/ )
 
+	# 为变量SUBARCH追加调用shell执行sed后的返回值。
+	# sed 是一种在线编辑器，它一次处理一行内容。
+	# Sed主要用来自动编辑一个或多个文件；简化对文件的反复操作；编写转换程序等。
+	# sed -e参数表明只在命令行上执行该命令
+	# s为替换字符串操作，即匹配前一项的都统一使用后一项的名称
+	# 如 SUBARCH := i386
+
 # Cross compiling and selecting different set of gcc/bin-utils
 # ---------------------------------------------------------------------------
 #
@@ -180,6 +351,10 @@ SUBARCH := $(shell uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ \
 # make ARCH=ia64
 # Another way is to have ARCH set in the environment.
 # The default ARCH is the host where make is executed.
+
+	# 交叉编译的时候，则需要使用ARCH变量设置目标机架构
+	# 可以在命令行使用ARCH=或设置环境变量
+	# ARCH的默认值会被设置为编译主机
 
 # CROSS_COMPILE specify the prefix used for all executables used
 # during compilation. Only gcc and related bin-utils executables
@@ -191,13 +366,36 @@ SUBARCH := $(shell uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ \
 # "make" in the configured kernel build directory always uses that.
 # Default value for CROSS_COMPILE is not to prefix executables
 # Note: Some architectures assign CROSS_COMPILE in their arch/*/Makefile
+
+	# 设置CROSS_COMPILE变量作为交叉编译时使用的工具集程序前缀
+	# 即用于指出交叉编译器的路径
+	# 可以在命令行使用CROSS_COMPILE=或设置环境变量
+	# 或在.config文件中配置
+	# 部分架构的CROSS_COMPILE会在其对应架构目录下的Makefile中指定
+
+	# 向下级make传递编译主机架构
+
 export KBUILD_BUILDHOST := $(SUBARCH)
+
+	# 如果命令行或环境变量没有指定ARCH的话，则默认即编译主机架构
+
 ARCH		?= $(SUBARCH)
+
+	# 如果命令行或环境变量没有指定CROSS_COMPILE的话，则由配置文件决定
+
 CROSS_COMPILE	?= $(CONFIG_CROSS_COMPILE:"%"=%)
 
 # Architecture as present in compile.h
+
+	# Universal TimeSharing System 通用分时系统
+
 UTS_MACHINE 	:= $(ARCH)
+
+	# 内核源码对应的架构目录名称
+
 SRCARCH 	:= $(ARCH)
+
+	# i386和x86代码统一在一个目录下了
 
 # Additional ARCH settings for x86
 ifeq ($(ARCH),i386)
@@ -228,6 +426,8 @@ ifeq ($(ARCH),tilegx)
        SRCARCH := tile
 endif
 
+	# 对应架构头文件目录所在的架构目录
+
 # Where to locate arch specific headers
 hdr-arch  := $(SRCARCH)
 
@@ -235,13 +435,19 @@ ifeq ($(ARCH),m68knommu)
        hdr-arch  := m68k
 endif
 
+	# 内核配置文件.config
+
 KCONFIG_CONFIG	?= .config
 export KCONFIG_CONFIG
+
+	# 取使用的shell程序
 
 # SHELL used by kbuild
 CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 	  else if [ -x /bin/bash ]; then echo /bin/bash; \
 	  else echo sh; fi ; fi)
+
+	# 编译内核所使用的编译器及编译参数
 
 HOSTCC       = gcc
 HOSTCXX      = g++
@@ -251,6 +457,9 @@ HOSTCXXFLAGS = -O2
 # Decide whether to build built-in, modular, or both.
 # Normally, just do built-in.
 
+	# 决定是编译整个内核还是编译单个模块，或者2者都是
+	# 通常都是在编译内核vmlinux
+
 KBUILD_MODULES :=
 KBUILD_BUILTIN := 1
 
@@ -258,6 +467,9 @@ KBUILD_BUILTIN := 1
 #	When we're building modules with modversions, we need to consider
 #	the built-in objects during the descend as well, in order to
 #	make sure the checksums are up to date before we record them.
+
+	# 如果仅是编译外部模块的话，则无需再编译内核vmlinux
+	# 如果配置文件中配置了CONFIG_MODVERSIONS的话，则需要检查checksum来决定是否重新编译内核
 
 ifeq ($(MAKECMDGOALS),modules)
   KBUILD_BUILTIN := $(if $(CONFIG_MODVERSIONS),1)
@@ -271,12 +483,16 @@ ifneq ($(filter all _all modules,$(MAKECMDGOALS)),)
   KBUILD_MODULES := 1
 endif
 
+	# 命令行只使用了make
+
 ifeq ($(MAKECMDGOALS),)
   KBUILD_MODULES := 1
 endif
 
 export KBUILD_MODULES KBUILD_BUILTIN
 export KBUILD_CHECKSRC KBUILD_SRC KBUILD_EXTMOD
+
+	# 美化输出
 
 # Beautify output
 # ---------------------------------------------------------------------------
@@ -312,6 +528,10 @@ endif
 # If the user is running make -s (silent mode), suppress echoing of
 # commands
 
+	# 如果make使用了-s参数的话，则阻止命令的输出
+	# 函数findstring的语法是：$(findstring <find>;,<in>;)
+	# 函数findstring的功能是：如果在$(MAKEFLAGS)中能找到字符s，那么返回字符s；否则返回空字符。
+
 ifneq ($(findstring s,$(MAKEFLAGS)),)
   quiet=silent_
 endif
@@ -319,14 +539,25 @@ endif
 export quiet Q KBUILD_VERBOSE
 
 
+	# 指定make搜索的头文件目录，make也可以使用-I参数指定多个目录
+
 # Look for make include files relative to root of kernel src
 MAKEFLAGS += --include-dir=$(srctree)
 
 # We need some generic definitions (do not try to remake the file).
 $(srctree)/scripts/Kbuild.include: ;
+
+	# 包含Kbuild.include文件
+	# 在Makefile使用include关键字可以把别的Makefile包含进来。
+	# 这很像C语言的#include，被包含的文件会原模原样的放在当前文件的包含位置。
+	# include的语法是： include <filename>;
+	# 这里没有使用-include，所以Kbuild.include文件必须存在
+
 include $(srctree)/scripts/Kbuild.include
 
 # Make variables (CC, etc...)
+
+	# Makefile中常用的一些变量定义
 
 AS		= $(CROSS_COMPILE)as
 LD		= $(CROSS_COMPILE)ld
@@ -357,6 +588,9 @@ CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
 # Use LINUXINCLUDE when you must reference the include/ directory.
 # Needed to be compatible with the O= option
+
+	# 内核所引用的头文件检索目录
+
 LINUXINCLUDE    := -I$(srctree)/arch/$(hdr-arch)/include \
                    -Iarch/$(hdr-arch)/include/generated -Iinclude \
                    $(if $(KBUILD_SRC), -I$(srctree)/include) \
@@ -378,7 +612,12 @@ KBUILD_LDFLAGS_MODULE := -T $(srctree)/scripts/module-common.lds
 
 # Read KERNELRELEASE from include/config/kernel.release (if it exists)
 KERNELRELEASE = $(shell cat include/config/kernel.release 2> /dev/null)
+
+	# 由该文件头部定义的几个变量生成内核版本标识
+
 KERNELVERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(EXTRAVERSION)
+
+	# 用关键词export声明变量，使得这些变量能传到下级Makefile中
 
 export VERSION PATCHLEVEL SUBLEVEL KERNELRELEASE KERNELVERSION
 export ARCH SRCARCH CONFIG_SHELL HOSTCC HOSTCFLAGS CROSS_COMPILE AS LD CC
@@ -396,9 +635,14 @@ export KBUILD_ARFLAGS
 # When compiling out-of-tree modules, put MODVERDIR in the module
 # tree rather than in the kernel tree. The kernel tree might
 # even be read-only.
+
+	# 编译外部模块时，在对应的外部模块目录下创建隐藏文件.tmp_versions
+
 export MODVERDIR := $(if $(KBUILD_EXTMOD),$(firstword $(KBUILD_EXTMOD))/).tmp_versions
 
 # Files to ignore in find ... statements
+
+	# 忽略和版本控制相关的一些文件
 
 RCS_FIND_IGNORE := \( -name SCCS -o -name BitKeeper -o -name .svn -o -name CVS -o -name .pc -o -name .hg -o -name .git \) -prune -o
 export RCS_TAR_IGNORE := --exclude SCCS --exclude BitKeeper --exclude .svn --exclude CVS --exclude .pc --exclude .hg --exclude .git
@@ -408,6 +652,12 @@ export RCS_TAR_IGNORE := --exclude SCCS --exclude BitKeeper --exclude .svn --exc
 
 # Basic helpers built in scripts/
 PHONY += scripts_basic
+
+	# build这个变量，定义在scripts/Kbuild.include内
+	# 故可认为scripts_basic规则的命令展开后为@make -f scripts/Makefile.build obj=scripts/basic 
+	# 然后这个规则的命令最终会进入scripts目录，
+	# 执行Makefile.build文件（传说中的Kbuild脚本），并传递参数obj=scripts/basic。
+
 scripts_basic:
 	$(Q)$(MAKE) $(build)=scripts/basic
 	$(Q)rm -f .tmp_quiet_recordmcount
@@ -415,10 +665,18 @@ scripts_basic:
 # To avoid any implicit rule to kick in, define an empty command.
 scripts/basic/%: scripts_basic ;
 
+	# 定义了一个规则，依赖关系为scripts/basic/%: scripts_basic
+	# 分号；的作用是定义一个空命令（正如上面解释所说）。
+
 PHONY += outputmakefile
 # outputmakefile generates a Makefile in the output directory, if using a
 # separate output directory. This allows convenient use of make in the
 # output directory.
+
+	# 当KBUILD_SRC不为空时，则说明是将编译目标文件输出到另外一个目录
+	# 创建一个source目录链接到内核源码目录
+	# 使用脚本mkmakefile在输出目录下构造一个Makefile文件
+
 outputmakefile:
 ifneq ($(KBUILD_SRC),)
 	$(Q)ln -fsn $(srctree) source
@@ -440,20 +698,37 @@ asm-generic:
 # Detect when mixed targets is specified, and make a second invocation
 # of make so .config is not included in this case either (for *config).
 
+	# 与.config没有关联的目标
+
 no-dot-config-targets := clean mrproper distclean \
 			 cscope gtags TAGS tags help %docs check% coccicheck \
 			 include/linux/version.h headers_% \
 			 kernelversion %src-pkg
 
+	# config-targets置1表示对内核进行配置
+	# mixed-targets置1表示即配置又有其他目标
+	# dot-config置1表示和.config文件有关联
+
 config-targets := 0
 mixed-targets  := 0
 dot-config     := 1
+
+	# 如果命令行中含有no-dot-config-targets中的某一个词
+	# 并且不含有no-dot-config-targets中没有的词
+	# 即命令行中有且只含有no-dot-config-targets中的词时
+	# 则将dot-config置0，表明此次make的目标和.config没有关联
 
 ifneq ($(filter $(no-dot-config-targets), $(MAKECMDGOALS)),)
 	ifeq ($(filter-out $(no-dot-config-targets), $(MAKECMDGOALS)),)
 		dot-config := 0
 	endif
 endif
+
+	# 不是编译外部模块
+	# 命令行中含有config %config，即是对内核进行配置
+	# 将config-targets置1
+	# 命令行中除了config %config外，还含有其他目标参数
+	# 则将mixed-targets置1
 
 ifeq ($(KBUILD_EXTMOD),)
         ifneq ($(filter config %config,$(MAKECMDGOALS)),)
@@ -464,15 +739,26 @@ ifeq ($(KBUILD_EXTMOD),)
         endif
 endif
 
+	# 混合目标
+
 ifeq ($(mixed-targets),1)
 # ===========================================================================
 # We're called with mixed targets (*config and build targets).
 # Handle them one by one.
 
+	# 双冒号规则(Double-colon rules)
+	# 逐个make命令行中的参数目标
+	# $@匹配第一个目标
+
 %:: FORCE
 	$(Q)$(MAKE) -C $(srctree) KBUILD_SRC= $@
 
 else
+
+	# 非混合目标
+
+	# 对内核进行配置
+
 ifeq ($(config-targets),1)
 # ===========================================================================
 # *config targets only - make sure prerequisites are updated, and descend
@@ -481,6 +767,9 @@ ifeq ($(config-targets),1)
 # Read arch specific Makefile to set KBUILD_DEFCONFIG as needed.
 # KBUILD_DEFCONFIG may point out an alternative default configuration
 # used for 'make defconfig'
+
+	# 包含对应架构目录下的Makefile，以便用于make defconfig
+
 include $(srctree)/arch/$(SRCARCH)/Makefile
 export KBUILD_DEFCONFIG KBUILD_KCONFIG
 
@@ -493,6 +782,12 @@ config: scripts_basic outputmakefile FORCE
 	$(Q)$(MAKE) $(build)=scripts/kconfig $@
 
 else
+
+	# 编译内核
+
+	# 只构建目标，包括vmlinux，架构相关的目标，clean等
+	# 基本上都是*config以外的目标
+
 # ===========================================================================
 # Build targets only - this includes vmlinux, arch specific targets, clean
 # targets and others. In general all targets except *config targets.
@@ -506,6 +801,9 @@ scripts: scripts_basic include/config/auto.conf include/config/tristate.conf
 	$(Q)$(MAKE) $(build)=$(@)
 
 # Objects we will link into vmlinux / subdirs we need to visit
+
+	# 需要链接进vmlinux的目标文件所在目录
+
 init-y		:= init/
 drivers-y	:= drivers/ sound/ firmware/
 net-y		:= net/
@@ -513,11 +811,24 @@ libs-y		:= lib/
 core-y		:= usr/
 endif # KBUILD_EXTMOD
 
+	# 和.config文件相关联的目标
+
 ifeq ($(dot-config),1)
+
+	# 关键词include将文件include/config/auto.conf包含进来，
+	# 该文件会原模原样的放在当前文件的包含位置。
+	# 关键词include前面的-减号的作用是让make不理那些无法读取的文件，而继续执行。
+	# 这里即尝试包含include/config/auto.conf文件
+
 # Read in config
 -include include/config/auto.conf
 
+	# 编译内核
+
 ifeq ($(KBUILD_EXTMOD),)
+
+	# 尝试包含include/config/auto.conf.cmd文件
+
 # Read in dependencies to all Kconfig* files, make sure to run
 # oldconfig if changes are detected.
 -include include/config/auto.conf.cmd
@@ -525,13 +836,23 @@ ifeq ($(KBUILD_EXTMOD),)
 # To avoid any implicit rule to kick in, define an empty command
 $(KCONFIG_CONFIG) include/config/auto.conf.cmd: ;
 
+	# tinker : 修补
+
 # If .config is newer than include/config/auto.conf, someone tinkered
 # with it and forgot to run make oldconfig.
 # if auto.conf.cmd is missing then we are probably in a cleaned tree so
 # we execute the config step to be sure to catch updated Kconfig files
+
+	# .config有修改，或auto.conf.cmd不存在
+	# 则会执行silentoldconfig
+	# 递归到scripts/kconfig/Makefile中的silentoldconfig目标规则，然后执行conf程序
+
 include/config/%.conf: $(KCONFIG_CONFIG) include/config/auto.conf.cmd
 	$(Q)$(MAKE) -f $(srctree)/Makefile silentoldconfig
 else
+
+	# 编译外部模块
+
 # external modules needs include/generated/autoconf.h and include/config/auto.conf
 # but do not care if they are up-to-date. Use auto.conf to trigger the test
 PHONY += include/config/auto.conf
@@ -548,6 +869,9 @@ include/config/auto.conf:
 endif # KBUILD_EXTMOD
 
 else
+
+	# 和.config没有关联的目标
+
 # Dummy target needed, because used as prerequisite
 include/config/auto.conf: ;
 endif # $(dot-config)
@@ -1145,6 +1469,11 @@ modules modules_install: FORCE
 
 endif # CONFIG_MODULES
 
+	# 3个内核源码树的清理级别
+	# make clean 		: 删除大多数生成的文件，留下足够的信息以便能够编译外部模块
+	# make mrproper		: Mr. Proper，删除配置文件和所有生成的文件
+	# make distclean	: distribution clean，在mrproper的基础上，再删除备份文件，补丁文件等
+
 ###
 # Cleaning is done on three levels.
 # make clean     Delete most generated files
@@ -1562,6 +1891,17 @@ endif	# skip-makefile
 PHONY += FORCE
 FORCE:
 
+# 当规则没有依赖关系也没有命令，而且其目标不是存在的文件名，
+# make认为此规则运行时这个目标总是被更新。
+# 这意味着如果规则依赖于此目标，其命令总是被执行。
+# 使用习惯名称FORCE即是这样的一种规则，以让依赖FORCE的规则中的命令总是被执行
+
 # Declare the contents of the .PHONY variable as phony.  We keep that
 # information in a variable so we can use it in if_changed and friends.
 .PHONY: $(PHONY)
+
+# phony : 假的
+#
+# .PHONY的作用是告诉make这个target不是真正的文件，只是一个虚拟的target
+# 当已知虚拟目标文件并非由其他文件生成的实际文件，make便会跳过隐含规则搜索
+# 这样虚拟目标对应的命令便总是会被执行
