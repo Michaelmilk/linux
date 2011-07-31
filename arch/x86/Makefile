@@ -157,6 +157,9 @@ all: bzImage
 # KBUILD_IMAGE specify target image being built
 KBUILD_IMAGE := $(boot)/bzImage
 
+	# bzImage的命令，进入boot目录生成bzImage
+	# 例如: make -f scripts/Makefile.build obj=arch/x86/boot arch/x86/boot/bzImage
+
 bzImage: vmlinux
 ifeq ($(CONFIG_X86_DECODER_SELFTEST),y)
 	$(Q)$(MAKE) $(build)=arch/x86/tools posttest

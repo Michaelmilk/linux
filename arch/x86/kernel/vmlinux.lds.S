@@ -7,7 +7,7 @@
  *   Copyright (C) 2007-2009  Sam Ravnborg <sam@ravnborg.org>
  *
  *
- * Don't define absolute symbols until and unless you know that symbol
+ * Don''t define absolute symbols until and unless you know that symbol
  * value is should remain constant even if kernel image is relocated
  * at run time. Absolute symbols are not relocated. If symbol value should
  * change if kernel is relocated, make the symbol section relative and
@@ -15,6 +15,9 @@
  */
 
 #ifdef CONFIG_X86_32
+/*
+对于32位机，加载的偏移通常是3G
+*/
 #define LOAD_OFFSET __PAGE_OFFSET
 #else
 #define LOAD_OFFSET __START_KERNEL_map
@@ -83,7 +86,10 @@ PHDRS {
 SECTIONS
 {
 #ifdef CONFIG_X86_32
+	/* 根据autoconf.h配置，通常LOAD_PHYSICAL_ADDR为16M */
         . = LOAD_OFFSET + LOAD_PHYSICAL_ADDR;
+        /* 此时还没有启用分页，所以直接跳转到物理地址
+           startup_32对应的为链接后的虚拟地址 */
         phys_startup_32 = startup_32 - LOAD_OFFSET;
 #else
         . = __START_KERNEL;

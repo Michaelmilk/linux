@@ -7,6 +7,10 @@ OUTPUT_FORMAT(CONFIG_OUTPUT_FORMAT, CONFIG_OUTPUT_FORMAT, CONFIG_OUTPUT_FORMAT)
 #include <asm/cache.h>
 #include <asm/page_types.h>
 
+/*
+设置输出文件的体系架构
+将ENTRY()中的符号的值设置成入口地址
+*/
 #ifdef CONFIG_X86_64
 OUTPUT_ARCH(i386:x86-64)
 ENTRY(startup_64)

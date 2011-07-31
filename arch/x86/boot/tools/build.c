@@ -133,6 +133,12 @@ static void usage(void)
 	die("Usage: build setup system [rootdev] [> image]");
 }
 
+/*
+由arch/x86/boot/目录的Makefile中的命令cmd_image
+arch/x86/boot/tools/build
+	arch/x86/boot/setup.bin arch/x86/boot/vmlinux.bin CURRENT > arch/x86/boot/bzImage
+调用本程序生成bzImage
+*/
 int main(int argc, char ** argv)
 {
 	unsigned int i, sz, setup_sectors;
@@ -173,19 +179,26 @@ int main(int argc, char ** argv)
 	fprintf(stderr, "Root device is (%d, %d)\n", major_root, minor_root);
 
 	/* Copy the setup code */
+	/* 读入文件setup.bin */
 	file = fopen(argv[1], "r");
 	if (!file)
 		die("Unable to open `%s': %m", argv[1]);
+	/* 按照二进制逐字节从file中读入到buf[]里
+	   返回读取到的字节数 */
 	c = fread(buf, 1, sizeof(buf), file);
 	if (ferror(file))
 		die("read-error on `setup'");
 	if (c < 1024)
 		die("The setup must be at least 1024 bytes");
+	/* 判断第一扇区(前512字节)的最后2个字节是否为0xAA55
+	   参考header.S中的汇编代码
+	   grub中grub_cmd_linux()同样也会判断该值，以判断有效性 */
 	if (buf[510] != 0x55 || buf[511] != 0xaa)
 		die("Boot block hasn't got boot flag (0xAA55)");
 	fclose(file);
 
 	/* Pad unused space with zeros */
+	/* 按照512字节对齐，buf[]中其余部分清0 */
 	setup_sectors = (c + 511) / 512;
 	if (setup_sectors < SETUP_SECT_MIN)
 		setup_sectors = SETUP_SECT_MIN;
@@ -199,9 +212,11 @@ int main(int argc, char ** argv)
 	fprintf(stderr, "Setup is %d bytes (padded to %d bytes).\n", c, i);
 
 	/* Open and stat the kernel file */
+	/* 读入文件vmlinux.bin */
 	fd = open(argv[2], O_RDONLY);
 	if (fd < 0)
 		die("Unable to open `%s': %m", argv[2]);
+	/* 读取文件信息到stats buffer内 */
 	if (fstat(fd, &sb))
 		die("Unable to stat `%s': %m", argv[2]);
 	sz = sb.st_size;
@@ -210,9 +225,11 @@ int main(int argc, char ** argv)
 	if (kernel == MAP_FAILED)
 		die("Unable to mmap '%s': %m", argv[2]);
 	/* Number of 16-byte paragraphs, including space for a 4-byte CRC */
+	/* 按照16字节对齐 */
 	sys_size = (sz + 15 + 4) / 16;
 
 	/* Patch the setup code with the appropriate size parameters */
+	/* 参考header.S */
 	buf[0x1f1] = setup_sectors-1;
 	buf[0x1f4] = sys_size;
 	buf[0x1f5] = sys_size >> 8;
@@ -220,15 +237,18 @@ int main(int argc, char ** argv)
 	buf[0x1f7] = sys_size >> 24;
 
 	crc = partial_crc32(buf, i, crc);
+	/* 将buf[]中的setup部分写入标准输出，重定向至文件bzImage */
 	if (fwrite(buf, 1, i, stdout) != i)
 		die("Writing setup failed");
 
 	/* Copy the kernel code */
 	crc = partial_crc32(kernel, sz, crc);
+	/* 写入vmlinux部分 */
 	if (fwrite(kernel, 1, sz, stdout) != sz)
 		die("Writing kernel failed");
 
 	/* Add padding leaving 4 bytes for the checksum */
+	/* 按照16字节对齐，最后留4个字节放crc码 */
 	while (sz++ < (sys_size*16) - 4) {
 		crc = partial_crc32_one('\0', crc);
 		if (fwrite("\0", 1, 1, stdout) != 1)
@@ -237,6 +257,8 @@ int main(int argc, char ** argv)
 
 	/* Write the CRC */
 	fprintf(stderr, "CRC %lx\n", crc);
+	/* 在最后4个字节写入整个文件的crc码，不包含最后4个字节
+	   这里直接取的crc地址写入，即写入文件时为主机字节序 */
 	if (fwrite(&crc, 1, 4, stdout) != 4)
 		die("Writing CRC failed");
 

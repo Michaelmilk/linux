@@ -61,6 +61,10 @@ static void conf_message(const char *fmt, ...)
 		conf_message_callback(fmt, ap);
 }
 
+/*
+取环境变量KCONFIG_CONFIG的值
+如果没有的话，则默认名称即.config
+*/
 const char *conf_get_configname(void)
 {
 	char *name = getenv("KCONFIG_CONFIG");

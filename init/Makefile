@@ -26,6 +26,9 @@ $(obj)/version.o: include/generated/compile.h
        chk_compile.h = :
  quiet_chk_compile.h = echo '  CHK     $@'
 silent_chk_compile.h = :
+
+	# 使用FORCE，以便让该目标的命令一定会执行
+
 include/generated/compile.h: FORCE
 	@$($(quiet)chk_compile.h)
 	$(Q)$(CONFIG_SHELL) $(srctree)/scripts/mkcompile_h $@ \

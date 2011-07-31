@@ -1,5 +1,7 @@
 #!/bin/sh
 
+	# 接收由init/Makefile中调用此脚本时传来的参数
+
 TARGET=$1
 ARCH=$2
 SMP=$3

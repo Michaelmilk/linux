@@ -169,6 +169,7 @@ PHONY := _all
 _all:
 
 	# 定义两个Makefile伪目标，命令为空，以避免隐式规则检查
+	# 分号";"前的依赖为空，紧跟在分号";"后的第一条命令为空，没有以tab开头的其他命令
 
 # Cancel implicit rules on top Makefile
 $(CURDIR)/Makefile Makefile: ;
@@ -1034,6 +1035,10 @@ export mod_strip_cmd
 ifeq ($(KBUILD_EXTMOD),)
 core-y		+= kernel/ mm/ fs/ ipc/ security/ crypto/ block/
 
+	# 所有要编译的目录
+	# 例如: init usr arch/x86 kernel mm fs ipc security crypto block drivers
+	#       sound firmware arch/x86/pci arch/x86/power arch/x86/video net lib arch/x86/lib
+
 vmlinux-dirs	:= $(patsubst %/,%,$(filter %/, $(init-y) $(init-m) \
 		     $(core-y) $(core-m) $(drivers-y) $(drivers-m) \
 		     $(net-y) $(net-m) $(libs-y) $(libs-m)))
@@ -1078,11 +1083,38 @@ libs-y		:= $(libs-y1) $(libs-y2)
 #
 # System.map is generated to document addresses of all kernel symbols
 
+	# head-y在对应架构的Makefile中定义
+	# 例如: arch/x86/Makefile中的head-y
+
+	# vmlinux-init展开为: arch/x86/kernel/head_32.o arch/x86/kernel/head32.o
+	#                     arch/x86/kernel/head.o arch/x86/kernel/init_task.o  init/built-in.o
+
 vmlinux-init := $(head-y) $(init-y)
+
+	# vmlinux-main展开为: usr/built-in.o  arch/x86/built-in.o  kernel/built-in.o
+	#                     mm/built-in.o  fs/built-in.o  ipc/built-in.o  security/built-in.o
+	#                     crypto/built-in.o  block/built-in.o  lib/lib.a  arch/x86/lib/lib.a
+	#                     lib/built-in.o  arch/x86/lib/built-in.o  drivers/built-in.o
+	#                     sound/built-in.o  firmware/built-in.o  arch/x86/pci/built-in.o
+	#                     arch/x86/power/built-in.o  arch/x86/video/built-in.o  net/built-in.o
+
 vmlinux-main := $(core-y) $(libs-y) $(drivers-y) $(net-y)
 vmlinux-all  := $(vmlinux-init) $(vmlinux-main)
 vmlinux-lds  := arch/$(SRCARCH)/kernel/vmlinux.lds
 export KBUILD_VMLINUX_OBJS := $(vmlinux-all)
+
+	# 连接生成vmlinux的规则
+	# 例如: ld -m elf_i386 --emit-relocs  -o vmlinux -T arch/x86/kernel/vmlinux.lds
+	#           arch/x86/kernel/head_32.o arch/x86/kernel/head32.o arch/x86/kernel/head.o
+	#           arch/x86/kernel/init_task.o  init/built-in.o
+	#         --start-group  usr/built-in.o  arch/x86/built-in.o  kernel/built-in.o  mm/built-in.o
+	#           fs/built-in.o  ipc/built-in.o  security/built-in.o  crypto/built-in.o
+	#           block/built-in.o  lib/lib.a  arch/x86/lib/lib.a  lib/built-in.o
+	#           arch/x86/lib/built-in.o  drivers/built-in.o  sound/built-in.o
+	#           firmware/built-in.o  arch/x86/pci/built-in.o  arch/x86/power/built-in.o
+	#           arch/x86/video/built-in.o  net/built-in.o
+	#         --end-group
+	#           .tmp_kallsyms3.o
 
 # Rule to link vmlinux - also used during CONFIG_KALLSYMS
 # May be overridden by arch/$(ARCH)/Makefile
@@ -1091,6 +1123,11 @@ quiet_cmd_vmlinux__ ?= LD      $@
       -T $(vmlinux-lds) $(vmlinux-init)                          \
       --start-group $(vmlinux-main) --end-group                  \
       $(filter-out $(vmlinux-lds) $(vmlinux-init) $(vmlinux-main) vmlinux.o FORCE ,$^)
+
+	# 若.version文件不存在或不可读
+	# 则使用echo 创建文件并写入计数1
+	# 有的话则将其计数+1
+	# 然后进入init目录生成其中Makefile的目标version.o
 
 # Generate new vmlinux version
 quiet_cmd_vmlinux_version = GEN     .version
@@ -1104,6 +1141,9 @@ quiet_cmd_vmlinux_version = GEN     .version
 	fi;						\
 	$(MAKE) $(build)=init
 
+	# 使用scripts/mksysmap脚本生成符号表
+	# 即使用nm程序-n参数获取符号地址信息
+
 # Generate System.map
 quiet_cmd_sysmap = SYSMAP
       cmd_sysmap = $(CONFIG_SHELL) $(srctree)/scripts/mksysmap
@@ -1113,6 +1153,15 @@ quiet_cmd_sysmap = SYSMAP
 # Generate System.map and verify that the content is consistent
 # Use + in front of the vmlinux_version rule to silent warning with make -j2
 # First command is ':' to allow us to use + in front of the rule
+
+	# make -j2 : 选项-j(--job) make同时执行的命令数目
+
+	# 宏展开
+	# cmd_vmlinux_version
+	# cmd_vmlinux__ 
+	# cmd_sysmap 生成符号表
+	# 使用echo把执行的cmd_linux命令写入隐藏文件./.vmlinux.cmd内
+
 define rule_vmlinux__
 	:
 	$(if $(CONFIG_KALLSYMS),,+$(call cmd,vmlinux_version))
@@ -1181,6 +1230,9 @@ define rule_ksym_ld
 	$(Q)echo 'cmd_$@ := $(cmd_vmlinux__)' > $(@D)/.$(@F).cmd
 endef
 
+	# $< : 第一个依赖文件名称
+	# $@ : 目标文件的完整名称
+
 # Generate .S file with all kernel symbols
 quiet_cmd_kallsyms = KSYM    $@
       cmd_kallsyms = $(NM) -n $< | $(KALLSYMS) \
@@ -1219,10 +1271,38 @@ endif # ifdef CONFIG_KALLSYMS
 
 # Do modpost on a prelinked vmlinux. The finally linked vmlinux has
 # relevant sections renamed as per the linker script.
+
+	# $^ : Makefile中的自动变量，代表所有不重复的依赖文件，以空格分开
+
+	# cmd_vmlinux-modpost为vmlinux.o的连接命令，依赖连接生成vmlinux.o
+	# 例如: ld -m elf_i386 -r -o vmlinux.o arch/x86/kernel/head_32.o arch/x86/kernel/head32.o
+	#           arch/x86/kernel/head.o arch/x86/kernel/init_task.o  init/built-in.o
+	#         --start-group  usr/built-in.o  arch/x86/built-in.o  kernel/built-in.o
+	#           mm/built-in.o  fs/built-in.o  ipc/built-in.o  security/built-in.o
+	#           crypto/built-in.o  block/built-in.o  lib/lib.a  arch/x86/lib/lib.a  lib/built-in.o
+	#           arch/x86/lib/built-in.o  drivers/built-in.o  sound/built-in.o  firmware/built-in.o
+	#           arch/x86/pci/built-in.o  arch/x86/power/built-in.o  arch/x86/video/built-in.o
+	#           net/built-in.o
+	#         --end-group
+
+	# ld选项--start-group ARCHIVES --end-group
+	# ARCHIVES中的存档文件会被多遍搜索，直到没有新的无定义引用被创建
+	# 通常一个档案文件只会被搜索一次
+	# 但如果这个档案文件中的一个符号需要被用来解析一个档案中的目标引用到的无定义的符号
+	# 而这个符号在命令行上的后面某个档案文件中出现，连接器不能解析这个引用
+	# 把这些档案分组后，它们都可被反复搜索直到所有可能的引用都被解析了为止
+
 quiet_cmd_vmlinux-modpost = LD      $@
       cmd_vmlinux-modpost = $(LD) $(LDFLAGS) -r -o $@                          \
 	 $(vmlinux-init) --start-group $(vmlinux-main) --end-group             \
 	 $(filter-out $(vmlinux-init) $(vmlinux-main) FORCE ,$^)
+
+	# rule_vmlinux-modpost
+	# 目标vmlinux.o使用此命令:
+	#   make -f /work/vmapollo/linux-2.6.39.3/scripts/Makefile.modpost vmlinux.o
+
+	# 命令行前使用+号，则该命令行始终被执行
+
 define rule_vmlinux-modpost
 	:
 	+$(call cmd,vmlinux-modpost)
@@ -1230,7 +1310,16 @@ define rule_vmlinux-modpost
 	$(Q)echo 'cmd_$@ := $(cmd_vmlinux-modpost)' > $(dot-target).cmd
 endef
 
+
+	# 最终连接成的vmlinux，包含更新后的符号表
+
 # vmlinux image - including updated kernel symbols
+
+	# 函数vmlinux-modpost没有定义
+	# rule_vmlinux__
+	# 虽然vmlinux依赖vmlinux.o，但是在rule_vmlinux__ => cmd_vmlinux__中并不会连接vmlinux.o
+	# vmlinux.o为模块的编译做准备
+
 vmlinux: $(vmlinux-lds) $(vmlinux-init) $(vmlinux-main) vmlinux.o $(kallsyms.o) FORCE
 ifdef CONFIG_HEADERS_CHECK
 	$(Q)$(MAKE) -f $(srctree)/Makefile headers_check
@@ -1250,12 +1339,21 @@ ifdef CONFIG_KALLSYMS
 .tmp_vmlinux1: vmlinux.o
 endif
 
+	# 从初始化依赖中过滤掉built-in.o
+	# 例如: modpost-init的值为arch/x86/kernel/head_32.o arch/x86/kernel/head32.o
+	#                         arch/x86/kernel/head.o arch/x86/kernel/init_task.o
+	# 命令为宏rule_vmlinux-modpost
+
 modpost-init := $(filter-out init/built-in.o, $(vmlinux-init))
 vmlinux.o: $(modpost-init) $(vmlinux-main) FORCE
 	$(call if_changed_rule,vmlinux-modpost)
 
 # The actual objects are generated when descending, 
 # make sure no implicit rule kicks in
+
+	# 各个.o与built-in.o依赖于$(vmlinux-dirs)
+	# 在目标$(vmlinux-dirs)的命令中便进入各个目录进行编译
+
 $(sort $(vmlinux-init) $(vmlinux-main)) $(vmlinux-lds): $(vmlinux-dirs) ;
 
 # Handle descending into subdirectories listed in $(vmlinux-dirs)
@@ -1265,6 +1363,10 @@ $(sort $(vmlinux-init) $(vmlinux-main)) $(vmlinux-lds): $(vmlinux-dirs) ;
 # Error messages still appears in the original language
 
 PHONY += $(vmlinux-dirs)
+
+	# 使用make -f scripts/Makefile.build obj=
+	# 进入各个目录进行代码的编译
+
 $(vmlinux-dirs): prepare scripts
 	$(Q)$(MAKE) $(build)=$@
 

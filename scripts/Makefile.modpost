@@ -70,6 +70,8 @@ ifneq ($(KBUILD_BUILDHOST),$(ARCH))
         cross_build := 1
 endif
 
+	# 使用scripts/mod/modpost小程序为模块生成*.mod.c文件
+
 # Step 2), invoke modpost
 #  Includes step 3,4
 modpost = scripts/mod/modpost                    \

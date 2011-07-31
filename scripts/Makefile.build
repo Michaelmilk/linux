@@ -2,7 +2,14 @@
 # Building
 # ==========================================================================
 
+	# 使用变量obj来指示当前编译的目录
+	# obj会被加在目录下所有文件的前面，来组成相对目录树根的一个完整路径文件名称
+	# 例如: 编译文件系统时使用make -f scripts/Makefile.build obj=fs
+	#       首先编译fs/%.c
+
 src := $(obj)
+
+	# 默认的目标
 
 PHONY := __build
 __build:
@@ -31,7 +38,12 @@ subdir-asflags-y :=
 subdir-ccflags-y :=
 
 # Read auto.conf if it exists, otherwise ignore
+
+	# 包含由.config生成的配置信息
+
 -include include/config/auto.conf
+
+	# 包含一些有用的变量和命令等
 
 include scripts/Kbuild.include
 
@@ -39,8 +51,18 @@ include scripts/Kbuild.include
 save-cflags := $(CFLAGS)
 
 # The filename Kbuild has precedence over Makefile
+
+	# 当前编译目录的完整绝对目录路径
+
 kbuild-dir := $(if $(filter /%,$(src)),$(src),$(srctree)/$(src))
+
+	# 当前编译目录下的Makefile绝对路径
+
 kbuild-file := $(if $(wildcard $(kbuild-dir)/Kbuild),$(kbuild-dir)/Kbuild,$(kbuild-dir)/Makefile)
+
+	# 包含当前编译目录的Makefile
+	# 此类Makfile内根据.config生成的内容为编译的目标变量赋值
+
 include $(kbuild-file)
 
 # If the save-* variables changed error out
@@ -99,6 +121,8 @@ endif
 KBUILD_CFLAGS += $(warning)
 endif
 
+	# 包含Makefile.lib文件，用来提取要编译的子目录文件，常用的命令等
+
 include scripts/Makefile.lib
 
 ifdef host-progs
@@ -132,6 +156,9 @@ ifneq ($(strip $(lib-y) $(lib-m) $(lib-n) $(lib-)),)
 lib-target := $(obj)/lib.a
 endif
 
+	# 使用make的strip函数去掉空字符
+	# 即如果该目录下有需要处理的目标时，为builtin-target赋值
+
 ifneq ($(strip $(obj-y) $(obj-m) $(obj-n) $(obj-) $(subdir-m) $(lib-target)),)
 builtin-target := $(obj)/built-in.o
 endif
@@ -139,6 +166,9 @@ endif
 modorder-target := $(obj)/modules.order
 
 # We keep a list of all modules in $(MODVERDIR)
+
+	# 先解决顶层目录obj的目标built-in.o
+	# subdir-ym在上面包含的Makefile.lib中赋值，处理子目录中的目标
 
 __build: $(if $(KBUILD_BUILTIN),$(builtin-target) $(lib-target) $(extra-y)) \
 	 $(if $(KBUILD_MODULES),$(obj-m) $(modorder-target)) \
@@ -160,6 +190,8 @@ endif
 ifdef CONFIG_DEBUG_SECTION_MISMATCH
   cmd_secanalysis = ; scripts/mod/modpost $@
 endif
+
+	# 编译.c的一些规则
 
 # Compile C sources (.c)
 # ---------------------------------------------------------------------------
@@ -320,6 +352,8 @@ quiet_cmd_cc_lst_c = MKLST   $@
 $(obj)/%.lst: $(src)/%.c FORCE
 	$(call if_changed_dep,cc_lst_c)
 
+	# 编译.S的一些规则
+
 # Compile assembler sources (.S)
 # ---------------------------------------------------------------------------
 
@@ -435,6 +469,8 @@ targets += $(multi-used-y) $(multi-used-m)
 
 # Descending
 # ---------------------------------------------------------------------------
+
+	# 子目录的递归编译
 
 PHONY += $(subdir-ym)
 $(subdir-ym):

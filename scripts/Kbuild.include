@@ -1,11 +1,16 @@
 ####
 # kbuild: Generic definitions
 
+	#定义一些有用的变量和命令等
+
 # Convenient variables
 comma   := ,
 squote  := '
 empty   :=
 space   := $(empty) $(empty)
+
+	# dir取目录，notdir取最后的文件名称
+	# 效果就是在文件名称前加个.变成隐藏文件
 
 ###
 # Name of target with a '.' as filename prefix. foo/bar.o => foo/.bar.o
@@ -177,6 +182,9 @@ flags = $(foreach o,$($(1)),$(if $(filter -I%,$(o)),$(call addtree,$(o)),$(o)))
 # Short version is used, if $(quiet) equals `quiet_', otherwise full one.
 echo-cmd = $(if $($(quiet)cmd_$(1)),\
 	echo '  $(call escsq,$($(quiet)cmd_$(1)))$(echo-why)';)
+
+	# 定义函数cmd，用来拼接成新的字符串
+	# 例如: $(call cmd,vmlinux__)即得到的值为cmd_vmlinux__
 
 # printing commands
 cmd = @$(echo-cmd) $(cmd_$(1))
