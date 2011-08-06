@@ -29,10 +29,17 @@
 
 #define KSYM_NAME_LEN		128
 
+/*
+符号条目
+*/
 struct sym_entry {
+	/* 目标文件中符号的虚拟地址 */
 	unsigned long long addr;
+	/* 为sym指向字符串的长度，不包含'\0' */
 	unsigned int len;
+	/* 在数组中的下标 */
 	unsigned int start_pos;
+	/* 指向动态分配的符号字符串空间 */
 	unsigned char *sym;
 };
 
@@ -51,7 +58,14 @@ static struct text_range text_ranges[] = {
 #define text_range_text     (&text_ranges[0])
 #define text_range_inittext (&text_ranges[1])
 
+/*
+指向动态分配的struct sym_entry数组
+*/
 static struct sym_entry *table;
+/*
+table_size记录动态分配的struct sym_entry数组长度
+table_cnt记录数组中使用的项个数
+*/
 static unsigned int table_size, table_cnt;
 static int all_symbols = 0;
 static char symbol_prefix_char = '\0';
@@ -99,12 +113,16 @@ static int read_symbol_tr(const char *sym, unsigned long long addr)
 	return 1;
 }
 
+/*
+从输入流@in读取符号
+*/
 static int read_symbol(FILE *in, struct sym_entry *s)
 {
 	char str[500];
 	char *sym, stype;
 	int rc;
 
+	/* 从输入流@in中格式化读取 */
 	rc = fscanf(in, "%llx %c %499s\n", &s->addr, &stype, str);
 	if (rc != 3) {
 		if (rc != EOF && fgets(str, 500, in) == NULL)
@@ -122,6 +140,7 @@ static int read_symbol(FILE *in, struct sym_entry *s)
 		_text = s->addr;
 	else if (read_symbol_tr(sym, s->addr) == 0)
 		/* nothing to do */;
+	/* 符号类型'A'，绝对地址，大写为全局符号 */
 	else if (toupper(stype) == 'A')
 	{
 		/* Keep these useful absolute symbols */
@@ -132,6 +151,7 @@ static int read_symbol(FILE *in, struct sym_entry *s)
 			return -1;
 
 	}
+	/* 'U' 未定义的 */
 	else if (toupper(stype) == 'U' ||
 		 is_arm_mapping_symbol(sym))
 		return -1;
@@ -144,14 +164,18 @@ static int read_symbol(FILE *in, struct sym_entry *s)
 
 	/* include the type field in the symbol name, so that it gets
 	 * compressed together */
+	/* 包含符号类型的一个字符 */
 	s->len = strlen(str) + 1;
+	/* 字符串以'\0'结尾 */
 	s->sym = malloc(s->len + 1);
 	if (!s->sym) {
 		fprintf(stderr, "kallsyms failure: "
 			"unable to allocate required amount of memory\n");
 		exit(EXIT_FAILURE);
 	}
+	/* 复制符号名称 */
 	strcpy((char *)s->sym + 1, str);
+	/* 第一个字符保存符号类型 */
 	s->sym[0] = stype;
 
 	return 0;
@@ -229,7 +253,9 @@ static int symbol_valid(struct sym_entry *s)
 
 static void read_map(FILE *in)
 {
+	/* 检测文件流结束符 */
 	while (!feof(in)) {
+		/* 当数组中符号不够用时，动态扩充空间 */
 		if (table_cnt >= table_size) {
 			table_size += 10000;
 			table = realloc(table, sizeof(*table) * table_size);
@@ -238,6 +264,7 @@ static void read_map(FILE *in)
 				exit (1);
 			}
 		}
+		/* 读取符号，使用table数组接收 */
 		if (read_symbol(in, &table[table_cnt]) == 0) {
 			table[table_cnt].start_pos = table_cnt;
 			table_cnt++;
@@ -285,6 +312,10 @@ static int expand_symbol(unsigned char *data, int len, char *result)
 	return total;
 }
 
+/*
+使用printf向标准输出stdout写入符号信息
+然后重定向至文件
+*/
 static void write_src(void)
 {
 	unsigned int i, k, off;
@@ -630,9 +661,15 @@ static int compare_symbols(const void *a, const void *b)
 
 static void sort_symbols(void)
 {
+	/* 使用快速排序法对table数组进行排序 */
 	qsort(table, table_cnt, sizeof(struct sym_entry), compare_symbols);
 }
 
+/*
+使用nm工具获取目标文件的符号信息后
+通过管道输入到本程序进行读取解析
+然后重定向输出到文件
+*/
 int main(int argc, char **argv)
 {
 	if (argc >= 2) {
@@ -652,6 +689,7 @@ int main(int argc, char **argv)
 	} else if (argc != 1)
 		usage();
 
+	/* 管道而来，所以从标准输入读取 */
 	read_map(stdin);
 	sort_symbols();
 	optimize_token_table();
