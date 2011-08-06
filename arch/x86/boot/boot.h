@@ -74,6 +74,9 @@ static inline u32 inl(u32 port)
 	return v;
 }
 
+/*
+在两次连续的I/O操作之间插入一段微小的延时
+*/
 static inline void io_delay(void)
 {
 	const u16 DELAY_PORT = 0x80;
@@ -113,6 +116,11 @@ static inline u16 gs(void)
 
 typedef unsigned int addr_t;
 
+/*
+以fs为段地址，段内偏移@addr地址处的8bit值
+
+@addr	: 段内偏移
+*/
 static inline u8 rdfs8(addr_t addr)
 {
 	u8 v;
@@ -287,6 +295,10 @@ void intcall(u8 int_no, const struct biosregs *ireg, struct biosregs *oreg);
 /* cmdline.c */
 int __cmdline_find_option(u32 cmdline_ptr, const char *option, char *buffer, int bufsize);
 int __cmdline_find_option_bool(u32 cmdline_ptr, const char *option);
+
+/*
+从引导加载器提供的命令行参数中查找选项的值
+*/
 static inline int cmdline_find_option(const char *option, char *buffer, int bufsize)
 {
 	return __cmdline_find_option(boot_params.hdr.cmd_line_ptr, option, buffer, bufsize);

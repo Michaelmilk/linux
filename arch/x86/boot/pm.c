@@ -19,14 +19,24 @@
  * Invoke the realmode switch hook if present; otherwise
  * disable all interrupts.
  */
+/*
+参考Documentation/x86/boot.txt
+*/
 static void realmode_switch_hook(void)
 {
 	if (boot_params.hdr.realmode_swtch) {
+		/* 长调用16位地址
+		   %0取输入值realmode_swtch
+		   *%0前的"*"号表示取的为绝对地址 */
 		asm volatile("lcallw *%0"
 			     : : "m" (boot_params.hdr.realmode_swtch)
 			     : "eax", "ebx", "ecx", "edx");
 	} else {
+		/* 使用cli指令
+		   将IF位置0(关中断) */
 		asm volatile("cli");
+		/* NMI: NonMaskable Interrupt 不可屏蔽中断请求
+		   将0x70端口的bit7置1，即Disable NMI */
 		outb(0x80, 0x70); /* Disable NMI */
 		io_delay();
 	}

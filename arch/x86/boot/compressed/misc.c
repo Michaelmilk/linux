@@ -127,6 +127,10 @@ static char *vidmem;
 static int vidport;
 static int lines, cols;
 
+/*
+注意:这里包含的是一个.c文件
+文件内含有内核映像的解压函数gunzip()
+*/
 #ifdef CONFIG_KERNEL_GZIP
 #include "../../../../lib/decompress_inflate.c"
 #endif
@@ -323,6 +327,9 @@ static void parse_elf(void *output)
 	}
 }
 
+/*
+asmlinkage通过堆栈传递参数
+*/
 asmlinkage void decompress_kernel(void *rmode, memptr heap,
 				  unsigned char *input_data,
 				  unsigned long input_len,
@@ -336,9 +343,11 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 		debug = 1;
 
 	if (real_mode->screen_info.orig_video_mode == 7) {
+		/* 0xb0000 = 704K, 0x3b4 = 948 */
 		vidmem = (char *) 0xb0000;
 		vidport = 0x3b4;
 	} else {
+		/* 0xb8000 = 736K, 0x3d4 = 980 */
 		vidmem = (char *) 0xb8000;
 		vidport = 0x3d4;
 	}
@@ -353,12 +362,17 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 	free_mem_ptr     = heap;	/* Heap */
 	free_mem_end_ptr = heap + BOOT_HEAP_SIZE;
 
+	/* 判断对齐 */
 	if ((unsigned long)output & (MIN_KERNEL_ALIGN - 1))
 		error("Destination address inappropriately aligned");
 #ifdef CONFIG_X86_64
 	if (heap > 0x3fffffffffffUL)
 		error("Destination address too large");
 #else
+	/* __PAGE_OFFSET通常为3G
+	   -__PAGE_OFFSET即把最高位的1当成符号位，剩下的部分取反+1后即1G
+	   128左移20位，即128M
+	   计算下来即heap不能大于896M-1 */
 	if (heap > ((-__PAGE_OFFSET-(128<<20)-1) & 0x7fffffff))
 		error("Destination address too large");
 #endif
@@ -369,6 +383,8 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 
 	if (!quiet)
 		putstr("\nDecompressing Linux... ");
+	/* 调用解压函数解压缩内核映像文件
+	   当配置CONFIG_KERNEL_GZIP时，即decompress_inflate.c中的gunzip() */
 	decompress(input_data, input_len, NULL, NULL, output, NULL, error);
 	parse_elf(output);
 	if (!quiet)

@@ -13,6 +13,9 @@
  * If you want more physical memory than this then see the CONFIG_HIGHMEM4G
  * and CONFIG_HIGHMEM64G options in the kernel configuration.
  */
+/*
+Õ®≥£≈‰÷√Œ™3G
+*/
 #define __PAGE_OFFSET		_AC(CONFIG_PAGE_OFFSET, UL)
 
 #define THREAD_ORDER	1

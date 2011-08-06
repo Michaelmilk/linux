@@ -8,7 +8,7 @@
  *
  *	Rewritten as a common file by H. Peter Anvin (Apr 2007)
  *
- * BIG FAT NOTE: We're in real mode using 64k segments.  Therefore segment
+ * BIG FAT NOTE: We''re in real mode using 64k segments.  Therefore segment
  * addresses must be multiplied by 16 to obtain their respective linear
  * addresses. To avoid confusion, linear addresses are written using leading
  * hex while segment addresses are written as segment:offset.
@@ -25,9 +25,21 @@
 #include "voffset.h"
 #include "zoffset.h"
 
+/*
+16-bit实模式引导段地址，左移4位再加上偏移0
+对应的线性地址就是0x7c00，即31K
+此时是实模式，即物理地址
+*/
 BOOTSEG		= 0x07C0		/* original address of boot-sector */
+/*
+历史上system模块加载的段
+即物理地址0x10000，即64K
+*/
 SYSSEG		= 0x1000		/* historical load address >> 4 */
 
+/*
+ASK_VGA参考Documentation/svga.txt
+*/
 #ifndef SVGA_MODE
 #define SVGA_MODE ASK_VGA
 #endif
@@ -40,12 +52,28 @@ SYSSEG		= 0x1000		/* historical load address >> 4 */
 #define ROOT_RDONLY 1
 #endif
 
+	/* 连接的时候放在bstext节，boot sector
+	   参考连接脚本setup.ld
+	   使用objdump -d setup.elf查看其前面的内容
+	   查看bzImage的二进制文件 */
 	.code16
 	.section ".bstext", "ax"
 
 	.global bootsect_start
 bootsect_start:
 
+	/* 当PC按下电源，CPU加电后，自动从0xFFFF0处开始执行代码，这个地址位于BIOS中。
+	   接着BIOS开始一系列系统检测，并在内存物理地址0处初始化中断向量，
+	   供Linux内核启动过程中进行调用。
+	   此后，它将启动设备的第一个扇区（磁盘引导扇区，512Bytes）读入内存绝对地址0x7C00处，
+	   并跳到这个地方开始执行。
+
+	   此处第1条指令便进行长跳转到段0x07C0，偏移$start2处开始执行指令
+	   实际上这部分指令已不会再使用
+	   原来此处前512字节做的事已经由引导加载器来完成，如GRUB
+	   参考grub代码中的boot/i386/pc/boot.S
+	   内容存放在MBR内，读MBR内的512字节到物理地址0x7c00即stage1
+	   可以使用dd if=dev/sda of=mbr.bin bs=512 count=1来查看当前硬盘的MBR内容 */
 	# Normalize the start address
 	ljmp	$BOOTSEG, $start2
 
@@ -79,6 +107,7 @@ bs_die:
 	# invoke the BIOS reset code...
 	ljmp	$0xf000,$0xfff0
 
+	/* 查看bzImage的2进制文件，可以看到下面的这些字符 */
 	.section ".bsdata", "a"
 bugger_off_msg:
 	.ascii	"Direct booting from floppy is no longer supported.\r\n"
@@ -91,6 +120,11 @@ bugger_off_msg:
 	# Kernel attributes; used by setup.  This is part 1 of the
 	# header, from the old boot sector.
 
+/*
+参考连接脚本setup.ld，header节从偏移497开始，即0x1F1
+参考boot.txt
+struct setup_header
+*/
 	.section ".header", "a"
 	.globl	hdr
 hdr:
@@ -104,11 +138,21 @@ boot_flag:	.word 0xAA55
 
 	# offset 512, entry point
 
+/*
+setup的第2个512字节，偏移0x200
+引导加载器切换回实模式后便跳转到此地址处开始执行
+*/
 	.globl	_start
 _start:
 		# Explicitly enter this as bytes, or the assembler
 		# tries to generate a 3-byte jump here, which causes
 		# everything else to push off to the wrong offset.
+		/* 进行硬编码，明确的使用字节写入跳转指令
+		   否则汇编器会生成3个字节的跳转指令，便打乱了后面数据的偏移
+
+		   0xeb即jmp指令的指令码
+		   1f指向前1标号所对应的地址，这样便计算出了start_of_setup到此处的偏移
+		   即跳转到start_of_setup处 */
 		.byte	0xeb		# short (2-byte) jump
 		.byte	start_of_setup-1f
 1:
@@ -116,6 +160,7 @@ _start:
 	# Part 2 of the header, from the old setup.S
 
 		.ascii	"HdrS"		# header signature
+		/* 协议版本2.10 */
 		.word	0x020a		# header version number (>= 0x0105)
 					# or else old loadlin-1.5 will fail)
 		.globl realmode_swtch
@@ -124,7 +169,7 @@ start_sys_seg:	.word	SYSSEG		# obsolete and meaningless, but just
 					# in case something decided to "use" it
 		.word	kernel_version-512 # pointing to kernel version string
 					# above section of header is compatible
-					# with loadlin-1.5 (header v1.5). Don't
+					# with loadlin-1.5 (header v1.5). Don''t
 					# change it.
 
 type_of_loader:	.byte	0		# 0 means ancient bootloader, newer
@@ -237,8 +282,15 @@ init_size:		.long INIT_SIZE		# kernel initialization size
 
 # End of setup header #####################################################
 
+/*
+由0x200处直接跳转过来执行
+初始化一些段寄存器后，设置实模式代码堆栈，bss清0，调用main.c中的main()函数
+此时依然处于实模式
+*/
 	.section ".entrytext", "ax"
+
 start_of_setup:
+
 #ifdef SAFE_RESET_DISK_CONTROLLER
 # Reset the disk controller.
 	movw	$0x0000, %ax		# Reset disk controller
@@ -254,7 +306,7 @@ start_of_setup:
 # Apparently some ancient versions of LILO invoked the kernel with %ss != %ds,
 # which happened to work by accident for the old code.  Recalculate the stack
 # pointer if %ss is invalid.  Otherwise leave it alone, LOADLIN sets up the
-# stack behind its own code, so we can't blindly put it directly past the heap.
+# stack behind its own code, so we can''t blindly put it directly past the heap.
 
 	movw	%ss, %dx
 	cmpw	%ax, %dx	# %ds == %ss?
@@ -273,7 +325,7 @@ start_of_setup:
 2:	# Now %dx should point to the end of our stack space
 	andw	$~3, %dx	# dword align (might as well...)
 	jnz	3f
-	movw	$0xfffc, %dx	# Make sure we're not zero
+	movw	$0xfffc, %dx	# Make sure we''re not zero
 3:	movw	%ax, %ss
 	movzwl	%dx, %esp	# Clear upper half of %esp
 	sti			# Now we should have a working stack
@@ -286,10 +338,17 @@ start_of_setup:
 6:
 
 # Check signature at end of setup
+/*
+检查setup的签名
+setup_sig在连接脚本setup.ld中定义赋值
+*/
 	cmpl	$0x5a5aaa55, setup_sig
 	jne	setup_bad
 
 # Zero the bss
+/*
+setup的bss段数据清0
+*/
 	movw	$__bss_start, %di
 	movw	$_end+3, %cx
 	xorl	%eax, %eax
@@ -298,6 +357,12 @@ start_of_setup:
 	rep; stosl
 
 # Jump to C code (should not return)
+/*
+调用arch/x86/boot/main.c中main()函数
+main()中调用go_to_protected_mode() => protected_mode_jump()
+跳转到保护模式代码
+所以不会再返回这里
+*/
 	calll	main
 
 # Setup corrupt somehow...

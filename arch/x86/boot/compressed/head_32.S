@@ -21,6 +21,12 @@
 /*
  * High loaded stuff by Hans Lermen & Werner Almesberger, Feb. 1996
  */
+
+/*
+在连接脚本arch/x86/boot/compressed/vmlinux.lds中
+把这里的符号startup_32作为arch/x86/boot/compressed/vmlinux的起始地址
+*/
+
 	.text
 
 #include <linux/init.h>
@@ -32,6 +38,9 @@
 
 	__HEAD
 ENTRY(startup_32)
+	/* 对连接好的arch/x86/boot/compressed/vmlinux使用objdump -d得到的信息
+	   第一条命令就是这里的cld
+	   DF标志置0，指示地址方向为增加 */
 	cld
 	/*
 	 * Test KEEP_SEGMENTS flag to see if the bootloader is asking
@@ -40,7 +49,11 @@ ENTRY(startup_32)
 	testb	$(1<<6), BP_loadflags(%esi)
 	jnz	1f
 
+	/* 清除IF标志，关闭中断 */
 	cli
+	/* 引导数据段放入eax寄存器
+	   __BOOT_DS定义在arch/x86/include/asm/segment.h中
+	   参考boot.txt */
 	movl	$__BOOT_DS, %eax
 	movl	%eax, %ds
 	movl	%eax, %es
@@ -57,9 +70,18 @@ ENTRY(startup_32)
  * data at 0x1e4 (defined as a scratch field) are used as the stack
  * for this calculation. Only 4 bytes are needed.
  */
+	/* scratch为结构struct boot_params中的字段，在结构中的偏移为0x1e4
+	   esi寄存器在protected_mode_jump跳转时，保存的是boot_params的线性地址
+	   参考pmjump.S中的protected_mode_jump()
+	   0x1e4 + 4 = 0x1e8
+	   栈顶指针esp指向scratch字段末尾处
+	   */
 	leal	(BP_scratch+4)(%esi), %esp
 	call	1f
+	/* 出栈，即scratch字段的值保存到了ebp寄存器 */
 1:	popl	%ebp
+	/* 1b指的是backward，即前1句标号1的地址偏移值
+	   计算相对差值 */
 	subl	$1b, %ebp
 
 /*
@@ -68,8 +90,16 @@ ENTRY(startup_32)
  * for safe in-place decompression.
  */
 
+/*
+relocate : 迁移
+根据内核不同的配置做不同的处理
+*/
 #ifdef CONFIG_RELOCATABLE
 	movl	%ebp, %ebx
+	/* BP_kernel_alignment定义在arch/x86/kernel/asm-offsets.c中
+	   esi寄存器中的地址依然为boot_params的线性地址
+	   加上BP_kernel_alignment后
+	   即struct setup_header的kernel_alignment字段的值，存入eax寄存器 */
 	movl	BP_kernel_alignment(%esi), %eax
 	decl	%eax
 	addl    %eax, %ebx
@@ -107,8 +137,15 @@ ENTRY(startup_32)
  * Jump to the relocated address.
  */
 	leal	relocated(%ebx), %eax
+	/* call和jmp在操作数前指定前缀"*"，则表示是一个绝对地址跳转
+	   如果没有"*"，则操作数是一个相对地址 */
 	jmp	*%eax
 ENDPROC(startup_32)
+
+/*
+根据连接脚本arch/x86/boot/compressed/vmlinux.lds
+下面部分连接在压缩文件后的.text节
+*/
 
 	.text
 relocated:
@@ -139,6 +176,17 @@ relocated:
 /*
  * Do the decompression, and jump to the new kernel..
  */
+
+/*
+decompress_kernel()函数的定义:
+asmlinkage void decompress_kernel(void *rmode, memptr heap,
+				  unsigned char *input_data,
+				  unsigned long input_len,
+				  unsigned char *output)
+在栈中准备decompress_kernel()函数的参数
+然后调用decompress_kernel()函数
+*/
+
 	leal	z_extract_offset_negative(%ebx), %ebp
 				/* push arguments for decompress_kernel: */
 	pushl	%ebp		/* output address */
@@ -148,7 +196,13 @@ relocated:
 	leal	boot_heap(%ebx), %eax
 	pushl	%eax		/* heap area */
 	pushl	%esi		/* real mode pointer */
+
+	/* 调用decompress_kernel()函数 */
 	call	decompress_kernel
+
+	/* 栈顶指针+20，即decompress_kernel()函数5个参数所占的长度
+	   decompress_kernel()函数返回的时候会退栈
+	   这里让栈顶指针前进20，以便继续使用5个参数的值 */
 	addl	$20, %esp
 
 #if CONFIG_RELOCATABLE

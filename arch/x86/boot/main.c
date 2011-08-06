@@ -26,6 +26,10 @@ char *heap_end = _end;		/* Default end of heap = no heap */
  * filling in the new-style command line pointer instead.
  */
 
+/*
+把第一扇区的参数复制到boot_params变量中
+boot_params位于setup的数据段
+*/
 static void copy_boot_params(void)
 {
 	struct old_cmdline {
@@ -35,7 +39,11 @@ static void copy_boot_params(void)
 	const struct old_cmdline * const oldcmd =
 		(const struct old_cmdline *)OLD_CL_ADDRESS;
 
+	/* 0页对应的struct boot_params结构大小正好为4096字节 */
 	BUILD_BUG_ON(sizeof boot_params != 4096);
+	/* 复制setup中的hdr信息
+	   参考arch/x86/boot/header.S
+	   arch/x86/include/asm/bootparam.h中的struct setup_header */
 	memcpy(&boot_params.hdr, &hdr, sizeof hdr);
 
 	if (!boot_params.hdr.cmd_line_ptr &&
@@ -110,6 +118,8 @@ static void init_heap(void)
 {
 	char *stack_end;
 
+	/* 如果CAN_USE_HEAP位置1了，说明heap_end_ptr中的值是有效的
+	   参考boot.txt */
 	if (boot_params.hdr.loadflags & CAN_USE_HEAP) {
 		asm("leal %P1(%%esp),%0"
 		    : "=r" (stack_end) : "i" (-STACK_SIZE));
@@ -125,6 +135,9 @@ static void init_heap(void)
 	}
 }
 
+/*
+main函数之后收集到的信息全部存放在setup的数据段中
+*/
 void main(void)
 {
 	/* First, copy the boot header into the "zeropage" */

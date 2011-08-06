@@ -5,11 +5,26 @@
 #include <linux/types.h>
 
 /* PAGE_SHIFT determines the page size */
+/*
+页位移
+*/
 #define PAGE_SHIFT	12
+/*
+页大小，即4KB
+*/
 #define PAGE_SIZE	(_AC(1,UL) << PAGE_SHIFT)
+/*
+高20位置1的掩码
+*/
 #define PAGE_MASK	(~(PAGE_SIZE-1))
 
+/*
+物理地址掩码，32位机未启用PAE时，即0xffffffff
+*/
 #define __PHYSICAL_MASK		((phys_addr_t)((1ULL << __PHYSICAL_MASK_SHIFT) - 1))
+/*
+虚拟地址掩码，对于4GB的虚拟空间，即0xffffffff
+*/
 #define __VIRTUAL_MASK		((1UL << __VIRTUAL_MASK_SHIFT) - 1)
 
 /* Cast PAGE_MASK to a signed type so that it is sign-extended if
@@ -27,6 +42,9 @@
 
 #define HUGE_MAX_HSTATE 2
 
+/*
+通常为3GB
+*/
 #define PAGE_OFFSET		((unsigned long)__PAGE_OFFSET)
 
 #define VM_DATA_DEFAULT_FLAGS \

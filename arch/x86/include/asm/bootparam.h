@@ -22,7 +22,14 @@ struct setup_data {
 	__u8 data[0];
 };
 
+/*
+参考Documentation/x86/boot.txt
+arch/x86/boot/tools/build.c程序
+arch/x86/boot/header.S中各字段布局与该结构是一致的
+*/
 struct setup_header {
+	/* 前3个字段数据在构建内核映像时
+	   由arch/x86/boot/tools/build.c编译生成的主机程序build填写 */
 	__u8	setup_sects;
 	__u16	root_flags;
 	__u32	syssize;
@@ -33,7 +40,9 @@ struct setup_header {
 	__u16	vid_mode;
 	__u16	root_dev;
 	__u16	boot_flag;
+	/* header.S中0x200(物理地址0x90200)处的2个字节跳转指令 */
 	__u16	jump;
+	/* ASCII码"HdrS" */
 	__u32	header;
 	__u16	version;
 	__u32	realmode_swtch;
@@ -90,6 +99,11 @@ struct efi_info {
 	__u32 efi_memmap_hi;
 };
 
+/*
+参考Dcumentation/x86/zero-page.txt
+参考header.S
+对应的是内核映像中setup部分的第一个4096字节
+*/
 /* The so-called "zeropage" */
 struct boot_params {
 	struct screen_info screen_info;			/* 0x000 */

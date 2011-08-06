@@ -30,9 +30,11 @@ SECTIONS
 		HEAD_TEXT
 		_ehead = . ;
 	}
+	/* 连接压缩后的内核代码arch/x86/boot/compressed/vmlinux.bin.gz */
 	.rodata..compressed : {
 		*(.rodata..compressed)
 	}
+	/* 文本段 */
 	.text :	{
 		_text = .; 	/* Text */
 		*(.text)

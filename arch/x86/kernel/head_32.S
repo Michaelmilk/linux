@@ -6,6 +6,33 @@
  *  and Martin Mares, November 1997.
  */
 
+/*
+32位启动代码： 
+编译程序在链接内核vmlinux的时候，将vmlinux起始位置链接到0xC0000000 + 0x100000，
+这样所有的符号地址=0xC0000000+符号。在编译后的文件中的偏移地址。
+因此在页面映射没有启动之前，如果需要访问符号的物理地址，必须要减去0xC0000000。
+
+需要说明几点： 
+1.内核vmlinux被加载的时候，其存放在物理地址为0x100000处。
+CPU在执行这些指令的时候，如该文件中的第一条指令，CS=0,IP=0x100000，
+由于该条指令的物理地址依然在0x100000，故CPU顺序往下执行，而无须程序作任何其他调整； 
+
+2.但是，在链接vmlinux的时候，链接程序将该源程序中所有的符号，
+例如符号empty_zero_page，在最后形成的二进制文件中都替换为固定的值，
+这个固定的值就是：0xC0000000 + 0x100000 + 其在最后形成的二进制文件中的偏移 
+这样在没有启动页面映射之前，如果直接访问该地址，由于该地址是在3G + offset，
+在物理上基本上是不存在的，所以会出错。
+为了访问到该符号所标识的数据所在的物理地址，需要减去0xC0000000，
+这样便得到了该符号在该映射文件中的偏移值 + 0x100000，
+由于内核在加载的时候刚好被加载在内存0x100000处，
+故该符号在该映射文件中的偏移值+0x100000就是该符号在物理内存中的地址。 
+
+在/arch/x86/kernel/vmlinux.lds.S中可以看到相关的设置信息，
+objdump -D vmlinux命令来获取所有的符号以及这些符号的地址。
+
+本文件为进入C语言编写的代码进行初始化
+*/
+
 .text
 #include <linux/threads.h>
 #include <linux/init.h>
@@ -28,6 +55,14 @@
 /*
  * References to members of the new_cpu_data structure.
  */
+
+/*
+new_cpu_data是类型为结构struct cpuinfo_x86的全局变量
+在arch/i386/kernel/setup.c中定义
+以下定义取的即是new_cpu_data中各字段的值
+
+CPUINFO_x86各宏的定义在include/generated/asm-offsets.h中由Kbuild生成
+*/
 
 #define X86		new_cpu_data+CPUINFO_x86
 #define X86_VENDOR	new_cpu_data+CPUINFO_x86_vendor
@@ -61,6 +96,9 @@
 #endif
 
 /* Number of possible pages in the lowmem region */
+/*
+对于3G的偏移，内核直接访问的物理内存不超过1G，即256K个页
+*/
 LOWMEM_PAGES = (((1<<32) - __PAGE_OFFSET) >> PAGE_SHIFT)
 	
 /* Enough space to fit pagetables for the low memory linear map */
@@ -79,12 +117,29 @@ RESERVE_BRK(pagetables, INIT_MAP_SIZE)
 /*
  * 32-bit kernel entrypoint; only used by the boot CPU.  On entry,
  * %esi points to the real-mode code as a 32-bit pointer.
- * CS and DS must be 4 GB flat segments, but we don't depend on
+ * CS and DS must be 4 GB flat segments, but we don''t depend on
  * any particular GDT layout, because we load our own as soon as we
  * can.
  */
+
+/*
+ENTRY(name)宏展开为
+
+.globl name;
+ALIGN;
+name:
+
+.globl使得连接程序（ld）能够看到symbl。
+如果局部程序中定义了symbl，那么，与这个局部程序连接的其他局部程序也能存取symbl
+*/
+
+/*
+由pmjump.S中跳转而来
+此处已经进入保护模式
+*/
 __HEAD
 ENTRY(startup_32)
+	/* 把stack_start符号对应的物理地址处的4字节数放进ecx寄存器 */
 	movl pa(stack_start),%ecx
 	
 	/* test KEEP_SEGMENTS flag to see if the bootloader is asking
@@ -95,7 +150,12 @@ ENTRY(startup_32)
 /*
  * Set segments to known values.
  */
+/*
+初始化保护模式下的各个段寄存器（还没有分页）
+*/
+	/* 将引导全局段描述符所处的物理地址加载到gdtr寄存器 */
 	lgdt pa(boot_gdt_descr)
+	/* 将__BOOT_DS的值加载进eax寄存器 */
 	movl $(__BOOT_DS),%eax
 	movl %eax,%ds
 	movl %eax,%es
@@ -108,12 +168,28 @@ ENTRY(startup_32)
 /*
  * Clear BSS first so that there are no surprises...
  */
+/*
+首先将内存BSS段对应物理地址中的值清0
+*/
+ 	/* cld 清除方向标志 si di向前移动
+ 	   std 设置方向 si di向后移动*/
 	cld
+	/* 异或将eax寄存器清0 */
 	xorl %eax,%eax
+	/* BSS(Block Started by Symbol)通常是指
+	   用来存放程序中未初始化的全局变量和静态变量的一块内存区域
+	   将__bss_start物理地址放入edi寄存器 */
 	movl $pa(__bss_start),%edi
+	/* 将__bss_stop物理地址放入ecx寄存器 */
 	movl $pa(__bss_stop),%ecx
+	/* (ecx - edi)求出BSS段所占字节数，结果存入ecx寄存器 */
 	subl %edi,%ecx
+	/* 逻辑右移2位，即除以4，变成4字节单位 */
 	shrl $2,%ecx
+	/* rep 重复执行stosl，直到ecx寄存器的值为0
+	   每执行一次rep，ecx寄存器中的值会减1，以便循环结束
+	   stosl 以4字节单位把eax寄存器中的值(即0)写到edi寄存器中物理地址指向的内存中
+	   上面使用了cld指令，edi中的值会步进4字节 */
 	rep ; stosl
 /*
  * Copy bootup parameters out of the way.
@@ -138,7 +214,7 @@ ENTRY(startup_32)
 1:
 
 #ifdef CONFIG_OLPC
-	/* save OFW's pgdir table for later use when calling into OFW */
+	/* save OFW''s pgdir table for later use when calling into OFW */
 	movl %cr3, %eax
 	movl %eax, pa(olpc_ofw_pgd)
 #endif
@@ -236,7 +312,7 @@ page_pde_offset = (__PAGE_OFFSET >> 20);
 	jb default_entry
 
 	/* Paravirt-compatible boot parameters.  Look to see what architecture
-		we're booting under. */
+		we''re booting under. */
 	movl pa(boot_params + BP_hardware_subarch), %eax
 	cmpl $num_subarch_entries, %eax
 	jae bad_subarch
@@ -267,7 +343,7 @@ num_subarch_entries = (. - subarch_entries) / 4
 
 /*
  * Non-boot CPU entry point; entered from trampoline.S
- * We can't lgdt here, because lgdt itself uses a data segment, but
+ * We can''t lgdt here, because lgdt itself uses a data segment, but
  * we know the trampoline has already loaded the boot_gdt for us.
  *
  * If cpu hotplug is not supported then this code can go in init section
@@ -296,12 +372,12 @@ default_entry:
  *
  *	NOTE! If we are on a 486 we may have no cr4 at all!
  *	So we do not try to touch it unless we really have
- *	some bits in it to set.  This won't work if the BSP
+ *	some bits in it to set.  This won''t work if the BSP
  *	implements cr4 but this AP does not -- very unlikely
  *	but be warned!  The same applies to the pse feature
  *	if not equally supported. --macro
  *
- *	NOTE! We have to correct for the fact that we're
+ *	NOTE! We have to correct for the fact that we''re
  *	not yet offset PAGE_OFFSET..
  */
 #define cr4_bits pa(mmu_cr4_features)
@@ -356,7 +432,7 @@ default_entry:
 	addl $__PAGE_OFFSET, %esp
 
 /*
- * Initialize eflags.  Some BIOS's leave bits like NT set.  This would
+ * Initialize eflags.  Some BIOS''s leave bits like NT set.  This would
  * confuse the debugger if this code is traced.
  * XXX - best to initialize before switching to protected mode.
  */
@@ -380,9 +456,9 @@ checkCPUtype:
 
 /* check if it is 486 or 386. */
 /*
- * XXX - this does a lot of unnecessary setup.  Alignment checks don't
+ * XXX - this does a lot of unnecessary setup.  Alignment checks don''t
  * apply at our cpl of 0 and the stack ought to be aligned already, and
- * we don't need to preserve eflags.
+ * we don''t need to preserve eflags.
  */
 
 	movb $3,X86		# at least 386
@@ -448,11 +524,11 @@ is386:	movl $2,%ecx		# set MP
 	movl %eax,%es
 
 	movl $(__KERNEL_PERCPU), %eax
-	movl %eax,%fs			# set this cpu's percpu
+	movl %eax,%fs			# set this cpu''s percpu
 
 #ifdef CONFIG_CC_STACKPROTECTOR
 	/*
-	 * The linker can't handle this by relocation.  Manually set
+	 * The linker can''t handle this by relocation.  Manually set
 	 * base address in stack canary segment descriptor.
 	 */
 	cmpb $0,ready
@@ -499,7 +575,7 @@ check_x87:
  *  setup_idt
  *
  *  sets up a idt with 256 entries pointing to
- *  ignore_int, interrupt gates. It doesn't actually load
+ *  ignore_int, interrupt gates. It doesn''t actually load
  *  idt - that can be done only after paging has been enabled
  *  and the kernel moved to PAGE_OFFSET. Interrupts
  *  are enabled elsewhere, when we can be relatively
@@ -726,6 +802,7 @@ ENTRY(early_gdt_descr)
  */
 	.align L1_CACHE_BYTES
 ENTRY(boot_gdt)
+	/* 填充2项8个字节的段描述符，即引导代码段和引导数据段 */
 	.fill GDT_ENTRY_BOOT_CS,8,0
 	.quad 0x00cf9a000000ffff	/* kernel 4GB code at 0x00000000 */
 	.quad 0x00cf92000000ffff	/* kernel 4GB data at 0x00000000 */

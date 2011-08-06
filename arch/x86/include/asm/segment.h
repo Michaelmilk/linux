@@ -14,6 +14,9 @@
 
 /* Simple and small GDT entries for booting only */
 
+/*
+简短的GDT表，仅在引导期间使用
+*/
 #define GDT_ENTRY_BOOT_CS	2
 #define __BOOT_CS		(GDT_ENTRY_BOOT_CS * 8)
 
@@ -24,6 +27,10 @@
 #define __BOOT_TSS		(GDT_ENTRY_BOOT_TSS * 8)
 
 #ifdef CONFIG_X86_32
+/*
+全局描述符表 GDT(Global Descriptor Table) 
+*/
+
 /*
  * The layout of the per-CPU GDT under Linux:
  *
@@ -68,6 +75,15 @@
  *  30 - unused
  *  31 - TSS for double fault handler
  */
+
+/*
+	 15            3   2   1  0 
+	|                |   |      |
+          INDEX       TI   RPL
+
+	索引为高13位，所以下面会乘以8，然后再加上TI和RPL，得到段选择符
+*/
+
 #define GDT_ENTRY_TLS_MIN	6
 #define GDT_ENTRY_TLS_MAX 	(GDT_ENTRY_TLS_MIN + GDT_ENTRY_TLS_ENTRIES - 1)
 
@@ -77,8 +93,14 @@
 
 #define GDT_ENTRY_KERNEL_BASE		(12)
 
+/*
+内核代码段入口索引
+*/
 #define GDT_ENTRY_KERNEL_CS		(GDT_ENTRY_KERNEL_BASE+0)
 
+/*
+内核数据段入口索引
+*/
 #define GDT_ENTRY_KERNEL_DS		(GDT_ENTRY_KERNEL_BASE+1)
 
 #define GDT_ENTRY_TSS			(GDT_ENTRY_KERNEL_BASE+4)
@@ -184,9 +206,17 @@
 
 #endif
 
+/*
+TI 	: 表指示器 0表示段描述符在GDT中 1在LDT
+RPL : 请求者特权级
+*/
+/* TI=0 RPL=0 */
 #define __KERNEL_CS	(GDT_ENTRY_KERNEL_CS*8)
+/* TI=0 RPL=0 */
 #define __KERNEL_DS	(GDT_ENTRY_KERNEL_DS*8)
+/* TI=0 RPL=3 */
 #define __USER_DS	(GDT_ENTRY_DEFAULT_USER_DS*8+3)
+/* TI=0 RPL=3 */
 #define __USER_CS	(GDT_ENTRY_DEFAULT_USER_CS*8+3)
 #ifndef CONFIG_PARAVIRT
 #define get_kernel_rpl()  0
