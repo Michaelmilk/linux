@@ -229,7 +229,9 @@ int main(int argc, char ** argv)
 	sys_size = (sz + 15 + 4) / 16;
 
 	/* Patch the setup code with the appropriate size parameters */
-	/* 参考header.S */
+	/* 参考header.S
+	   减1，不包含引导扇区的512字节
+	   参考Documentation/x86/boot.txt中setup_sects字段说明 */
 	buf[0x1f1] = setup_sectors-1;
 	buf[0x1f4] = sys_size;
 	buf[0x1f5] = sys_size >> 8;
