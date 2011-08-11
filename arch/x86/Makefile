@@ -157,6 +157,10 @@ all: bzImage
 # KBUILD_IMAGE specify target image being built
 KBUILD_IMAGE := $(boot)/bzImage
 
+	# 本Makefile会被include到顶层的Makefile里
+	# 这里bzImage的依赖文件vmlinux便是顶层Makefile里的
+	# vmlinux: $(vmlinux-lds) $(vmlinux-init) $(vmlinux-main) vmlinux.o $(kallsyms.o) FORCE
+
 	# bzImage的命令，进入boot目录生成bzImage
 	# 例如: make -f scripts/Makefile.build obj=arch/x86/boot arch/x86/boot/bzImage
 
