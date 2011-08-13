@@ -168,8 +168,8 @@ endif
 PHONY := _all
 _all:
 
-	# 定义两个Makefile伪目标，命令为空，以避免隐式规则检查
-	# 分号";"前的依赖为空，紧跟在分号";"后的第一条命令为空，没有以tab开头的其他命令
+    # 定义两个Makefile伪目标，命令为空，以避免隐式规则检查
+    # 分号";"前的依赖为空，紧跟在分号";"后的第一条命令为空，没有以tab开头的其他命令
 
 # Cancel implicit rules on top Makefile
 $(CURDIR)/Makefile Makefile: ;
@@ -699,7 +699,7 @@ asm-generic:
 # Detect when mixed targets is specified, and make a second invocation
 # of make so .config is not included in this case either (for *config).
 
-	# 与.config没有关联的目标
+    # 与.config没有关联的目标
 
 no-dot-config-targets := clean mrproper distclean \
 			 cscope gtags TAGS tags help %docs check% coccicheck \
@@ -803,7 +803,7 @@ scripts: scripts_basic include/config/auto.conf include/config/tristate.conf
 
 # Objects we will link into vmlinux / subdirs we need to visit
 
-	# 需要链接进vmlinux的目标文件所在目录
+    # 需要链接进vmlinux的目标文件所在目录
 
 init-y		:= init/
 drivers-y	:= drivers/ sound/ firmware/
@@ -1339,10 +1339,10 @@ ifdef CONFIG_KALLSYMS
 .tmp_vmlinux1: vmlinux.o
 endif
 
-	# 从初始化依赖中过滤掉built-in.o
-	# 例如: modpost-init的值为arch/x86/kernel/head_32.o arch/x86/kernel/head32.o
-	#                         arch/x86/kernel/head.o arch/x86/kernel/init_task.o
-	# 命令为宏rule_vmlinux-modpost
+    # 从初始化依赖中过滤掉built-in.o
+    # 例如: modpost-init的值为arch/x86/kernel/head_32.o arch/x86/kernel/head32.o
+    #                         arch/x86/kernel/head.o arch/x86/kernel/init_task.o
+    # 命令为宏rule_vmlinux-modpost
 
 modpost-init := $(filter-out init/built-in.o, $(vmlinux-init))
 vmlinux.o: $(modpost-init) $(vmlinux-main) FORCE
