@@ -191,7 +191,7 @@ ifdef CONFIG_DEBUG_SECTION_MISMATCH
   cmd_secanalysis = ; scripts/mod/modpost $@
 endif
 
-	# 编译.c的一些规则
+    # 编译.c的一些规则
 
 # Compile C sources (.c)
 # ---------------------------------------------------------------------------
