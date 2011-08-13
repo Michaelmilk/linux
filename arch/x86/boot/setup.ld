@@ -35,6 +35,7 @@ SECTIONS
 	. = ALIGN(16);
 	.data		: { *(.data*) }
 
+	/* setup代码的签名，用于检查该代码是否被正确加载进了内存 */
 	.signature	: {
 		setup_sig = .;
 		LONG(0x5a5aaa55)
@@ -56,7 +57,9 @@ SECTIONS
 	/*
 	 * The ASSERT() sink to . is intentional, for binutils 2.14 compatibility:
 	 */
+	/* setup实模式代码最大32K */
 	. = ASSERT(_end <= 0x8000, "Setup too big!");
+	/* hdr必须在偏移0x1f1处 */
 	. = ASSERT(hdr == 0x1f1, "The setup header has the wrong offset!");
 	/* Necessary for the very-old-loader check to work... */
 	. = ASSERT(__end_init <= 5*512, "init sections too big!");

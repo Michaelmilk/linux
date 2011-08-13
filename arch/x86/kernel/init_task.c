@@ -20,6 +20,11 @@ static struct sighand_struct init_sighand = INIT_SIGHAND(init_sighand);
  * way process stacks are handled. This is done by having a special
  * "init_task" linker map entry..
  */
+/*
+用0号进程初始化init_thread_union栈
+
+保存在连续的2个物理页框内
+*/
 union thread_union init_thread_union __init_task_data =
 	{ INIT_THREAD_INFO(init_task) };
 
@@ -28,6 +33,9 @@ union thread_union init_thread_union __init_task_data =
  *
  * All other task structs will be allocated on slabs in fork.c
  */
+/*
+即0号进程的PCB，是进程的"根"，始终保持初值INIT_TASK
+*/
 struct task_struct init_task = INIT_TASK(init_task);
 EXPORT_SYMBOL(init_task);
 

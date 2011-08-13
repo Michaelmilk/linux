@@ -18,6 +18,10 @@
 
 #include "boot.h"
 
+/*
+APM: Advanced Power Management
+传统的APM是一种基于bios的电源管理标准，提供了CPU和设备电源管理的功能。
+*/
 int query_apm_bios(void)
 {
 	struct biosregs ireg, oreg;

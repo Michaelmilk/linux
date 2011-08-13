@@ -39,9 +39,18 @@
 
 #define E820NR	0x1e8		/* # entries in E820MAP */
 
+/*
+内存
+*/
 #define E820_RAM	1
+/*
+只读存储区域，如ROM，NOR FLASH等
+*/
 #define E820_RESERVED	2
 #define E820_ACPI	3
+/*
+Non-Volatile Storage 非易失性存储器，包括:ROM，EPROM，FLASH存储器等
+*/
 #define E820_NVS	4
 #define E820_UNUSABLE	5
 
@@ -55,6 +64,9 @@
 
 #ifndef __ASSEMBLY__
 #include <linux/types.h>
+/*
+对一个物理区间的描述
+*/
 struct e820entry {
 	__u64 addr;	/* start of memory segment */
 	__u64 size;	/* size of memory segment */

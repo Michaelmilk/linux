@@ -127,6 +127,14 @@ static void enable_a20_fast(void)
 
 #define A20_ENABLE_LOOPS 255	/* Number of times to try */
 
+/*
+置位8042键盘控制器的A20引脚
+A20引脚是在80286系统中引入的，为的是与古老的8088微处理器物理地址兼容
+在切换到保护模式之前必须先将A20引脚正确置位
+否则，每个物理地址的第21位都会被CPU看做0
+
+正确置位的话返回0
+*/
 int enable_a20(void)
 {
        int loops = A20_ENABLE_LOOPS;

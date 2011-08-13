@@ -54,8 +54,11 @@ ASK_VGA参考Documentation/svga.txt
 
 	/* 连接的时候放在bstext节，boot sector
 	   参考连接脚本setup.ld
-	   使用objdump -d setup.elf查看其前面的内容
-	   查看bzImage的二进制文件 */
+	   使用objdump -d -M i8086 setup.elf查看其前面的内容
+	   查看bzImage的二进制文件
+
+	   使用code16告诉编译器，下面的代码要编译成16位代码
+	   即编译成16位实模式代码 */
 	.code16
 	.section ".bstext", "ax"
 
@@ -73,7 +76,10 @@ bootsect_start:
 	   原来此处前512字节做的事已经由引导加载器来完成，如GRUB
 	   参考grub代码中的boot/i386/pc/boot.S
 	   内容存放在MBR内，读MBR内的512字节到物理地址0x7c00即stage1
-	   可以使用dd if=dev/sda of=mbr.bin bs=512 count=1来查看当前硬盘的MBR内容 */
+	   可以使用dd if=dev/sda of=mbr.bin bs=512 count=1来查看当前硬盘的MBR内容
+
+	   现在这部分代码由bootloader装入物理地址0x90000处，即576K
+	   */
 	# Normalize the start address
 	ljmp	$BOOTSEG, $start2
 
@@ -128,6 +134,9 @@ struct setup_header
 	.section ".header", "a"
 	.globl	hdr
 hdr:
+/*
+实模式setup代码所占扇区数，不包含这里的第1个扇区，512字节为单位
+*/
 setup_sects:	.byte 0			/* Filled in by build.c */
 root_flags:	.word ROOT_RDONLY
 syssize:	.long 0			/* Filled in by build.c */
@@ -139,8 +148,10 @@ boot_flag:	.word 0xAA55
 	# offset 512, entry point
 
 /*
-setup的第2个512字节，偏移0x200
+setup.bin的第2个512字节，偏移0x200
 引导加载器切换回实模式后便跳转到此地址处开始执行
+此处代码由引导加载器复制到物理地址X处
+以X=0x90200为例，bootloader将ds寄存器设置为0x9000
 */
 	.globl	_start
 _start:
@@ -194,6 +205,9 @@ setup_move_size: .word  0x8000		# size to move, when setup is not
 					# loader knows how much data behind
 					# us also needs to be loaded.
 
+/*
+bootloader加载bzImage第2部分代码的起始物理地址
+*/
 code32_start:				# here loaders can put a different
 					# start address for 32-bit code.
 		.long	0x100000	# 0x100000 = default for big kernel
@@ -299,6 +313,7 @@ start_of_setup:
 #endif
 
 # Force %es = %ds
+	/* grub跳转到_start时，ds内值为0x9000 */
 	movw	%ds, %ax
 	movw	%ax, %es
 	cld
@@ -309,31 +324,81 @@ start_of_setup:
 # stack behind its own code, so we can''t blindly put it directly past the heap.
 
 	movw	%ss, %dx
+	/* %dx - %ax 判断%ax与%dx是否相等
+	   上面刚给%ax赋值为%ds
+	   即判断%ss的值是否与%ds相等 */
 	cmpw	%ax, %dx	# %ds == %ss?
 	movw	%sp, %dx
+	/* je: jump if equel
+	   相等的话则跳到2f处
+	   不相等的话则继续，设置堆栈指针 */
 	je	2f		# -> assume %sp is reasonably set
 
+/*
+
++---------------------+ <- %esp
+|
+|			<- heap_end_ptr
+|
++---------------------+ <- _end
+|
+|
+|			<- _start         0x90200
++---------------------+ <- bootsect_start 0x90000
+
+*/
+
 	# Invalid %ss, make up a new stack
+	/* _end为setup.ld中bss节后面 */
 	movw	$_end, %dx
+	/* $CAN_USE_HEAP & loadflags 按位与，检查CAN_USE_HEAP位是否置位 */
 	testb	$CAN_USE_HEAP, loadflags
+	/* 如果ZF置位，即按位与的值为0，说明CAN_USE_HEAP没有置位
+	   则heap_end_ptr不可用，所以跳过，到1f处 */
 	jz	1f
+	/* 取堆顶地址 */
 	movw	heap_end_ptr, %dx
+	/* 加上栈的大小 */
 1:	addw	$STACK_SIZE, %dx
+	/* jnc: jump if not carry
+	   如果addw的结果没有产生进位的话，则跳转到2f处 */
 	jnc	2f
 	xorw	%dx, %dx	# Prevent wraparound
 
 2:	# Now %dx should point to the end of our stack space
+	/* andw: bitwise logical AND
+	   按位与，以便4字节对齐 */
 	andw	$~3, %dx	# dword align (might as well...)
+	/* 栈顶指针有效的话则跳转到3f */
 	jnz	3f
+	/* 如果没有跳转3f的话，则将栈顶指向0xfffc，总之不能为0 */
 	movw	$0xfffc, %dx	# Make sure we''re not zero
+	/* 设置栈段
+	   让%ds和%ss相等 */
 3:	movw	%ax, %ss
+	/* movzwl: move and zero extend
+	   设置栈指针，高16位置0 */
 	movzwl	%dx, %esp	# Clear upper half of %esp
+	/* sti: set interrupt flag
+	   设置中断标志，开启中断 */
 	sti			# Now we should have a working stack
 
 # We will have entered with %cs = %ds+0x20, normalize %cs so
 # it is on par with the other segments.
+/*
+从grub中跳转到上面_start处时，cs寄存器内值为%ds+0x20
+而本文件指令代码连接时是从0开始，为了得到正确的代码段基地址
+这里利用ret指令重设cs和ip寄存器的值
+*/
+	/* grub跳转过来时，ds内值为0x9000
+	   ds值入栈 */
 	pushw	%ds
+	/* 6f处地址入栈，6f值为链接文件中的相对偏移值 */
 	pushw	$6f
+	/* 使用ret指令返回到6f处
+	   ret指令返回的时候会将栈中的值恢复到cs和ip寄存器中
+	   这样cs寄存器的值便和ds寄存器的值相等了，均为0x9000
+	   为setup指令在内存中的起始位置 */
 	lretw
 6:
 
@@ -342,7 +407,11 @@ start_of_setup:
 检查setup的签名
 setup_sig在连接脚本setup.ld中定义赋值
 */
+	/* setup_sig - 0x5a5aaa55 相等的话即等于0
+	   ZF置0 */
 	cmpl	$0x5a5aaa55, setup_sig
+	/* jne检查ZF是否为0，如果不为0的话，即不相等
+	   则跳转到setup_bad */
 	jne	setup_bad
 
 # Zero the bss
@@ -351,9 +420,16 @@ setup的bss段数据清0
 */
 	movw	$__bss_start, %di
 	movw	$_end+3, %cx
+	/* 异或，eax清0 */
 	xorl	%eax, %eax
+	/* cx=cx-di 计算bss段长度 */
 	subw	%di, %cx
+	/* 逻辑右移2位，即除以4，将字节数转换为按照4字节单位计算
+	   即使用ecx作为stosl的循环次数 */
 	shrw	$2, %cx
+	/* stosl的作用是将寄存器eax中的值保存到edi所指的单元中，即清0
+	   然后移动edi指针到下一单元
+	   rep使用ecx中的数做为循环计数器 */
 	rep; stosl
 
 # Jump to C code (should not return)

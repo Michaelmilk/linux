@@ -50,6 +50,7 @@ static const u32 req_flags[NCAPINTS] =
 
 static int is_amd(void)
 {
+	/* AuthenticAMD */
 	return cpu_vendor[0] == A32('A', 'u', 't', 'h') &&
 	       cpu_vendor[1] == A32('e', 'n', 't', 'i') &&
 	       cpu_vendor[2] == A32('c', 'A', 'M', 'D');
@@ -74,22 +75,33 @@ static int has_fpu(void)
 	u16 fcw = -1, fsw = -1;
 	u32 cr0;
 
+	/* 取cr0寄存器值 */
 	asm("movl %%cr0,%0" : "=r" (cr0));
+	/* 清除cr0寄存器中的2个bit位 */
 	if (cr0 & (X86_CR0_EM|X86_CR0_TS)) {
 		cr0 &= ~(X86_CR0_EM|X86_CR0_TS);
 		asm volatile("movl %0,%%cr0" : : "r" (cr0));
 	}
 
+	/* fninit: initialize floating-point unit without checking error conditions
+	   fnstsw: store floating-point unit status word without checking error conditions
+	   fnstcw: store floating-point unit control word without checking error conditions */
 	asm volatile("fninit ; fnstsw %0 ; fnstcw %1"
 		     : "+m" (fsw), "+m" (fcw));
 
 	return fsw == 0 && (fcw & 0x103f) == 0x003f;
 }
 
+/*
+判断eflags寄存器中对应@mask的bit位是否有置位
+*/
 static int has_eflag(u32 mask)
 {
 	u32 f0, f1;
 
+	/* pushfl: push %eflags onto stack
+	   popfl: pop %eflags from stack
+	   xorl S,D: D = D ^ S */
 	asm("pushfl ; "
 	    "pushfl ; "
 	    "popl %0 ; "
@@ -115,6 +127,7 @@ static void get_flags(void)
 		set_bit(X86_FEATURE_FPU, cpu.flags);
 
 	if (has_eflag(X86_EFLAGS_ID)) {
+		/* cpuid: processor identification */
 		asm("cpuid"
 		    : "=a" (max_intel_level),
 		      "=b" (cpu_vendor[0]),

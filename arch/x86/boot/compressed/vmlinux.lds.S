@@ -47,6 +47,7 @@ SECTIONS
 		*(.rodata.*)
 		_erodata = . ;
 	}
+	/* Global Offset Table */
 	.got : {
 		_got = .;
 		KEEP(*(.got.plt))

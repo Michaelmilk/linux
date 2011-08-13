@@ -118,6 +118,9 @@ static int get_edd_info(u8 devno, struct edd_info *ei)
 	return 0;
 }
 
+/*
+EDD: BIOS Enhanced Disk Device
+*/
 void query_edd(void)
 {
 	char eddarg[8];

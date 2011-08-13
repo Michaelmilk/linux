@@ -134,8 +134,13 @@ name:
 */
 
 /*
-由pmjump.S中跳转而来
+内核解压后从arch/x86/boot/compressed/head_32.S跳转而来
 此处已经进入保护模式
+*/
+/*
+在include/linux/init.h中定义
+#define __HEAD		.section	".head.text","ax"
+以下代码放在.head.text节
 */
 __HEAD
 ENTRY(startup_32)
@@ -200,6 +205,7 @@ ENTRY(startup_32)
  * page tables.
  */
 	movl $pa(boot_params),%edi
+	/* struct boot_params的大小除以4放入ecx寄存器作为计数器 */
 	movl $(PARAM_SIZE/4),%ecx
 	cld
 	rep
@@ -550,6 +556,10 @@ is386:	movl $2,%ecx		# set MP
 	cld			# gcc2 wants the direction flag cleared at all times
 	pushl $0		# fake return address for unwinder
 	movb $1, ready
+	/* initial_code处保存的值为i386_start_kernel()函数的虚拟地址
+	   call和jmp在操作数前指定前缀"*"，则表示是一个绝对地址跳转
+	   如果没有"*"，则操作数是一个相对地址
+	   调用arch/x86/kernel/head32.c中的i386_start_kernel()函数 */
 	jmp *(initial_code)
 
 /*

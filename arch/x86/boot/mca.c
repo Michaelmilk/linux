@@ -15,6 +15,9 @@
 
 #include "boot.h"
 
+/*
+MCA: MicroChannel Architecture(MCA)Bus 微通道体系结构总线
+*/
 int query_mca(void)
 {
 	struct biosregs ireg, oreg;

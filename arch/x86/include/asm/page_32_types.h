@@ -18,6 +18,9 @@
 */
 #define __PAGE_OFFSET		_AC(CONFIG_PAGE_OFFSET, UL)
 
+/*
+使用2个页面，即8KB的进程栈
+*/
 #define THREAD_ORDER	1
 #define THREAD_SIZE 	(PAGE_SIZE << THREAD_ORDER)
 

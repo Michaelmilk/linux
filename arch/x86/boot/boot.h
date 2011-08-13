@@ -16,6 +16,9 @@
 #ifndef BOOT_BOOT_H
 #define BOOT_BOOT_H
 
+/*
+实模式栈的大小
+*/
 #define STACK_SIZE	512	/* Minimum number of bytes for stack */
 
 #ifndef __ASSEMBLY__
@@ -85,6 +88,9 @@ static inline void io_delay(void)
 
 /* These functions are used to reference data in other segments. */
 
+/*
+取ds寄存器内的值
+*/
 static inline u16 ds(void)
 {
 	u16 seg;
@@ -290,6 +296,11 @@ struct biosregs {
 		};
 	};
 };
+
+/*
+bios调用的封装函数
+代码的实现在arch/x86/boot/bioscall.S中
+*/
 void intcall(u8 int_no, const struct biosregs *ireg, struct biosregs *oreg);
 
 /* cmdline.c */

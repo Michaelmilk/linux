@@ -5,6 +5,15 @@
 
 /* Constructor for a conventional segment GDT (or LDT) entry */
 /* This is a macro so it can be used in initializers */
+/*
+16-39和56-63bit为BASE，共32bit
+0-15和48-51bit为LIMIT，共20bit
+flags共12bit
+
+... | 55 | 54 | 53 | 52 | 51 | 50 | 49 | 48 | 47 | 46 | 45 | 44 | 43 | 42 | 41 | 40 |
+... | G  | B  | O  | AVL|-    L I M I T    -| 1  |  D P L  | S  |        TYPE       |
+
+*/
 #define GDT_ENTRY(flags, base, limit)			\
 	((((base)  & _AC(0xff000000,ULL)) << (56-24)) |	\
 	 (((flags) & _AC(0x0000f0ff,ULL)) << 40) |	\

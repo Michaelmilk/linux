@@ -86,10 +86,15 @@ PHDRS {
 SECTIONS
 {
 #ifdef CONFIG_X86_32
-	/* 根据autoconf.h配置，通常LOAD_PHYSICAL_ADDR为16M */
+	/* 根据autoconf.h配置，通常LOAD_PHYSICAL_ADDR配置为16M
+	   当然可以配置为其他的值
+	   LOAD_PHYSICAL_ADDR为解压后内核代码所加载的物理地址
+	   这里加上3G的偏移，成为此处代码连接的线性地址
+	   使用objdump -D vmlinux查看顶层目录下的vmlinux对应的线性地址
+	   所以内核中可以直接使用pa宏减3G偏移得到内核代码的物理地址 */
         . = LOAD_OFFSET + LOAD_PHYSICAL_ADDR;
-        /* 此时还没有启用分页，所以直接跳转到物理地址
-           startup_32对应的为链接后的虚拟地址 */
+        /* arch/x86/kernel/head_32.S中的startup_32连接的时候是加了3G的
+           所以这里减去3G得到startup_32的物理地址 */
         phys_startup_32 = startup_32 - LOAD_OFFSET;
 #else
         . = __START_KERNEL;
@@ -100,6 +105,8 @@ SECTIONS
 	.text :  AT(ADDR(.text) - LOAD_OFFSET) {
 		_text = .;
 		/* bootstrapping code */
+		/* 根据asm-generic/vmlinux.lds.h头文件中的定义
+		   arch/x86/kernel/head_32.S中从startup_32开始会连接在此处 */
 		HEAD_TEXT
 #ifdef CONFIG_X86_32
 		. = ALIGN(PAGE_SIZE);

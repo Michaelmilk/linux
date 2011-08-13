@@ -36,6 +36,11 @@
 #include <asm/boot.h>
 #include <asm/asm-offsets.h>
 
+/*
+这里的代码即bzImage的第二部分vmlinux.bin起始代码
+由grub复制在物理地址0x100000处
+*/
+
 	__HEAD
 ENTRY(startup_32)
 	/* 对连接好的arch/x86/boot/compressed/vmlinux使用objdump -d得到的信息
@@ -46,14 +51,17 @@ ENTRY(startup_32)
 	 * Test KEEP_SEGMENTS flag to see if the bootloader is asking
 	 * us to not reload segments
 	 */
+	/* 检查bit6的KEEP_SEGMENTS标志是否置位
+	   参考Documentation/x86/boot.txt */
 	testb	$(1<<6), BP_loadflags(%esi)
+	/* 如果置位的话，则跳过下面重新加载段选择子的操作 */
 	jnz	1f
 
 	/* 清除IF标志，关闭中断 */
 	cli
 	/* 引导数据段放入eax寄存器
 	   __BOOT_DS定义在arch/x86/include/asm/segment.h中
-	   参考boot.txt */
+	   参考Documentation/x86/boot.txt */
 	movl	$__BOOT_DS, %eax
 	movl	%eax, %ds
 	movl	%eax, %es
@@ -75,6 +83,8 @@ ENTRY(startup_32)
 	   参考pmjump.S中的protected_mode_jump()
 	   0x1e4 + 4 = 0x1e8
 	   栈顶指针esp指向scratch字段末尾处
+
+	   leal: load effective address
 	   */
 	leal	(BP_scratch+4)(%esi), %esp
 	call	1f
@@ -101,8 +111,11 @@ relocate : 迁移
 	   加上BP_kernel_alignment后
 	   即struct setup_header的kernel_alignment字段的值，存入eax寄存器 */
 	movl	BP_kernel_alignment(%esi), %eax
+	/* 减1，相加，取反，按位与
+	   即按照对齐的值进行对齐 */
 	decl	%eax
 	addl    %eax, %ebx
+	/* notl: bitwise logical NOT */
 	notl	%eax
 	andl    %eax, %ebx
 #else
@@ -110,6 +123,8 @@ relocate : 迁移
 #endif
 
 	/* Target address to relocate to for decompression */
+	/* z_extract_offset为压缩文件填补对齐后的大小
+	   参考arch/x86/boot/compressed/mkpiggy.c */
 	addl	$z_extract_offset, %ebx
 
 	/* Set up the stack */
@@ -117,12 +132,15 @@ relocate : 迁移
 
 	/* Zero EFLAGS */
 	pushl	$0
+	/* popfl: pop %eflags from stack */
 	popfl
 
 /*
  * Copy the compressed kernel to the end of our buffer
  * where decompression in place becomes safe.
  */
+
+	/* esi内为全局变量boot_params的指针 */
 	pushl	%esi
 	leal	(_bss-4)(%ebp), %esi
 	leal	(_bss-4)(%ebx), %edi
@@ -167,6 +185,7 @@ relocated:
 	leal	_egot(%ebx), %ecx
 1:
 	cmpl	%ecx, %edx
+	/* jae: jump if above or equel */
 	jae	2f
 	addl	%ebx, (%edx)
 	addl	$4, %edx
@@ -190,7 +209,9 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 	leal	z_extract_offset_negative(%ebx), %ebp
 				/* push arguments for decompress_kernel: */
 	pushl	%ebp		/* output address */
+	/* 压缩文件的大小，字节 */
 	pushl	$z_input_len	/* input_len */
+	/* 压缩文件的地址 */
 	leal	input_data(%ebx), %eax
 	pushl	%eax		/* input_data */
 	leal	boot_heap(%ebx), %eax
@@ -201,8 +222,8 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 	call	decompress_kernel
 
 	/* 栈顶指针+20，即decompress_kernel()函数5个参数所占的长度
-	   decompress_kernel()函数返回的时候会退栈
-	   这里让栈顶指针前进20，以便继续使用5个参数的值 */
+	   decompress_kernel()函数返回的时候退栈
+	   栈是由高地址向低地址的，所以加20起到退栈的作用 */
 	addl	$20, %esp
 
 #if CONFIG_RELOCATABLE

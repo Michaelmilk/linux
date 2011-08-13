@@ -56,6 +56,11 @@ static void store_video_mode(void)
  * parameters in the default 80x25 mode -- these are set directly,
  * because some very obscure BIOSes supply insane values.
  */
+/*
+obscure: 不出名的
+insane: 疯狂的
+
+*/
 static void store_mode_params(void)
 {
 	u16 font_size;
@@ -314,6 +319,7 @@ static void restore_screen(void)
 
 void set_video(void)
 {
+	/* bootloader中设置的显示模式 */
 	u16 mode = boot_params.hdr.vid_mode;
 
 	RESET_HEAP();

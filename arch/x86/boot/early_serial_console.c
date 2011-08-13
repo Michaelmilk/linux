@@ -17,7 +17,13 @@
 #define MSR             6       /*  Modem Status              */
 #define DLL             0       /*  Divisor Latch Low         */
 #define DLH             1       /*  Divisor latch High        */
+/*
+latch: 锁存器
+*/
 
+/*
+baud: 波特率
+*/
 #define DEFAULT_BAUD 9600
 
 static void early_serial_init(int port, int baud)
@@ -40,6 +46,9 @@ static void early_serial_init(int port, int baud)
 	early_serial_base = port;
 }
 
+/*
+解析引导加载器的命令行参数earlyprintk
+*/
 static void parse_earlyprintk(void)
 {
 	int baud = DEFAULT_BAUD;
@@ -77,6 +86,7 @@ static void parse_earlyprintk(void)
 			if (!strncmp(arg + pos, "ttyS", 4))
 				pos += 4;
 
+			/* ttyS1则使用0x2f8 */
 			if (arg[pos++] == '1')
 				idx = 1;
 
@@ -86,11 +96,13 @@ static void parse_earlyprintk(void)
 		if (arg[pos] == ',')
 			pos++;
 
+		/* 解析命令行中的数字，波特率 */
 		baud = simple_strtoull(arg + pos, &e, 0);
 		if (baud == 0 || arg + pos == e)
 			baud = DEFAULT_BAUD;
 	}
 
+	/* 解析到了端口，则初始化串口 */
 	if (port)
 		early_serial_init(port, baud);
 }
@@ -111,6 +123,11 @@ static unsigned int probe_baud(int port)
 	return BASE_BAUD / quot;
 }
 
+/*
+uart: Universal Asynchronous Receiver/Transmitter 通用异步接收/发送装置
+	  uart是一种通用串行数据总线，用于异步通信。
+	  该总线双向通信，可以实现全双工传输和接收。
+*/
 static void parse_console_uart8250(void)
 {
 	char optstr[64], *options;

@@ -17,7 +17,16 @@
 
 struct boot_params boot_params __attribute__((aligned(16)));
 
+/*
+堆底
+_end在arch/x86/boot/setup.ld中bss节上面
+堆由低地址向高地址分配
+*/
 char *HEAP = _end;
+/*
+堆顶
+初始化为_end
+*/
 char *heap_end = _end;		/* Default end of heap = no heap */
 
 /*
@@ -43,9 +52,17 @@ static void copy_boot_params(void)
 	BUILD_BUG_ON(sizeof boot_params != 4096);
 	/* 复制setup中的hdr信息
 	   参考arch/x86/boot/header.S
-	   arch/x86/include/asm/bootparam.h中的struct setup_header */
+	   arch/x86/include/asm/bootparam.h中的struct setup_header
+
+	   到了这里便可以使用arch/x86/boot/printf.c中的printf()函数
+	   将hdr各个字段的值打印出来查看了
+	   例如: printf("hdr.code32_start:%x\n", hdr.code32_start);
+	         查看32位代码在物理内存中的起始地址
+			 对于bzImage便是0x100000了 */
 	memcpy(&boot_params.hdr, &hdr, sizeof hdr);
 
+	/* 如果bootloader没有传递命令行参数
+	   则使用旧的协议地址 */
 	if (!boot_params.hdr.cmd_line_ptr &&
 	    oldcmd->cl_magic == OLD_CL_MAGIC) {
 		/* Old-style command line protocol. */
@@ -68,6 +85,9 @@ static void copy_boot_params(void)
  * Set the keyboard repeat rate to maximum.  Unclear why this
  * is done here; this might be possible to kill off as stale code.
  */
+/*
+stale: 过时的
+*/
 static void keyboard_set_repeat(void)
 {
 	struct biosregs ireg;
@@ -79,6 +99,11 @@ static void keyboard_set_repeat(void)
 /*
  * Get Intel SpeedStep (IST) information.
  */
+/*
+Speed Step是Intel CPU使用的一项技术，
+在移动Pentium-3 600Mhz之后的移动版Pentium处理器中，
+Intel加入了一个通过降低CPU运行主频来达到降低功耗的技术。
+*/
 static void query_ist(void)
 {
 	struct biosregs ireg, oreg;
@@ -121,11 +146,16 @@ static void init_heap(void)
 	/* 如果CAN_USE_HEAP位置1了，说明heap_end_ptr中的值是有效的
 	   参考boot.txt */
 	if (boot_params.hdr.loadflags & CAN_USE_HEAP) {
+		/* 取栈底指针 */
 		asm("leal %P1(%%esp),%0"
 		    : "=r" (stack_end) : "i" (-STACK_SIZE));
 
+		/* 堆顶指针
+		   加上0x200，因为bootloader中减了0x200，即去掉了第1个扇区
+		   参考Documentation/x86/boot.txt */
 		heap_end = (char *)
 			((size_t)boot_params.hdr.heap_end_ptr + 0x200);
+		/* 堆顶不能超过栈底 */
 		if (heap_end > stack_end)
 			heap_end = stack_end;
 	} else {
@@ -145,6 +175,7 @@ void main(void)
 
 	/* Initialize the early-boot console */
 	console_init();
+	/* 命令行中是否有debug */
 	if (cmdline_find_option_bool("debug"))
 		puts("early console in setup code\n");
 

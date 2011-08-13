@@ -95,12 +95,15 @@ int main(int argc, char *argv[])
 	offs = (olen > ilen) ? olen - ilen : 0;
 	offs += olen >> 12;	/* Add 8 bytes for each 32K block */
 	offs += 64*1024 + 128;	/* Add 64K + 128 bytes slack */
+	/* 对齐到4K边界 */
 	offs = (offs+4095) & ~4095; /* Round to a 4K boundary */
 
 	/* 向文件arch/x86/boot/compressed/piggy.S中写入以下内容 */
 	printf(".section \".rodata..compressed\",\"a\",@progbits\n");
+	/* 压缩文件的大小，字节 */
 	printf(".globl z_input_len\n");
 	printf("z_input_len = %lu\n", ilen);
+	/* 解压后文件的大小，字节 */
 	printf(".globl z_output_len\n");
 	printf("z_output_len = %lu\n", (unsigned long)olen);
 	printf(".globl z_extract_offset\n");
