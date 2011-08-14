@@ -38,10 +38,10 @@ $(obj)/vmlinux: $(obj)/vmlinux.lds $(obj)/head_$(BITS).o $(obj)/misc.o $(obj)/st
 	$(call if_changed,ld)
 	@:
 
-	# 使用objcopy得到2进制文件vmlinux.bin
-	# 例如: objcopy  -R .comment -S vmlinux arch/x86/boot/compressed/vmlinux.bin
-	# -R .comment 复制时去掉.comment节
-	# -S strip
+    # 使用objcopy得到2进制文件vmlinux.bin
+    # 例如: objcopy  -R .comment -S vmlinux arch/x86/boot/compressed/vmlinux.bin
+    # -R .comment 复制时去掉.comment节
+    # -S strip
 
 OBJCOPYFLAGS_vmlinux.bin :=  -R .comment -S
 $(obj)/vmlinux.bin: vmlinux FORCE

@@ -1351,8 +1351,8 @@ vmlinux.o: $(modpost-init) $(vmlinux-main) FORCE
 # The actual objects are generated when descending, 
 # make sure no implicit rule kicks in
 
-	# 各个.o与built-in.o依赖于$(vmlinux-dirs)
-	# 在目标$(vmlinux-dirs)的命令中便进入各个目录进行编译
+    # 各个.o与built-in.o依赖于$(vmlinux-dirs)
+    # 在目标$(vmlinux-dirs)的命令中便进入各个目录进行编译
 
 $(sort $(vmlinux-init) $(vmlinux-main)) $(vmlinux-lds): $(vmlinux-dirs) ;
 

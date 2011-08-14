@@ -88,23 +88,23 @@ $(obj)/bzImage: $(obj)/setup.bin $(obj)/vmlinux.bin $(obj)/tools/build FORCE
 	$(call if_changed,image)
 	@echo 'Kernel: $@ is ready' ' (#'`cat .version`')'
 
-	# 依赖文件为compressed/vmlinux，进入compressed目录生成目标vmlinux
+    # 依赖文件为compressed/vmlinux，进入compressed目录生成目标vmlinux
 
-	# 然后使用objcopy复制出2进制文件
-	# 例如: objcopy  -O binary -R .note -R .comment -S
-	#         arch/x86/boot/compressed/vmlinux arch/x86/boot/vmlinux.bin
-	# -O binary 以2进制格式输出
-	# -R .note -R .comment 从输入文件中去掉.note .comment节
-	# -S
-	# --strip-all
-	#     Do not copy relocation and symbol information from the source file.
+    # 然后使用objcopy复制出2进制文件
+    # 例如: objcopy  -O binary -R .note -R .comment -S
+    #         arch/x86/boot/compressed/vmlinux arch/x86/boot/vmlinux.bin
+    # -O binary 以2进制格式输出
+    # -R .note -R .comment 从输入文件中去掉.note .comment节
+    # -S
+    # --strip-all
+    #     Do not copy relocation and symbol information from the source file.
 
 OBJCOPYFLAGS_vmlinux.bin := -O binary -R .note -R .comment -S
 $(obj)/vmlinux.bin: $(obj)/compressed/vmlinux FORCE
 	$(call if_changed,objcopy)
 
-	# setup.elf所依赖的对象
-	# 给所有的setup-y项添加路径信息前缀
+    # setup.elf所依赖的对象
+    # 给所有的setup-y项添加路径信息前缀
 
 SETUP_OBJS = $(addprefix $(obj)/,$(setup-y))
 
@@ -136,18 +136,18 @@ $(obj)/zoffset.h: $(obj)/compressed/vmlinux FORCE
 AFLAGS_header.o += -I$(obj)
 $(obj)/header.o: $(obj)/voffset.h $(obj)/zoffset.h
 
-	# 使用连接脚本setup.ld连接生成setup.elf，然后由objcopy为setup.bin
+    # 使用连接脚本setup.ld连接生成setup.elf，然后由objcopy为setup.bin
 
-	# 例如: ld -m elf_i386   -T arch/x86/boot/setup.ld
-	#         arch/x86/boot/a20.o arch/x86/boot/bioscall.o arch/x86/boot/cmdline.o
-	#         arch/x86/boot/copy.o arch/x86/boot/cpu.o arch/x86/boot/cpucheck.o
-	#         arch/x86/boot/early_serial_console.o arch/x86/boot/edd.o arch/x86/boot/header.o
-	#         arch/x86/boot/main.o arch/x86/boot/mca.o arch/x86/boot/memory.o
-	#         arch/x86/boot/pm.o arch/x86/boot/pmjump.o arch/x86/boot/printf.o arch/x86/boot/regs.o
-	#         arch/x86/boot/string.o arch/x86/boot/tty.o arch/x86/boot/video.o
-	#         arch/x86/boot/video-mode.o arch/x86/boot/version.o arch/x86/boot/apm.o
-	#         arch/x86/boot/video-vga.o arch/x86/boot/video-vesa.o arch/x86/boot/video-bios.o
-	#         -o arch/x86/boot/setup.elf
+    # 例如: ld -m elf_i386   -T arch/x86/boot/setup.ld
+    #         arch/x86/boot/a20.o arch/x86/boot/bioscall.o arch/x86/boot/cmdline.o
+    #         arch/x86/boot/copy.o arch/x86/boot/cpu.o arch/x86/boot/cpucheck.o
+    #         arch/x86/boot/early_serial_console.o arch/x86/boot/edd.o arch/x86/boot/header.o
+    #         arch/x86/boot/main.o arch/x86/boot/mca.o arch/x86/boot/memory.o
+    #         arch/x86/boot/pm.o arch/x86/boot/pmjump.o arch/x86/boot/printf.o arch/x86/boot/regs.o
+    #         arch/x86/boot/string.o arch/x86/boot/tty.o arch/x86/boot/video.o
+    #         arch/x86/boot/video-mode.o arch/x86/boot/version.o arch/x86/boot/apm.o
+    #         arch/x86/boot/video-vga.o arch/x86/boot/video-vesa.o arch/x86/boot/video-bios.o
+    #         -o arch/x86/boot/setup.elf
 
 LDFLAGS_setup.elf	:= -T
 $(obj)/setup.elf: $(src)/setup.ld $(SETUP_OBJS) FORCE
