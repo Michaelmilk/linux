@@ -814,10 +814,14 @@ dotraplinkage void do_iret_error(struct pt_regs *regs, long error_code)
 /* Set of traps needed for early debugging. */
 void __init early_trap_init(void)
 {
+	/* 调试异常 */
 	set_intr_gate_ist(1, &debug, DEBUG_STACK);
 	/* int3 can be called from all */
+	/* 单字节，int 3 */
 	set_system_intr_gate_ist(3, &int3, DEBUG_STACK);
+	/* 页异常 */
 	set_intr_gate(14, &page_fault);
+	/* 加载中断描述符表 */
 	load_idt(&idt_descr);
 }
 
@@ -833,32 +837,51 @@ void __init trap_init(void)
 	early_iounmap(p, 4);
 #endif
 
+	/* 除法错误 */
 	set_intr_gate(0, &divide_error);
+	/* NMI 中断 */
 	set_intr_gate_ist(2, &nmi, NMI_STACK);
 	/* int4 can be called from all */
+	/* 溢出 */
 	set_system_intr_gate(4, &overflow);
+	/* 边界监测中断 */
 	set_intr_gate(5, &bounds);
+	/* 无操作码 */
 	set_intr_gate(6, &invalid_op);
+	/* 设备不可用 */
 	set_intr_gate(7, &device_not_available);
 #ifdef CONFIG_X86_32
+	/* 双重故障 */
 	set_task_gate(8, GDT_ENTRY_DOUBLEFAULT_TSS);
 #else
 	set_intr_gate_ist(8, &double_fault, DOUBLEFAULT_STACK);
 #endif
+	/* 协处理器段溢出 */
 	set_intr_gate(9, &coprocessor_segment_overrun);
+	/* 无效 TSS */
 	set_intr_gate(10, &invalid_TSS);
+	/* 缺段中断 */
 	set_intr_gate(11, &segment_not_present);
+	/* 堆栈异常 */
 	set_intr_gate_ist(12, &stack_segment, STACKFAULT_STACK);
+	/* 一般保护错误 */
 	set_intr_gate(13, &general_protection);
+	/* Intel 保留 */
 	set_intr_gate(15, &spurious_interrupt_bug);
+	/* 协处理器出错 */
 	set_intr_gate(16, &coprocessor_error);
+	/* 对齐中断检查 */
 	set_intr_gate(17, &alignment_check);
 #ifdef CONFIG_X86_MCE
+	/* 机器检查 */
 	set_intr_gate_ist(18, &machine_check, MCE_STACK);
 #endif
+	/* SIMD浮点 */
 	set_intr_gate(19, &simd_coprocessor_error);
 
 	/* Reserve all the builtin and the syscall vector: */
+	/* 标记0--31为已使用
+	   20--31为Intel预留 */
 	for (i = 0; i < FIRST_EXTERNAL_VECTOR; i++)
 		set_bit(i, used_vectors);
 
@@ -868,7 +891,10 @@ void __init trap_init(void)
 #endif
 
 #ifdef CONFIG_X86_32
+	/* 系统调用
+	   arch/x86/kernel/entry_32.S ENTRY(system_call) */
 	set_system_trap_gate(SYSCALL_VECTOR, &system_call);
+	/* 标记0x80 */
 	set_bit(SYSCALL_VECTOR, used_vectors);
 #endif
 
@@ -877,5 +903,6 @@ void __init trap_init(void)
 	 */
 	cpu_init();
 
+	/* 调用x86_init_noop()函数 */
 	x86_init.irqs.trap_init();
 }

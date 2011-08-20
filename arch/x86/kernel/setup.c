@@ -143,6 +143,11 @@ int default_check_phys_apicid_present(int phys_apicid)
 }
 #endif
 
+/*
+32位保护模式后使用的boot_params全局变量
+其中的值由arch/x86/boot/main.c的全局变量boot_params复制而来
+复制操作在arch/x86/kernel/head_32.S中
+*/
 #ifndef CONFIG_DEBUG_BOOT_PARAMS
 struct boot_params __initdata boot_params;
 #else
@@ -702,10 +707,12 @@ void __init setup_arch(char **cmdline_p)
 	 * copy kernel address range established so far and switch
 	 * to the proper swapper page table
 	 */
+	/* 复制内核使用的1G内存所对应的256项页目录到swapper_pg_dir中 */
 	clone_pgd_range(swapper_pg_dir     + KERNEL_PGD_BOUNDARY,
 			initial_page_table + KERNEL_PGD_BOUNDARY,
 			KERNEL_PGD_PTRS);
 
+	/* 重置cr3 */
 	load_cr3(swapper_pg_dir);
 	__flush_tlb_all();
 #else
@@ -724,6 +731,8 @@ void __init setup_arch(char **cmdline_p)
 
 	setup_olpc_ofw_pgd();
 
+	/* 依据从setup实模式代码部分复制而来的boot_params参数值
+	   初始化各项数据 */
 	ROOT_DEV = old_decode_dev(boot_params.hdr.root_dev);
 	screen_info = boot_params.screen_info;
 	edid_info = boot_params.edid_info;
@@ -764,6 +773,7 @@ void __init setup_arch(char **cmdline_p)
 	}
 #endif
 
+	/* 调用x86_init_noop()函数 */
 	x86_init.oem.arch_setup();
 
 	iomem_resource.end = (1ULL << boot_cpu_data.x86_phys_bits) - 1;
@@ -776,11 +786,13 @@ void __init setup_arch(char **cmdline_p)
 
 	if (!boot_params.hdr.root_flags)
 		root_mountflags &= ~MS_RDONLY;
+	/* 代码，数据，堆的虚拟地址 */
 	init_mm.start_code = (unsigned long) _text;
 	init_mm.end_code = (unsigned long) _etext;
 	init_mm.end_data = (unsigned long) _edata;
 	init_mm.brk = _brk_end;
 
+	/* 物理地址 */
 	code_resource.start = virt_to_phys(_text);
 	code_resource.end = virt_to_phys(_etext)-1;
 	data_resource.start = virt_to_phys(_etext);
@@ -813,6 +825,7 @@ void __init setup_arch(char **cmdline_p)
 	 */
 	x86_configure_nx();
 
+	/* 解析引导参数 */
 	parse_early_param();
 
 	x86_report_nx();
@@ -845,6 +858,7 @@ void __init setup_arch(char **cmdline_p)
 	 */
 	init_hypervisor_platform();
 
+	/* 调用probe_roms()函数 */
 	x86_init.resources.probe_roms();
 
 	/* after parse_early_param, so could debug it */
@@ -981,8 +995,10 @@ void __init setup_arch(char **cmdline_p)
 	kvmclock_init();
 #endif
 
+	/* 调用native_pagetable_setup_start() */
 	x86_init.paging.pagetable_setup_start(swapper_pg_dir);
 	paging_init();
+	/* 调用native_pagetable_setup_done() */
 	x86_init.paging.pagetable_setup_done(swapper_pg_dir);
 
 	if (boot_cpu_data.cpuid_level >= 0) {
@@ -1032,6 +1048,7 @@ void __init setup_arch(char **cmdline_p)
 	e820_reserve_resources();
 	e820_mark_nosave_regions(max_low_pfn);
 
+	/* 调用reserve_standard_io_resources() */
 	x86_init.resources.reserve_resources();
 
 	e820_setup_gap();

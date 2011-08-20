@@ -59,6 +59,13 @@ int ioremap_change_attr(unsigned long vaddr, unsigned long size,
  * have to convert them into an offset in a page-aligned mapping, but the
  * caller shouldn't need to know that small detail.
  */
+/*
+将一个物理地址映射为内核空间的虚拟地址
+
+@phys_addr	: 开始物理地址
+@size		: 映射的大小
+
+*/
 static void __iomem *__ioremap_caller(resource_size_t phys_addr,
 		unsigned long size, unsigned long prot_val, void *caller)
 {
@@ -73,10 +80,13 @@ static void __iomem *__ioremap_caller(resource_size_t phys_addr,
 	void __iomem *ret_addr;
 
 	/* Don't allow wraparound or zero size */
+	/* 计算结束物理地址
+	   检查有效性，避免0值和回绕 */
 	last_addr = phys_addr + size - 1;
 	if (!size || last_addr < phys_addr)
 		return NULL;
 
+	/* 检查地址是否在有效的bit位数范围内 */
 	if (!phys_addr_valid(phys_addr)) {
 		printk(KERN_WARNING "ioremap: invalid physical address %llx\n",
 		       (unsigned long long)phys_addr);
@@ -210,6 +220,8 @@ void __iomem *ioremap_nocache(resource_size_t phys_addr, unsigned long size)
 	 */
 	unsigned long val = _PAGE_CACHE_UC_MINUS;
 
+	/* __builtin_return_address(0)返回当前函数的返回地址
+	   即ioremap_nocache()函数的返回地址 */
 	return __ioremap_caller(phys_addr, size, val,
 				__builtin_return_address(0));
 }
@@ -388,6 +400,7 @@ void __init early_ioremap_init(void)
 	 * The boot-ioremap range spans multiple pmds, for which
 	 * we are not prepared:
 	 */
+/* 4G空间的最顶1页 */
 #define __FIXADDR_TOP (-PAGE_SIZE)
 	BUILD_BUG_ON((__fix_to_virt(FIX_BTMAP_BEGIN) >> PMD_SHIFT)
 		     != (__fix_to_virt(FIX_BTMAP_END) >> PMD_SHIFT));

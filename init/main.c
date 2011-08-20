@@ -124,10 +124,24 @@ void (*__initdata late_time_init)(void);
 extern void softirq_init(void);
 
 /* Untouched command line saved by arch-specific code. */
+/*
+内核命令行参数
+由arch/x86/kernel/head_32.S中从setup部分复制而来
+*/
 char __initdata boot_command_line[COMMAND_LINE_SIZE];
 /* Untouched saved command line (eg. for /proc) */
+/*
+动态分配空间保存boot_command_line[]中的命令行参数
+不会被修改
+可以用于/proc查看
+例如: cat /proc/cmdline
+*/
 char *saved_command_line;
 /* Command line for parameter parsing */
+/*
+用于命令行参数解析的字符串
+中间部分的空格会被'\0'截断
+*/
 static char *static_command_line;
 
 /*
@@ -370,8 +384,10 @@ static noinline void __init_refok rest_init(void)
 	 * the init task will end up wanting to create kthreads, which, if
 	 * we schedule it before we create kthreadd, will OOPS.
 	 */
+	/* 建立kernel_init内核线程 */
 	kernel_thread(kernel_init, NULL, CLONE_FS | CLONE_SIGHAND);
 	numa_default_policy();
+	/* 建立kthreadd内核线程 */
 	pid = kernel_thread(kthreadd, NULL, CLONE_FS | CLONE_FILES);
 	rcu_read_lock();
 	kthreadd_task = find_task_by_pid_ns(pid, &init_pid_ns);
@@ -396,14 +412,18 @@ static int __init do_early_param(char *param, char *val)
 {
 	const struct obs_kernel_param *p;
 
+    /* 这里的__setup_start和__setup_end分别是.init.setup段的起始和结束的地址 */
 	for (p = __setup_start; p < __setup_end; p++) {
+		/* 匹配参数名称 */
 		if ((p->early && strcmp(param, p->str) == 0) ||
 		    (strcmp(param, "console") == 0 &&
 		     strcmp(p->str, "earlycon") == 0)
 		) {
+			/* 调用处理函数 */
 			if (p->setup_func(val) != 0)
 				printk(KERN_WARNING
 				       "Malformed early option '%s'\n", param);
+				/* malformed: 畸形的 */
 		}
 	}
 	/* We accept everything at this stage. */
@@ -421,6 +441,7 @@ void __init parse_early_param(void)
 	static __initdata int done = 0;
 	static __initdata char tmp_cmdline[COMMAND_LINE_SIZE];
 
+	/* 控制该函数不会被重复执行 */
 	if (done)
 		return;
 
@@ -485,7 +506,8 @@ start_kernel()函数被调用，进入体系结构无关的内核部分。
 asmlinkage void __init start_kernel(void)
 {
 	char * command_line;
-	/* 引用2个内核符号，在链接脚本vmlinux.lds.h中定义的内核参数起始地址 */
+	/* 引用2个内核符号，在链接脚本arch/x86/kernel/vmlinux.lds.S引用的
+       头文件include/asm-generic/vmlinux.lds.h中定义的内核参数起始地址 */
 	extern const struct kernel_param __start___param[], __stop___param[];
 
 	smp_setup_processor_id();
@@ -531,7 +553,7 @@ asmlinkage void __init start_kernel(void)
 	setup_arch(&command_line);
 	mm_init_owner(&init_mm, &init_task);
 	mm_init_cpumask(&init_mm);
-	/* 复制参数 */
+	/* 复制grub的命令行参数 */
 	setup_command_line(command_line);
 	setup_nr_cpu_ids();
 	/* 每个CPU分配pre-cpu结构内存，并复制.data.percpu段的数据 */
@@ -800,6 +822,11 @@ static void __init do_pre_smp_initcalls(void)
 		do_one_initcall(*fn);
 }
 
+/*
+run_init_process()在调用相应程序运行的时候，用的是kernel_execve()
+也就是说调用进程@init_filename后会替换run_init_process()运行的当前进程。
+只要调用成功，就不会返回到调用它的函数。
+*/
 static void run_init_process(const char *init_filename)
 {
 	argv_init[0] = init_filename;
@@ -813,6 +840,10 @@ static noinline int init_post(void)
 {
 	/* need to finish all async __init code before freeing the memory */
 	async_synchronize_full();
+    /* 调用free_initmem()舍弃内存的__init_begin至__init_end
+	   （包括.init.setup、.initcall.init等节）之间的数据。
+       所有使用__init标记过的函数和使用__initdata标记过的数据，
+       在free_initmem()函数执行后，都不能再使用。 */
 	free_initmem();
 	mark_rodata_ro();
 	system_state = SYSTEM_RUNNING;
@@ -821,6 +852,7 @@ static noinline int init_post(void)
 
 	current->signal->flags |= SIGNAL_UNKILLABLE;
 
+	/* 执行在启动阶段用rdinit=x指定的内核命令 */
 	if (ramdisk_execute_command) {
 		run_init_process(ramdisk_execute_command);
 		printk(KERN_WARNING "Failed to execute %s\n",
@@ -833,20 +865,35 @@ static noinline int init_post(void)
 	 * The Bourne shell can be used instead of init if we are
 	 * trying to recover a really broken machine.
 	 */
+	/* 执行在启动阶段用init=x指定的内核命令
+	   内核启动的最后阶段在init_post函数中判断如果execute_command不为NULL
+	   则使用run_init_process函数建立一个进程来运行由execute_command指定的命令
+	   在内核启动的时候可以通过传递init=/bin/bash来绕过口令登录界面 */
 	if (execute_command) {
 		run_init_process(execute_command);
 		printk(KERN_WARNING "Failed to execute %s.  Attempting "
 					"defaults...\n", execute_command);
 	}
+	/* 运行init进程，init进程是linux系统上其他进程的父进程
+	   到这里内核启动就完成了
+	   /etc/inittab文件是init进程的配置文件
+	   系统可以配置inittab文件来启动需要的进程 */
 	run_init_process("/sbin/init");
 	run_init_process("/etc/init");
 	run_init_process("/bin/init");
 	run_init_process("/bin/sh");
 
+    /* run_init_process()在调用相应程序运行的时候，用的是kernel_execve。
+       也就是说调用进程会替换当前进程。
+       只要上述任意一个文件调用成功，就不会返回到这个函数。
+       如果上面几个文件都无法执行。打印出没有找到init文件的错误。 */
 	panic("No init found.  Try passing init= option to kernel. "
 	      "See Linux Documentation/init.txt for guidance.");
 }
 
+/*
+继续初始化内核，并建立init进程
+*/
 static int __init kernel_init(void * unused)
 {
 	/*
@@ -860,6 +907,7 @@ static int __init kernel_init(void * unused)
 	/*
 	 * init can run on any cpu.
 	 */
+    /* 修改进程的CPU亲和力 */
 	set_cpus_allowed_ptr(current, cpu_all_mask);
 
 	cad_pid = task_pid(current);
@@ -869,15 +917,26 @@ static int __init kernel_init(void * unused)
 	do_pre_smp_initcalls();
 	lockup_detector_init();
 
+    /* 激活SMP系统中其他CPU */
 	smp_init();
 	sched_init_smp();
 
+    /* 初始化设备，完成外设及其驱动程序（直接编译进内核的模块）的加载和初始化 */
 	do_basic_setup();
 
 	/* Open the /dev/console on the rootfs, this should never fail */
+	/* 打开终端
+       实际上init进程除了打印错误信息以外，并不使用控制台，
+       但是如果调用的是shell或者其他需要交互的进程，而不是init，
+       那么就需要一个可以交互的输入源。
+       如果成功执行open，/dev/console即成为init的标准输入源（文件描述符0）。
+    */
 	if (sys_open((const char __user *) "/dev/console", O_RDWR, 0) < 0)
 		printk(KERN_WARNING "Warning: unable to open an initial console.\n");
 
+    /* 调用dup打开/dev/console文件描述符两次。
+       这样，该控制台设备就也可以供标准输出和标准错误使用（文件描述符1和2）。
+       init进程现在就拥有3个文件描述符--标准输入、标准输出以及标准错误。 */
 	(void) sys_dup(0);
 	(void) sys_dup(0);
 	/*
@@ -899,6 +958,7 @@ static int __init kernel_init(void * unused)
 	 * initmem segments and start the user-mode stuff..
 	 */
 
+    /* 启动用户空间的init进程 */
 	init_post();
 	return 0;
 }

@@ -24,7 +24,9 @@
 #define INIT_MEMBLOCK_REGIONS	128
 
 struct memblock_region {
+	/* 开始物理地址 */
 	phys_addr_t base;
+	/* 占用的空间大小 */
 	phys_addr_t size;
 };
 
@@ -34,10 +36,15 @@ struct memblock_type {
 	struct memblock_region *regions;
 };
 
+/*
+记录物理内存使用情况
+*/
 struct memblock {
 	phys_addr_t current_limit;
 	phys_addr_t memory_size;	/* Updated by memblock_analyze() */
+	/* 标记可用内存区域 */
 	struct memblock_type memory;
+	/* 标记预留内存区域 */
 	struct memblock_type reserved;
 };
 

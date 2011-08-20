@@ -8,6 +8,10 @@
 #define NODES_SHIFT     0
 #endif
 
+/*
+系统中结点的个数
+UMA只有1个结点
+*/
 #define MAX_NUMNODES    (1 << NODES_SHIFT)
 
 #define	NUMA_NO_NODE	(-1)

@@ -284,6 +284,8 @@ static long __init_memblock memblock_add_region(struct memblock_type *type,
 	int i, slot = -1;
 
 	/* First try and coalesce this MEMBLOCK with others */
+	/* coalesce: 合并
+	   先遍历已存在的区域，尝试将新的区域与已存在的进行合并 */
 	for (i = 0; i < type->cnt; i++) {
 		struct memblock_region *rgn = &type->regions[i];
 		phys_addr_t rend = rgn->base + rgn->size;
@@ -301,6 +303,7 @@ static long __init_memblock memblock_add_region(struct memblock_type *type,
 		/* Check if we overlap or are adjacent with the bottom
 		 * of a block.
 		 */
+		/* adjacent: 临近的 */
 		if (base < rgn->base && end >= rgn->base) {
 			/* If we can't coalesce, create a new block */
 			if (!memblock_memory_can_coalesce(base, size,
@@ -464,18 +467,28 @@ static long __init_memblock __memblock_remove(struct memblock_type *type,
 	return 0;
 }
 
+/*
+从标记的可用内存区域中移出物理地址范围
+*/
 long __init_memblock memblock_remove(phys_addr_t base, phys_addr_t size)
 {
 	return __memblock_remove(&memblock.memory, base, size);
 }
 
+/*
+从标记的预留区域中移出物理地址范围
+*/
 long __init_memblock memblock_free(phys_addr_t base, phys_addr_t size)
 {
 	return __memblock_remove(&memblock.reserved, base, size);
 }
 
+/*
+标记物理内存到预留区域
+*/
 long __init_memblock memblock_reserve(phys_addr_t base, phys_addr_t size)
 {
+	/* rgn: region */
 	struct memblock_type *_rgn = &memblock.reserved;
 
 	BUG_ON(0 == size);
@@ -513,6 +526,12 @@ phys_addr_t __init memblock_alloc_base(phys_addr_t size, phys_addr_t align, phys
 	return alloc;
 }
 
+/*
+从可用内存区域中分配出一定大小并对齐的物理内存区域
+分配成功该部分地址标记入预留区域
+
+返回分配得到的物理地址@phys_addr_t
+*/
 phys_addr_t __init memblock_alloc(phys_addr_t size, phys_addr_t align)
 {
 	return memblock_alloc_base(size, align, MEMBLOCK_ALLOC_ACCESSIBLE);
@@ -775,15 +794,20 @@ void __init memblock_analyze(void)
 	memblock_can_resize = 1;
 }
 
+/*
+初始化全局变量memblock
+*/
 void __init memblock_init(void)
 {
 	static int init_done __initdata = 0;
 
+	/* 控制此处代码不重入 */
 	if (init_done)
 		return;
 	init_done = 1;
 
 	/* Hookup the initial arrays */
+	/* 初始值regions指向一片静态的数组空间 */
 	memblock.memory.regions	= memblock_memory_init_regions;
 	memblock.memory.max		= INIT_MEMBLOCK_REGIONS;
 	memblock.reserved.regions	= memblock_reserved_init_regions;

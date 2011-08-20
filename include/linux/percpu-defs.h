@@ -11,6 +11,11 @@
  * linkage errors occur due the compiler generating the wrong code to access
  * that section.
  */
+/*
+每cpu变量的属性
+
+@sec	: 具体的节，参考include/asm-generic/vmlinux.lds.h中的PERCPU_INPUT宏
+*/
 #define __PCPU_ATTRS(sec)						\
 	__percpu __attribute__((section(PER_CPU_BASE_SECTION sec)))	\
 	PER_CPU_ATTRIBUTES
@@ -72,9 +77,15 @@
 /*
  * Normal declaration and definition macros.
  */
+/*
+外部声明一个percpu变量，类型为type，名称为name
+*/
 #define DECLARE_PER_CPU_SECTION(type, name, sec)			\
 	extern __PCPU_ATTRS(sec) __typeof__(type) name
 
+/*
+定义一个percpu变量
+*/
 #define DEFINE_PER_CPU_SECTION(type, name, sec)				\
 	__PCPU_ATTRS(sec) PER_CPU_DEF_ATTRIBUTES			\
 	__typeof__(type) name
@@ -84,9 +95,17 @@
  * Variant on the per-CPU variable declaration/definition theme used for
  * ordinary per-CPU variables.
  */
+/*
+外部声明一个percpu变量
+放在(.data..percpu)节
+*/
 #define DECLARE_PER_CPU(type, name)					\
 	DECLARE_PER_CPU_SECTION(type, name, "")
 
+/*
+定义一个percpu变量
+放在(.data..percpu)节
+*/
 #define DEFINE_PER_CPU(type, name)					\
 	DEFINE_PER_CPU_SECTION(type, name, "")
 

@@ -83,6 +83,13 @@ static inline int parameq(const char *input, const char *paramname)
 	return 0;
 }
 
+/*
+@param			: 参数名称字符串
+@val			: 参数的值
+@params			: 各个模块注册的模块参数kernel_param结构
+@num_params		: @params个数
+@handle_unknown	: 没有注册的@params时调用
+*/
 static int parse_one(char *param,
 		     char *val,
 		     const struct kernel_param *params,
@@ -118,6 +125,17 @@ static int parse_one(char *param,
 
 /* You can use " around spaces, but can't escape ". */
 /* Hyphens and underscores equivalent in parameter names. */
+/*
+hyphen: 连字符
+underscore: 下划线
+equivalent: 等价
+
+@args	: 输入字符串，会被'\0'截断
+@param	: 当前参数起始地址
+@val	: 如果命令行中的参数为'='号赋值的话，@val指向'='号后的值
+
+当前参数后的空格被'\0'替换，返回下一项字符串参数的起始地址
+*/
 static char *next_arg(char *args, char **param, char **val)
 {
 	unsigned int i, equals = 0;
@@ -169,6 +187,12 @@ static char *next_arg(char *args, char **param, char **val)
 }
 
 /* Args looks like "foo=bar,bar2 baz=fuz wiz". */
+/*
+
+@args	: 命令行字符串
+@params	: 参数起始地址
+@num	: @params的个数
+*/
 int parse_args(const char *name,
 	       char *args,
 	       const struct kernel_param *params,
@@ -186,9 +210,13 @@ int parse_args(const char *name,
 		int ret;
 		int irq_was_disabled;
 
+		/* 取下一项参数 */
 		args = next_arg(args, &param, &val);
+		/* 取当前中断关闭状态 */
 		irq_was_disabled = irqs_disabled();
+		/* 解析命令行参数 */
 		ret = parse_one(param, val, params, num, unknown);
+		/* 判断是否在解析某项参数的时候开启了中断 */
 		if (irq_was_disabled && !irqs_disabled()) {
 			printk(KERN_WARNING "parse_args(): option '%s' enabled "
 					"irq's!\n", param);

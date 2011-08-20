@@ -222,9 +222,15 @@ extern int initcall_debug;
 	static initcall_t __initcall_##fn \
 	__used __section(.security_initcall.init) = fn
 
+/*
+内核中每一个可以处理的参数都在.init.setup段中占有一项obs_kernel_param结构
+*/
 struct obs_kernel_param {
+	/* 参数的名字 */
 	const char *str;
+	/* 参数对应的处理函数指针 */
 	int (*setup_func)(char *);
+	/* 是否有必要在内核启动的初期处理该参数 */
 	int early;
 };
 
@@ -247,6 +253,11 @@ struct obs_kernel_param {
 
 /* NOTE: fn is as per module_param, not __setup!  Emits warning if fn
  * returns non-zero. */
+/*
+1表示需要提前处理的参数
+启动初期需要处理的参数，许多参数是不需要在启动初期处理的
+因为这个时候许多内核模块的初始化还没完成
+*/
 #define early_param(str, fn)					\
 	__setup_param(str, fn, fn, 1)
 
@@ -292,6 +303,10 @@ void __init parse_early_options(char *cmdline);
 #define security_initcall(fn)		module_init(fn)
 
 /* Each module must use one module_init(). */
+/*
+定义函数__inittest用来检测传入函数的类型,并在编译时提供警告信息
+每个外部模块都需要使用module_init()来声明模块初始化函数
+*/
 #define module_init(initfn)					\
 	static inline initcall_t __inittest(void)		\
 	{ return initfn; }					\

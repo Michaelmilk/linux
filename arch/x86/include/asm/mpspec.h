@@ -69,6 +69,7 @@ static inline void early_get_smp_config(void)
 
 static inline void find_smp_config(void)
 {
+	/* µ÷ÓÃdefault_find_smp_config()º¯Êý */
 	x86_init.mpparse.find_smp_config();
 }
 

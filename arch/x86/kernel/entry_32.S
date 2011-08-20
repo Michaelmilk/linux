@@ -11,7 +11,7 @@
  * NOTE: This code handles signal-recognition, which happens every time
  * after a timer-interrupt and after each system call.
  *
- * I changed all the .align's to 4 (16 byte alignment), as that's faster
+ * I changed all the .align''s to 4 (16 byte alignment), as that''s faster
  * on a 486.
  *
  * Stack layout in 'syscall_exit':
@@ -55,7 +55,7 @@
 #include <asm/irq_vectors.h>
 #include <asm/cpufeature.h>
 
-/* Avoid __ASSEMBLER__'ifying <linux/audit.h> just for this.  */
+/* Avoid __ASSEMBLER__''ifying <linux/audit.h> just for this.  */
 #include <linux/elf-em.h>
 #define AUDIT_ARCH_I386		(EM_386|__AUDIT_ARCH_LE)
 #define __AUDIT_ARCH_LE	   0x40000000
@@ -115,7 +115,7 @@
  */
 #ifdef CONFIG_X86_32_LAZY_GS
 
- /* unfortunately push/pop can't be no-op */
+ /* unfortunately push/pop can''t be no-op */
 .macro PUSH_GS
 	pushl_cfi $0
 .endm
@@ -336,7 +336,7 @@ check_userspace:
 
 ENTRY(resume_userspace)
 	LOCKDEP_SYS_EXIT
- 	DISABLE_INTERRUPTS(CLBR_ANY)	# make sure we don't miss an interrupt
+ 	DISABLE_INTERRUPTS(CLBR_ANY)	# make sure we don''t miss an interrupt
 					# setting need_resched or sigpending
 					# between sampling and the iret
 	TRACE_IRQS_OFF
@@ -380,7 +380,7 @@ ENTRY(ia32_sysenter_target)
 	movl TSS_sysenter_sp0(%esp),%esp
 sysenter_past_esp:
 	/*
-	 * Interrupts are disabled here, but we can't trace it until
+	 * Interrupts are disabled here, but we can''t trace it until
 	 * enough kernel state to call TRACE_IRQS_OFF can be called - but
 	 * we immediately enable interrupts at that point anyway.
 	 */
@@ -496,7 +496,7 @@ ENDPROC(ia32_sysenter_target)
 	.pushsection .kprobes.text, "ax"
 	# system call handler stub
 ENTRY(system_call)
-	RING0_INT_FRAME			# can't unwind into user space anyway
+	RING0_INT_FRAME			# can''t unwind into user space anyway
 	pushl_cfi %eax			# save orig_eax
 	SAVE_ALL
 	GET_THREAD_INFO(%ebp)
@@ -510,7 +510,7 @@ syscall_call:
 	movl %eax,PT_EAX(%esp)		# store the return value
 syscall_exit:
 	LOCKDEP_SYS_EXIT
-	DISABLE_INTERRUPTS(CLBR_ANY)	# make sure we don't miss an interrupt
+	DISABLE_INTERRUPTS(CLBR_ANY)	# make sure we don''t miss an interrupt
 					# setting need_resched or sigpending
 					# between sampling and the iret
 	TRACE_IRQS_OFF
@@ -555,7 +555,7 @@ ldt_ss:
 
 #ifdef CONFIG_PARAVIRT
 	/*
-	 * The kernel can't run on a non-flat stack if paravirt mode
+	 * The kernel can''t run on a non-flat stack if paravirt mode
 	 * is active.  Rather than try to fixup the high bits of
 	 * ESP, bypass this code entirely.  This may break DOSemu
 	 * and/or Wine support in a paravirt VM, although the option
@@ -569,7 +569,7 @@ ldt_ss:
 /*
  * Setup and switch to ESPFIX stack
  *
- * We're returning to userspace with a 16 bit stack. The CPU will not
+ * We''re returning to userspace with a 16 bit stack. The CPU will not
  * restore the high word of ESP for us on executing iret... This is an
  * "official" bug of all the x86-compatible CPUs, which we can work
  * around to make dosemu and wine happy. We do this by preloading the
@@ -599,14 +599,14 @@ ENDPROC(system_call)
 
 	# perform work that needs to be done immediately before resumption
 	ALIGN
-	RING0_PTREGS_FRAME		# can't unwind into user space anyway
+	RING0_PTREGS_FRAME		# can''t unwind into user space anyway
 work_pending:
 	testb $_TIF_NEED_RESCHED, %cl
 	jz work_notifysig
 work_resched:
 	call schedule
 	LOCKDEP_SYS_EXIT
-	DISABLE_INTERRUPTS(CLBR_ANY)	# make sure we don't miss an interrupt
+	DISABLE_INTERRUPTS(CLBR_ANY)	# make sure we don''t miss an interrupt
 					# setting need_resched or sigpending
 					# between sampling and the iret
 	TRACE_IRQS_OFF
@@ -648,7 +648,7 @@ syscall_trace_entry:
 	movl $-ENOSYS,PT_EAX(%esp)
 	movl %esp, %eax
 	call syscall_trace_enter
-	/* What it returned is what we'll actually use.  */
+	/* What it returned is what we''ll actually use.  */
 	cmpl $(nr_syscalls), %eax
 	jnae syscall_call
 	jmp syscall_exit
@@ -668,7 +668,7 @@ syscall_exit_work:
 END(syscall_exit_work)
 	CFI_ENDPROC
 
-	RING0_INT_FRAME			# can't unwind into user space anyway
+	RING0_INT_FRAME			# can''t unwind into user space anyway
 syscall_fault:
 	GET_THREAD_INFO(%ebp)
 	movl $-EFAULT,PT_EAX(%esp)
@@ -756,7 +756,7 @@ ENDPROC(ptregs_clone)
 /*
  * Switch back for ESPFIX stack to the normal zerobased stack
  *
- * We can't call C functions using the ESPFIX stack. This code reads
+ * We can''t call C functions using the ESPFIX stack. This code reads
  * the high word of the segment base from the GDT and swiches to the
  * normal stack and adjusts ESP with the matching offset.
  */
@@ -1015,7 +1015,7 @@ ENTRY(kernel_thread_helper)
 ENDPROC(kernel_thread_helper)
 
 #ifdef CONFIG_XEN
-/* Xen doesn't set %esp to be precisely what the normal sysenter
+/* Xen doesn''t set %esp to be precisely what the normal sysenter
    entrypoint expects, so fix it up before using the normal path. */
 ENTRY(xen_sysenter_target)
 	RING0_INT_FRAME
@@ -1031,9 +1031,9 @@ ENTRY(xen_hypervisor_callback)
 	TRACE_IRQS_OFF
 
 	/* Check to see if we got the event in the critical
-	   region in xen_iret_direct, after we've reenabled
+	   region in xen_iret_direct, after we''ve reenabled
 	   events and checked for pending events.  This simulates
-	   iret instruction's behaviour where it delivers a
+	   iret instruction''s behaviour where it delivers a
 	   pending interrupt when enabling interrupts. */
 	movl PT_EIP(%esp),%eax
 	cmpl $xen_iret_start_crit,%eax
@@ -1228,7 +1228,7 @@ ENTRY(page_fault)
 	pushl_cfi $do_page_fault
 	ALIGN
 error_code:
-	/* the function address is in %gs's slot on the stack */
+	/* the function address is in %gs''s slot on the stack */
 	pushl_cfi %fs
 	/*CFI_REL_OFFSET fs, 0*/
 	pushl_cfi %es
@@ -1271,7 +1271,7 @@ END(page_fault)
 
 /*
  * Debug traps and NMI can happen at the one SYSENTER instruction
- * that sets up the real kernel stack. Check here, since we can't
+ * that sets up the real kernel stack. Check here, since we can''t
  * allow the wrong stack to be used.
  *
  * "TSS_sysenter_sp0+12" is because the NMI/debug handler will have
@@ -1312,8 +1312,8 @@ debug_stack_correct:
 END(debug)
 
 /*
- * NMI is doubly nasty. It can happen _while_ we're handling
- * a debug fault, and the debug fault hasn't yet been able to
+ * NMI is doubly nasty. It can happen _while_ we''re handling
+ * a debug fault, and the debug fault hasn''t yet been able to
  * clear up the stack. So we first check whether we got  an
  * NMI on the sysenter entry path, but after that we need to
  * check whether we got an NMI on the debug path where the debug

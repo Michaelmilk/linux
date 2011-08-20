@@ -275,10 +275,27 @@ struct zone_reclaim_stat {
 	unsigned long		recent_scanned[2];
 };
 
+/*
+系统的页被划分为区，每个区用struct zone表示
+*/
 struct zone {
 	/* Fields commonly accessed by the page allocator */
 
 	/* zone watermarks, access with *_wmark_pages(zone) macros */
+	/* watermark: 水印
+	   使用3个宏访问此字段
+	   min_wmark_pages
+	   low_wmark_pages
+	   high_wmark_pages
+
+	   当内存不足时，会调度kswapd腾出一些内存到磁盘的交换分区上
+	   这样的IO操作会引起进程阻塞
+	   某些进程在不可阻塞的执行路径下申请内存
+	   例如在中断处理中，或者持有自旋锁时，这时进程应该在申请内存时指定
+	   GFP_ATOMIC标志标明不允许阻塞，如果内存不足，直接返回失败
+	   为了减少这样的失败，每个zone中专门保留了一些页面用于处理GFP_ATOMIC的情况
+	   min_wmark_pages就是这个保留的页面数量
+	   */
 	unsigned long watermark[NR_WMARK];
 
 	/*
@@ -605,16 +622,20 @@ extern struct page *mem_map;
  */
 struct bootmem_data;
 typedef struct pglist_data {
+	/* 属于该节点的zone */
 	struct zone node_zones[MAX_NR_ZONES];
 	struct zonelist node_zonelists[MAX_ZONELISTS];
+	/* 该节点zone的个数 */
 	int nr_zones;
 #ifdef CONFIG_FLAT_NODE_MEM_MAP	/* means !SPARSEMEM */
+	/* 该节点的page结构数组 */
 	struct page *node_mem_map;
 #ifdef CONFIG_CGROUP_MEM_RES_CTLR
 	struct page_cgroup *node_page_cgroup;
 #endif
 #endif
 #ifndef CONFIG_NO_BOOTMEM
+	/* 由启动时的bootmem alloctor使用，该结构包含了页位图的首地址 */
 	struct bootmem_data *bdata;
 #endif
 #ifdef CONFIG_MEMORY_HOTPLUG
@@ -627,12 +648,19 @@ typedef struct pglist_data {
 	 */
 	spinlock_t node_size_lock;
 #endif
+	/* 该节点第一个页帧的编号PFN
+	   系统中所有的页帧编号全局唯一
+	   在UMA中，该值总为0，因为系统只有1个结点 */
 	unsigned long node_start_pfn;
+	/* 结点中物理页框的总数 */
 	unsigned long node_present_pages; /* total number of physical pages */
 	unsigned long node_spanned_pages; /* total size of physical page
 					     range, including holes */
+	/* node编号，从0开始 */
 	int node_id;
+	/* kswapd的等待队列 */
 	wait_queue_head_t kswapd_wait;
+	/* 该结点的交换守护进程 */
 	struct task_struct *kswapd;
 	int kswapd_max_order;
 	enum zone_type classzone_idx;

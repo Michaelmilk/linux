@@ -227,6 +227,15 @@ void __init e820_print_map(char *who)
  *	   ______________________4_
  */
 
+/*
+sanitize: 使清洁
+
+检查@biosmap数组，合并重叠项
+
+@biosmap	: e820entry数组指针，函数返回时内容为新的e820entry数组
+@max_nr_map	: 数组大小
+@pnr_map	: 传进来时为原有效的项数，函数返回时保存新的有效项数
+*/
 int __init sanitize_e820_map(struct e820entry *biosmap, int max_nr_map,
 			     u32 *pnr_map)
 {
@@ -1045,7 +1054,10 @@ char *__init default_machine_specific_memory_setup(void)
 	sanitize_e820_map(boot_params.e820_map,
 			ARRAY_SIZE(boot_params.e820_map),
 			&new_nr);
+	/* 记录新的有效项数 */
 	boot_params.e820_entries = new_nr;
+	/* 将boot_params.e820_map映射到全局变量e820中
+	   如果失败，则为e820创建一个假的映射 */
 	if (append_e820_map(boot_params.e820_map, boot_params.e820_entries)
 	  < 0) {
 		u64 mem_size;
@@ -1069,11 +1081,16 @@ char *__init default_machine_specific_memory_setup(void)
 	return who;
 }
 
+/*
+把setup引导期间使用bios中断获取的e820信息映射到全局变量e820中
+*/
 void __init setup_memory_map(void)
 {
 	char *who;
 
+	/* 根据x86_init的定义，调用函数default_machine_specific_memory_setup() */
 	who = x86_init.resources.memory_setup();
+	/* 全局变量e820在上面的memory_setup()中赋值 */
 	memcpy(&e820_saved, &e820, sizeof(struct e820map));
 	printk(KERN_INFO "BIOS-provided physical RAM map:\n");
 	e820_print_map(who);
