@@ -24,6 +24,8 @@ static struct sighand_struct init_sighand = INIT_SIGHAND(init_sighand);
 用0号进程初始化init_thread_union栈
 
 保存在连续的2个物理页框内
+
+放在连接脚本arch/x86/kernel/vmlinux.lds.S中的INIT_TASK_DATA处
 */
 union thread_union init_thread_union __init_task_data =
 	{ INIT_THREAD_INFO(init_task) };

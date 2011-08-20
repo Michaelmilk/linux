@@ -15,6 +15,9 @@
 
 #include "boot.h"
 
+/*
+实模式代码setup部分使用的boot_params全局变量
+*/
 struct boot_params boot_params __attribute__((aligned(16)));
 
 /*

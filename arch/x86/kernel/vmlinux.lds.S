@@ -32,10 +32,19 @@
 
 #undef i386     /* in case the preprocessor is a 32bit one */
 
+/*
+链接目标文件的输出格式
+*/
 OUTPUT_FORMAT(CONFIG_OUTPUT_FORMAT, CONFIG_OUTPUT_FORMAT, CONFIG_OUTPUT_FORMAT)
 
 #ifdef CONFIG_X86_32
+/*
+目标文件的平台
+*/
 OUTPUT_ARCH(i386)
+/*
+入口点
+*/
 ENTRY(phys_startup_32)
 jiffies = jiffies_64;
 #else
@@ -70,6 +79,9 @@ jiffies_64 = jiffies;
 
 #endif
 
+/*
+目标文件各个节的读写执行属性
+*/
 PHDRS {
 	text PT_LOAD FLAGS(5);          /* R_E */
 	data PT_LOAD FLAGS(6);          /* RW_ */
@@ -102,6 +114,8 @@ SECTIONS
 #endif
 
 	/* Text and read-only data */
+	/* AT指定节的加载地址
+	   ADDR返回节的绝对地址 */
 	.text :  AT(ADDR(.text) - LOAD_OFFSET) {
 		_text = .;
 		/* bootstrapping code */
@@ -125,6 +139,7 @@ SECTIONS
 		/* End of text section */
 		_etext = .;
 	} :text = 0x9090
+	/* 对齐部分填充0x9090 */
 
 	NOTES :text :note
 
@@ -135,6 +150,8 @@ SECTIONS
 	. = ALIGN(PAGE_SIZE);
 #endif
 	X64_ALIGN_DEBUG_RODATA_BEGIN
+	/* 定义在include/asm-generic/vmlinux.lds.h中的宏RO_DATA
+	   声明只读数据的各个节 */
 	RO_DATA(PAGE_SIZE)
 	X64_ALIGN_DEBUG_RODATA_END
 
@@ -327,6 +344,7 @@ SECTIONS
 	}
 
 #if !defined(CONFIG_X86_64) || !defined(CONFIG_SMP)
+	/* 每cpu变量节 */
 	PERCPU_SECTION(INTERNODE_CACHE_BYTES)
 #endif
 
@@ -402,6 +420,9 @@ INIT_PER_CPU(irq_stack_union);
 /*
  * Build-time check on the image size:
  */
+/*
+内核映像不能超过512MB
+*/
 . = ASSERT((_end - _text <= KERNEL_IMAGE_SIZE),
 	   "kernel image bigger than KERNEL_IMAGE_SIZE");
 

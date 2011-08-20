@@ -50,6 +50,9 @@ objdump -D vmlinux命令来获取所有的符号以及这些符号的地址。
 #include <asm/percpu.h>
 
 /* Physical address */
+/*
+减去3G，将虚拟地址转换为物理地址
+*/
 #define pa(X) ((X) - __PAGE_OFFSET)
 
 /*
@@ -92,16 +95,22 @@ CPUINFO_x86各宏的定义在include/generated/asm-offsets.h中由Kbuild生成
 #if PTRS_PER_PMD > 1
 #define PAGE_TABLE_SIZE(pages) (((pages) / PTRS_PER_PMD) + PTRS_PER_PGD)
 #else
+/*
+描述@pages需要的页表个数
+*/
 #define PAGE_TABLE_SIZE(pages) ((pages) / PTRS_PER_PGD)
 #endif
 
 /* Number of possible pages in the lowmem region */
 /*
-对于3G的偏移，内核直接访问的物理内存不超过1G，即256K个页
+对于3G的偏移，内核直接访问的物理内存不超过1G，即256K个页框
 */
 LOWMEM_PAGES = (((1<<32) - __PAGE_OFFSET) >> PAGE_SHIFT)
 	
 /* Enough space to fit pagetables for the low memory linear map */
+/*
+计算描述LOWMEM_PAGES所需的物理空间
+*/
 MAPPING_BEYOND_END = PAGE_TABLE_SIZE(LOWMEM_PAGES) << PAGE_SHIFT
 
 /*
@@ -109,9 +118,21 @@ MAPPING_BEYOND_END = PAGE_TABLE_SIZE(LOWMEM_PAGES) << PAGE_SHIFT
  * a relocatable kernel can live anywhere in lowmem, so we need to be able
  * to map all of lowmem.
  */
+/*
+因为内核会被重定向到896MB内存以下的任何位置
+所以这里需要预先留出足够多的页表空间
+*/
 KERNEL_PAGES = LOWMEM_PAGES
 
+/*
+对于1GB内核空间，共有256K个页框
+描述这么多的页框需要256个页表
+每个页表占4KB，则共需要1MB的空间
+*/
 INIT_MAP_SIZE = PAGE_TABLE_SIZE(KERNEL_PAGES) * PAGE_SIZE
+/*
+预留堆空间
+*/
 RESERVE_BRK(pagetables, INIT_MAP_SIZE)
 
 /*
@@ -144,23 +165,28 @@ name:
 */
 __HEAD
 ENTRY(startup_32)
-	/* 把stack_start符号对应的物理地址处的4字节数放进ecx寄存器 */
+	/* 把stack_start符号对应的物理地址处的4字节数放进ecx寄存器
+	   %ecx指向内核栈底 */
 	movl pa(stack_start),%ecx
 	
 	/* test KEEP_SEGMENTS flag to see if the bootloader is asking
 		us to not reload segments */
+	/* 检查引导参数是否置位了KEEP_SEGMENTS位 */
 	testb $(1<<6), BP_loadflags(%esi)
+	/* 如果置位了，则跳到标号2f
+	   否则，继续，重新加载段寄存器 */
 	jnz 2f
 
 /*
  * Set segments to known values.
  */
 /*
-初始化保护模式下的各个段寄存器（还没有分页）
+初始化保护模式下的各个段寄存器(还没有分页)
 */
 	/* 将引导全局段描述符所处的物理地址加载到gdtr寄存器 */
 	lgdt pa(boot_gdt_descr)
-	/* 将__BOOT_DS的值加载进eax寄存器 */
+	/* 将__BOOT_DS的值加载进eax寄存器
+	   引导代码段选择子 */
 	movl $(__BOOT_DS),%eax
 	movl %eax,%ds
 	movl %eax,%es
@@ -168,6 +194,17 @@ ENTRY(startup_32)
 	movl %eax,%gs
 	movl %eax,%ss
 2:
+
+/*
++-----------------------+ 8KB <- %esp
+|			|
+|			|
++-----------------------+ 4KB
+|			|
+|  struct thread_info 	| -> task
++-----------------------+ 0
+*/
+	/* 栈顶指针%esp指向stack_start */
 	leal -__PAGE_OFFSET(%ecx),%esp
 
 /*
@@ -176,8 +213,8 @@ ENTRY(startup_32)
 /*
 首先将内存BSS段对应物理地址中的值清0
 */
- 	/* cld 清除方向标志 si di向前移动
- 	   std 设置方向 si di向后移动*/
+ 	/* cld 清除方向标志 si di向前移动，增加
+ 	   std 设置方向 si di向后移动，减少 */
 	cld
 	/* 异或将eax寄存器清0 */
 	xorl %eax,%eax
@@ -204,6 +241,11 @@ ENTRY(startup_32)
  * (kexec on panic case). Hence copy out the parameters before initializing
  * page tables.
  */
+
+/*
+将setup部分arch/x86/boot/main.c的全局变量boot_params复制到
+arch/x86/kernel/setup.c的全局变量boot_params中
+*/
 	movl $pa(boot_params),%edi
 	/* struct boot_params的大小除以4放入ecx寄存器作为计数器 */
 	movl $(PARAM_SIZE/4),%ecx
@@ -213,9 +255,16 @@ ENTRY(startup_32)
 	movl pa(boot_params) + NEW_CL_POINTER,%esi
 	andl %esi,%esi
 	jz 1f			# No command line
+/*
+将setup部分的命令行参数复制到init/main.c的全局变量boot_command_line中
+*/
+	/* %edi中为目的地址，即boot_command_line[COMMAND_LINE_SIZE]数组 */
 	movl $pa(boot_command_line),%edi
+	/* COMMAND_LINE_SIZE为字符数组boot_command_line的大小
+	   除以4，以4字节为循环单位 */
 	movl $(COMMAND_LINE_SIZE/4),%ecx
 	rep
+	/* 循环从%esi中复制命令行参数到%edi指向的地址中 */
 	movsl
 1:
 
@@ -232,6 +281,9 @@ ENTRY(startup_32)
  * Mappings are created both at virtual address 0 (identity mapping)
  * and PAGE_OFFSET for up to _end.
  */
+/*
+初始化页表
+*/
 #ifdef CONFIG_X86_PAE
 
 	/*
@@ -281,34 +333,103 @@ ENTRY(startup_32)
 	movl %eax,pa(initial_pg_pmd+0x1000*KPMDS-8)
 #else	/* Not PAE */
 
+/*
+3G的页目录项偏移
+*/
 page_pde_offset = (__PAGE_OFFSET >> 20);
 
+/*
+4KB的页
+
++---------------+ <- 4G
+|		|
+|		|
++---------------+ <- 3G page_pde_offset=3072 第768项
+|		|
+|		|
+|		|
+|		|
+|		|
+|		|
++---------------+ <- 0 第0项
+
+
+物理内存布局
++---------------+
+|		|
+|		|
+|		|
++---------------+ <- _end/__brk_limit
+|		| <- _brk_end
+|	.brk	|
++---------------+ <- __brk_base
+|	.bss	|
++---------------+
+|	.data	|
++---------------+
+|	.text	|
++---------------+ 0x100000(或内核重定向的地址)
+|		|
+|		|
++---------------+
+
+
+*/
+
+	/* __brk_base的物理地址写入%edi寄存器 */
 	movl $pa(__brk_base), %edi
+	/* 页目录的物理地址 */
 	movl $pa(initial_page_table), %edx
+	/* 0x003 */
 	movl $PTE_IDENT_ATTR, %eax
 10:
+	/* 0x067 */
 	leal PDE_IDENT_ATTR(%edi),%ecx		/* Create PDE entry */
+	/* 将值写入%edx中指针指向的物理地址处
+	   即initial_page_table的第0项 */
 	movl %ecx,(%edx)			/* Store identity PDE entry */
+	/* initial_page_table的第768项中保存的指针值
+	   指向__brk_base所在的页框 */
 	movl %ecx,page_pde_offset(%edx)		/* Store kernel PDE entry */
+	/* %edx加4，下面再次回跳到标号10处的时候
+	   上面将设置第769项，依次类推 */
 	addl $4,%edx
+	/* 循环计数的次数 */
 	movl $1024, %ecx
 11:
+	/* stosl: store doubleword string
+	   将%eax中的值保存到ES:(E)DI指向的地址中
+	   循环1024次，即设置4KB的大小，1个页表 */
 	stosl
+	/* 增加4K */
 	addl $0x1000,%eax
+	/* loop: loop with %ecx counter
+	   循环1024次，设置1个页表中的1024项 */
 	loop 11b
 	/*
 	 * End condition: we must map up to the end + MAPPING_BEYOND_END.
 	 */
+	/* 页表中映射的物理地址范围需要一直包含到下面这个值
+	   即控制至少需要初始化的页表项数 */
 	movl $pa(_end) + MAPPING_BEYOND_END + PTE_IDENT_ATTR, %ebp
+	/* %eax - %ebp */
 	cmpl %ebp,%eax
+	/* jb: jump if below */
 	jb 10b
+	/* 加3G，转换为虚拟地址 */
 	addl $__PAGE_OFFSET, %edi
+	/* 给变量_brk_end赋值 */
 	movl %edi, pa(_brk_end)
+	/* 逻辑右移12bit */
 	shrl $12, %eax
+	/* 给变量max_pfn_mapped赋值
+	   即页表中已经映射的物理页框数 */
 	movl %eax, pa(max_pfn_mapped)
 
 	/* Do early initialization of the fixmap area */
+	/* initial_pg_fixmap对应页的物理地址存入页目录的最后一项 */
 	movl $pa(initial_pg_fixmap)+PDE_IDENT_ATTR,%eax
+	/* 0xffc=4092 即对应页目录的最后一项 */
 	movl %eax,pa(initial_page_table+0xffc)
 #endif
 
@@ -361,6 +482,7 @@ __CPUINIT
 #ifdef CONFIG_SMP
 ENTRY(startup_32_smp)
 	cld
+	/* 数据段选择子0x18 */
 	movl $(__BOOT_DS),%eax
 	movl %eax,%ds
 	movl %eax,%es
@@ -370,6 +492,10 @@ ENTRY(startup_32_smp)
 	movl %eax,%ss
 	leal -__PAGE_OFFSET(%ecx),%esp
 #endif /* CONFIG_SMP */
+
+/*
+入口
+*/
 default_entry:
 
 /*
@@ -389,6 +515,7 @@ default_entry:
 #define cr4_bits pa(mmu_cr4_features)
 	movl cr4_bits,%edx
 	andl %edx,%edx
+	/* 为0的话则跳转到标号6f处 */
 	jz 6f
 	movl %cr4,%eax		# Turn on paging options (PSE,PAE,..)
 	orl %edx,%eax
@@ -427,14 +554,24 @@ default_entry:
 /*
  * Enable paging
  */
+/*
+开启分页
+*/
+	/* 页目录表的物理地址 */
 	movl $pa(initial_page_table), %eax
+	/* cr3指向页目录表 */
 	movl %eax,%cr3		/* set the page table pointer.. */
+	/* cr0寄存器中，置位PG分页位，开启分页 */
 	movl %cr0,%eax
 	orl  $X86_CR0_PG,%eax
 	movl %eax,%cr0		/* ..and set paging (PG) bit */
+	/* 分页已经开启，使用长跳转
+	   清预取的指令，并重值%eip */
 	ljmp $__BOOT_CS,$1f	/* Clear prefetch and normalize %eip */
 1:
 	/* Shift the stack pointer to a virtual address */
+	/* 已经开启分页了，所以栈顶指针不再直接使用物理地址
+	   加上3G，转换为虚拟地址 */
 	addl $__PAGE_OFFSET, %esp
 
 /*
@@ -442,7 +579,9 @@ default_entry:
  * confuse the debugger if this code is traced.
  * XXX - best to initialize before switching to protected mode.
  */
+	/* eflags寄存器清0 */
 	pushl $0
+	/* popfl: pop %eflags from stack */
 	popfl
 
 #ifdef CONFIG_SMP
@@ -454,8 +593,12 @@ default_entry:
  * start system 32-bit setup. We need to re-do some of the things done
  * in 16-bit mode for the "real" operations.
  */
+	/* 设置中断描述符表 */
 	call setup_idt
 
+/*
+检查CPU类型和各项参数
+*/
 checkCPUtype:
 
 	movl $-1,X86_CPUID		#  -1 for no CPUID initially
@@ -553,6 +696,8 @@ is386:	movl $2,%ecx		# set MP
 	xorl %eax,%eax			# Clear LDT
 	lldt %ax
 
+	/* clear direction flag
+	   DF置0，[SI]，[DI]执行增量操作 */
 	cld			# gcc2 wants the direction flag cleared at all times
 	pushl $0		# fake return address for unwinder
 	movb $1, ready
@@ -593,17 +738,40 @@ check_x87:
  *
  *  Warning: %esi is live across this function.
  */
+
+/*
+ * 中断门描述符
+ *
+ * 31                          16                 7   4       0
+ * ------------------------------------------------------------
+ * |                             | |   | | | | | |   |        |
+ * |       OFFSET 31...16        |P|DPL| |           |RESERVED|
+ * |                             |1|00 |0|1|1|1|0|000|        |
+ * ------------------------------------------------------------
+ * |                             |                            |
+ * |     SEGMENT SELECTOR        |       OFFSET 15..0         |
+ * |                             |                            |
+ * ------------------------------------------------------------
+ */
+
 setup_idt:
+	/* 将ignore_int的虚拟地址加载进edx寄存器 */
 	lea ignore_int,%edx
 	movl $(__KERNEL_CS << 16),%eax
 	movw %dx,%ax		/* selector = 0x0010 = cs */
+	/* 0x8E00 = 1000111000000000 */
 	movw $0x8E00,%dx	/* interrupt gate - dpl=0, present */
 
+	/* 取idt_table的指针 */
 	lea idt_table,%edi
+	/* 循环256项 */
 	mov $256,%ecx
 rp_sidt:
+	/* 低32位 */
 	movl %eax,(%edi)
+	/* 高32位 */
 	movl %edx,4(%edi)
+	/* 加8个字节，到下一项 */
 	addl $8,%edi
 	dec %ecx
 	jne rp_sidt
@@ -618,6 +786,7 @@ rp_sidt:
 	movl %edx,8*\trapno+4(%edi)
 .endm
 
+	/* 利用上面定义的宏，初始化几个异常的处理函数 */
 	set_early_handler handler=early_divide_err,trapno=0
 	set_early_handler handler=early_illegal_opcode,trapno=6
 	set_early_handler handler=early_protection_fault,trapno=13
@@ -665,10 +834,16 @@ hlt_loop:
 	jmp hlt_loop
 
 /* This is the default interrupt "handler" :-) */
+/*
+默认的一个中断处理函数
+该函数什么也不做
+或许只会打印一些信息
+*/
 	ALIGN
 ignore_int:
 	cld
 #ifdef CONFIG_PRINTK
+	/* 调用printk()函数前，进行压栈处理 */
 	pushl %eax
 	pushl %ecx
 	pushl %edx
@@ -684,18 +859,21 @@ ignore_int:
 	pushl 24(%esp)
 	pushl 32(%esp)
 	pushl 40(%esp)
+	/* 将提示信息压入栈中，做为参数传递给printk()函数 */
 	pushl $int_msg
 	call printk
 
 	call dump_stack
 
 	addl $(5*4),%esp
+	/* 出栈，恢复各寄存器中的值 */
 	popl %ds
 	popl %es
 	popl %edx
 	popl %ecx
 	popl %eax
 #endif
+	/* iret: return from interrupt */
 	iret
 
 #include "verify_cpu.S"
@@ -708,12 +886,22 @@ ENTRY(initial_code)
 /*
  * BSS section
  */
+/*
+在include/linux/linkage.h中__PAGE_ALIGNED_BSS定义为
+#define __PAGE_ALIGNED_BSS	.section ".bss..page_aligned", "aw"
+因此下面的数据放在连接脚本arch/x86/kernel/vmlinux.lds.S中的(.bss..page_aligned)节
+*/
 __PAGE_ALIGNED_BSS
+	/* 按照页大小对齐，4KB */
 	.align PAGE_SIZE
 #ifdef CONFIG_X86_PAE
 initial_pg_pmd:
 	.fill 1024*KPMDS,4,0
 #else
+/*
+初始的一个页目录
+这里填充了4KB，内容全0
+*/
 ENTRY(initial_page_table)
 	.fill 1024,4,0
 #endif
@@ -721,6 +909,10 @@ initial_pg_fixmap:
 	.fill 1024,4,0
 ENTRY(empty_zero_page)
 	.fill 4096,1,0
+/*
+内核页目录
+即init进程(名称为swapper)的页目录
+*/
 ENTRY(swapper_pg_dir)
 	.fill 1024,4,0
 
@@ -753,6 +945,20 @@ ENTRY(initial_page_table)
 
 .data
 .balign 4
+/*
+init_thread_union定义在arch/x86/kernel/init_task.c中
+占2个页空间，THREAD_SIZE为8KB
+这样stack_start处的值即为内核栈底指针
+
++-----------------------+ 8KB <- stack_start中的值
+|			|
+|			|
++-----------------------+ 4KB
+|			|
+|  struct thread_info 	| -> task
++-----------------------+ 0
+
+*/
 ENTRY(stack_start)
 	.long init_thread_union+THREAD_SIZE
 

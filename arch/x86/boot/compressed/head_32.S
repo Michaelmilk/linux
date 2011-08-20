@@ -87,11 +87,15 @@ ENTRY(startup_32)
 	   leal: load effective address
 	   */
 	leal	(BP_scratch+4)(%esi), %esp
+	/* call调用，将当前的%eip入栈
+	   此时%eip指向标号1:处指令的线性地址
+	   即将值存入了boot_params的scratch字段 */
 	call	1f
-	/* 出栈，即scratch字段的值保存到了ebp寄存器 */
+	/* 出栈，即scratch字段的值保存到了ebp寄存器
+	   即ebp中值为标号1:的实际物理地址 */
 1:	popl	%ebp
 	/* 1b指的是backward，即前1句标号1的地址偏移值
-	   计算相对差值 */
+	   %ebp减去标号1:的偏移，即得到startup_32的实际物理地址了 */
 	subl	$1b, %ebp
 
 /*
@@ -103,8 +107,10 @@ ENTRY(startup_32)
 /*
 relocate : 迁移
 根据内核不同的配置做不同的处理
+计算解压后内核代码的物理地址
 */
 #ifdef CONFIG_RELOCATABLE
+	/* 当前startup_32的物理地址 */
 	movl	%ebp, %ebx
 	/* BP_kernel_alignment定义在arch/x86/kernel/asm-offsets.c中
 	   esi寄存器中的地址依然为boot_params的线性地址
@@ -124,7 +130,8 @@ relocate : 迁移
 
 	/* Target address to relocate to for decompression */
 	/* z_extract_offset为压缩文件填补对齐后的大小
-	   参考arch/x86/boot/compressed/mkpiggy.c */
+	   参考arch/x86/boot/compressed/mkpiggy.c
+	   %ebx增加解压需要的偏移量，指向一个用于移动压缩代码的临时位置 */
 	addl	$z_extract_offset, %ebx
 
 	/* Set up the stack */
@@ -144,16 +151,23 @@ relocate : 迁移
 	pushl	%esi
 	leal	(_bss-4)(%ebp), %esi
 	leal	(_bss-4)(%ebx), %edi
+	/* 计算需要复制的字节数 */
 	movl	$(_bss - startup_32), %ecx
+	/* 除以4，每次是按4字节移动的 */
 	shrl	$2, %ecx
+	/* std: set direction flag
+	   从后往前移动 */
 	std
+	/* 重复执行，开始移动代码 */
 	rep	movsl
 	cld
+	/* 出栈，%esi依然指向全局变量boot_params */
 	popl	%esi
 
 /*
  * Jump to the relocated address.
  */
+	/* 取得移动过后relocated的地址 */
 	leal	relocated(%ebx), %eax
 	/* call和jmp在操作数前指定前缀"*"，则表示是一个绝对地址跳转
 	   如果没有"*"，则操作数是一个相对地址 */
@@ -206,6 +220,8 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 然后调用decompress_kernel()函数
 */
 
+	/* %ebx为临时的包含未解压代码的起始地址
+	   %ebx减去增加的偏移，得到最终的解压地址 */
 	leal	z_extract_offset_negative(%ebx), %ebp
 				/* push arguments for decompress_kernel: */
 	pushl	%ebp		/* output address */

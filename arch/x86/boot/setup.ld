@@ -9,8 +9,12 @@ ENTRY(_start)
 
 SECTIONS
 {
+	/* 链接脚本的起始地址为0
+	   所以汇编代码部分需要注意ds等段寄存器的设置 */
 	. = 0;
+	/* boot sector text */
 	.bstext		: { *(.bstext) }
+	/* boot sector data */
 	.bsdata		: { *(.bsdata) }
 
 	. = 497;

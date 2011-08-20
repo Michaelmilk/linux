@@ -121,6 +121,7 @@ struct boot_params {
 	struct efi_info efi_info;			/* 0x1c0 */
 	__u32 alt_mem_k;				/* 0x1e0 */
 	__u32 scratch;		/* Scratch field! */	/* 0x1e4 */
+	/* Number of entries in e820_map (below) */
 	__u8  e820_entries;				/* 0x1e8 */
 	__u8  eddbuf_entries;				/* 0x1e9 */
 	__u8  edd_mbr_sig_buf_entries;			/* 0x1ea */

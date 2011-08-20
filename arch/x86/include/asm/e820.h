@@ -81,7 +81,13 @@ struct e820map {
 #define ISA_START_ADDRESS	0xa0000
 #define ISA_END_ADDRESS		0x100000
 
+/*
+640K
+*/
 #define BIOS_BEGIN		0x000a0000
+/*
+1M
+*/
 #define BIOS_END		0x00100000
 
 #define BIOS_ROM_BASE		0xffe00000
@@ -146,6 +152,7 @@ extern char *default_machine_specific_memory_setup(void);
  */
 static inline bool is_ISA_range(u64 s, u64 e)
 {
+	/* [640KB ~ 1MB] */
 	return s >= ISA_START_ADDRESS && e <= ISA_END_ADDRESS;
 }
 

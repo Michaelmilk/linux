@@ -204,6 +204,10 @@ extern struct cred init_cred;
 }
 
 /* Attach to the init_task data structure for proper alignment */
+/*
+宏定义属性__init_task_data
+放在连接脚本arch/x86/kernel/vmlinux.lds.S中的INIT_TASK_DATA处
+*/
 #define __init_task_data __attribute__((__section__(".data..init_task")))
 
 

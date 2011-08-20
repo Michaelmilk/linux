@@ -17,6 +17,9 @@
  * into it (errata #56). Usually the page is reserved anyways,
  * unless you have no PS/2 mouse plugged in.
  */
+/*
+EBDA: Extended BIOS Data Area 基本输入/输出扩展数据域
+*/
 void __init reserve_ebda_region(void)
 {
 	unsigned int lowmem, ebda_addr;

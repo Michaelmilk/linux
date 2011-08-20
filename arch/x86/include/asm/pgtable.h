@@ -577,6 +577,9 @@ static inline int pgd_none(pgd_t pgd)
  * this macro returns the index of the entry in the pgd page which would
  * control the given virtual address
  */
+/*
+计算地址@address对应的页目录索引
+*/
 #define pgd_index(address) (((address) >> PGDIR_SHIFT) & (PTRS_PER_PGD - 1))
 
 /*
@@ -592,6 +595,10 @@ static inline int pgd_none(pgd_t pgd)
 
 
 #define KERNEL_PGD_BOUNDARY	pgd_index(PAGE_OFFSET)
+/*
+内核使用的内存在页目录中占有多少项，即多少个指针
+比如3G:1G，则内核占用256项
+*/
 #define KERNEL_PGD_PTRS		(PTRS_PER_PGD - KERNEL_PGD_BOUNDARY)
 
 #ifndef __ASSEMBLY__

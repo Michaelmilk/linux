@@ -2046,8 +2046,24 @@ void yield(void);
  */
 extern struct exec_domain	default_exec_domain;
 
+/*
+注意:这是一个联合体
+保存在连续的2个物理页框内
+
++-----------------------+ 高地址
+|		堆栈			|
+|						|
+|						|
++-----------------------+
+|						| <-- esp
+|						|
+|	thread_info结构		|
++-----------------------+ 低地址
+	
+*/
 union thread_union {
 	struct thread_info thread_info;
+	/* 8KB栈，共2048项 */
 	unsigned long stack[THREAD_SIZE/sizeof(long)];
 };
 
