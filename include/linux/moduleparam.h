@@ -35,8 +35,10 @@ struct kernel_param;
 
 struct kernel_param_ops {
 	/* Returns 0, or -errno.  arg is in kp->arg. */
+	/* 设置参数的函数指针 */
 	int (*set)(const char *val, const struct kernel_param *kp);
 	/* Returns length written or -errno.  Buffer is 4k (ie. be short!) */
+	/* 读取参数的函数指针 */
 	int (*get)(char *buffer, const struct kernel_param *kp);
 	/* Optional function to free kp->arg when module unloaded. */
 	void (*free)(void *arg);
@@ -46,10 +48,14 @@ struct kernel_param_ops {
 #define KPARAM_ISBOOL		2
 
 struct kernel_param {
+	/* 参数名称 */
 	const char *name;
+	/* 参数操作的函数指针 */
 	const struct kernel_param_ops *ops;
+	/* 参数出现在/sys目录下的文件权限 */
 	u16 perm;
 	u16 flags;
+	/* 传递给操作函数指针的参数 */
 	union {
 		void *arg;
 		const struct kparam_string *str;
@@ -112,6 +118,12 @@ struct kparam_array
  * same, but that's harder if the variable must be non-static or is inside a
  * structure.  This allows exposure under a different name.
  */
+/*
+首先使用param_check_##type()对使用宏声明的变量名称@name进行类型检查
+param_check_##type()展开后为一个静态内联函数，没有调用处，会被编译器优化掉
+
+根据@type拼装操作函数指针
+*/
 #define module_param_named(name, value, type, perm)			   \
 	param_check_##type(name, &(value));				   \
 	module_param_cb(name, &param_ops_##type, &value, perm);		   \
@@ -141,6 +153,15 @@ struct kparam_array
 
 /* This is the fundamental function for registering boot/module
    parameters. */
+/*
+@prefix	: 前缀
+@name	: 变量名称
+
+使用BUILD_BUG_ON_ZERO宏检查@perm权限是否有效
+
+定义一个struct kernel_param结构，名称为__param_##name
+并初始化其中的字段
+*/
 #define __module_param_call(prefix, name, ops, arg, isbool, perm)	\
 	/* Default value instead of permissions? */			\
 	static int __param_perm_check_##name __attribute__((unused)) =	\
@@ -282,6 +303,16 @@ static inline void destroy_params(const struct kernel_param *params,
 /* All the helper functions */
 /* The macros to do compile-time type checking stolen from Jakub
    Jelinek, who IIRC came up with this idea for the 2.4 module init code. */
+/*
+参数一致性检查
+
+使用##对@name进行字符串连接，定义一个静态内联函数，名称为__check_##name
+该函数没有调用处，会被编译器优化掉
+
+@p为指向变量@name的指针
+@type为模块参数声明的类型
+使用函数返回指针@p，以检查其指针类型是否与声明的@type一致
+*/
 #define __param_check(name, p, type) \
 	static inline type *__check_##name(void) { return(p); }
 

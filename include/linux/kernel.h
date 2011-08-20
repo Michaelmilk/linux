@@ -687,6 +687,10 @@ struct sysinfo {
    result (of value 0 and type size_t), so the expression can be used
    e.g. in a structure initializer (or where-ever else comma expressions
    aren't permitted). */
+/*
+如果@e为真的话，两次取反后为1
+则int所占的bit位数将为-1，这将导致一个编译错误
+*/
 #define BUILD_BUG_ON_ZERO(e) (sizeof(struct { int:-!!(e); }))
 #define BUILD_BUG_ON_NULL(e) ((void *)sizeof(struct { int:-!!(e); }))
 
