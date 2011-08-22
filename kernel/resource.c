@@ -21,10 +21,15 @@
 #include <linux/pfn.h>
 #include <asm/io.h>
 
-
+/*
+全局变量ioport_resource和iomem_resource，
+分别描述基于IO映射方式的整个IO端口空间
+和基于内存映射方式的IO内存资源空间（包括IO端口和外设内存）。
+*/
 struct resource ioport_resource = {
 	.name	= "PCI IO",
 	.start	= 0,
+	/* 64K-1，IO端口空间是16位，可以寻址到64KB-1 */
 	.end	= IO_SPACE_LIMIT,
 	.flags	= IORESOURCE_IO,
 };
@@ -33,11 +38,17 @@ EXPORT_SYMBOL(ioport_resource);
 struct resource iomem_resource = {
 	.name	= "PCI mem",
 	.start	= 0,
+	/* end是无符号数，赋值为-1即其为0xffffffff，占整个4GB
+	   MEM的内存空间是32位，可以寻址到4GB-1
+	   会在setup_arch()中进行修改 */
 	.end	= -1,
 	.flags	= IORESOURCE_MEM,
 };
 EXPORT_SYMBOL(iomem_resource);
 
+/*
+资源访问的读写锁
+*/
 static DEFINE_RWLOCK(resource_lock);
 
 static void *r_next(struct seq_file *m, void *v, loff_t *pos)
@@ -131,6 +142,10 @@ static const struct file_operations proc_iomem_operations = {
 	.release	= seq_release,
 };
 
+/*
+在proc中建立2个目录
+可以通过/proc/ioports和/proc/iomem查看资源信息
+*/
 static int __init ioresources_init(void)
 {
 	proc_create("ioports", 0, NULL, &proc_ioports_operations);
@@ -142,30 +157,52 @@ __initcall(ioresources_init);
 #endif /* CONFIG_PROC_FS */
 
 /* Return the conflict entry if you can't request it */
+/*
+如果@root的范围无法包含新节点@new的范围，则返回@root
+如果请求的新节点@new与@root的子节点某一项冲突，则返回冲突节点的指针
+
+成功链入则返回NULL
+*/
 static struct resource * __request_resource(struct resource *root, struct resource *new)
 {
 	resource_size_t start = new->start;
 	resource_size_t end = new->end;
 	struct resource *tmp, **p;
 
+    /* @new的起始地址不合法 */
 	if (end < start)
 		return root;
+    /* @new的开始地址小于@root的开始地址 */
 	if (start < root->start)
 		return root;
+    /* @new的结束地址大于@root的结束地址 */
 	if (end > root->end)
 		return root;
+	/* 取@root的子节点 */
 	p = &root->child;
+	/* 遍历改子节点及兄弟节点 */
 	for (;;) {
 		tmp = *p;
+		/* 如果兄弟节点链表遍历结束
+		   或者当前节点的开始值大于新节点的结束值
+		   即按由小到大的顺序排链
+		   则将新节点@new链入该兄弟节点链表 */
 		if (!tmp || tmp->start > end) {
+			/* 新节点@new插入当前节点前面 */
 			new->sibling = tmp;
+			/* 修改前一项的sibling指针 */
 			*p = new;
+			/* 新节点@new的父指针指向@root */
 			new->parent = root;
+			/* 成功加入，则返回NULL */
 			return NULL;
 		}
 		p = &tmp->sibling;
+		/* 如果当前节点的结束值小于新节点@new的开始值
+		   则继续遍历 */
 		if (tmp->end < start)
 			continue;
+		/* 否则范围冲突，返回冲突节点 */
 		return tmp;
 	}
 }
@@ -243,6 +280,10 @@ struct resource *request_resource_conflict(struct resource *root, struct resourc
  *
  * Returns 0 for success, negative error code on error.
  */
+/*
+在IO端口或IO内存资源中
+申请或预留资源
+*/
 int request_resource(struct resource *root, struct resource *new)
 {
 	struct resource *conflict;
@@ -483,14 +524,18 @@ static struct resource * __insert_resource(struct resource *parent, struct resou
 
 	for (;; parent = first) {
 		first = __request_resource(parent, new);
+		/* 没有冲突，成功链入，则返回NULL */
 		if (!first)
 			return first;
 
+		/* __request_resource()返回了其参数parent
+		   说明无法包含新节点@new */
 		if (first == parent)
 			return first;
 		if (WARN_ON(first == new))	/* duplicated insertion */
 			return first;
 
+		/* 如果冲突节点有可能被包含在@new的范围内 */
 		if ((first->start > new->start) || (first->end < new->end))
 			break;
 		if ((first->start == new->start) && (first->end == new->end))
@@ -539,6 +584,13 @@ static struct resource * __insert_resource(struct resource *parent, struct resou
  * resource is inserted and the conflicting resources become children of
  * the new resource.
  */
+/*
+如果没有冲突的话，这个函数的作用和request_resource_conflict()的功能一样
+
+如果有冲突的话，则会检查新资源是否正好包含其他的资源
+这样新节点@new也会被加入资源树@parent
+冲突的节点会成为新节点@new的子节点
+*/
 struct resource *insert_resource_conflict(struct resource *parent, struct resource *new)
 {
 	struct resource *conflict;
@@ -556,6 +608,11 @@ struct resource *insert_resource_conflict(struct resource *parent, struct resour
  *
  * Returns 0 on success, -EBUSY if the resource can't be inserted.
  */
+/*
+在资源树@parent中加入新的节点@new
+
+成功则返回0
+*/
 int insert_resource(struct resource *parent, struct resource *new)
 {
 	struct resource *conflict;

@@ -86,6 +86,8 @@ extern void default_mpc_oem_bus_info(struct mpc_bus *m, char *str);
 extern void default_find_smp_config(void);
 extern void default_get_smp_config(unsigned int early);
 #else
+/* !CONFIG_X86_MPPARSE */
+
 static inline void early_reserve_e820_mpc_new(void) { }
 #define enable_update_mptable 0
 #define default_mpc_apic_id NULL

@@ -15,6 +15,9 @@
 #define __flush_tlb_single(addr) __native_flush_tlb_single(addr)
 #endif
 
+/*
+通过向cr3寄存器写值来刷新TLB
+*/
 static inline void __native_flush_tlb(void)
 {
 	native_write_cr3(native_read_cr3());
@@ -46,8 +49,12 @@ static inline void __native_flush_tlb_single(unsigned long addr)
 	asm volatile("invlpg (%0)" ::"r" (addr) : "memory");
 }
 
+/*
+刷新TLB
+*/
 static inline void __flush_tlb_all(void)
 {
+	/* Page Global Enable */
 	if (cpu_has_pge)
 		__flush_tlb_global();
 	else

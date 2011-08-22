@@ -171,6 +171,9 @@
 #define PGD_IDENT_ATTR	 0x001		/* PRESENT (no other attributes) */
 #endif
 
+/*
+包含页表类型
+*/
 #ifdef CONFIG_X86_32
 # include "pgtable_32_types.h"
 #else
@@ -182,31 +185,59 @@
 #include <linux/types.h>
 
 /* PTE_PFN_MASK extracts the PFN from a (pte|pmd|pud|pgd)val_t */
+/*
+页表的页框号掩码
+对于4KB页，掩掉了低12bit
+*/
 #define PTE_PFN_MASK		((pteval_t)PHYSICAL_PAGE_MASK)
 
 /* PTE_FLAGS_MASK extracts the flags from a (pte|pmd|pud|pgd)val_t */
+/*
+取低12bit的掩码
+*/
 #define PTE_FLAGS_MASK		(~PTE_PFN_MASK)
 
 typedef struct pgprot { pgprotval_t pgprot; } pgprot_t;
 
+/*
+页全局目录项
+*/
 typedef struct { pgdval_t pgd; } pgd_t;
 
+/*
+把一个指针地址值转换为pgd_t类型
+即将其值放入pgd_t结构中
+*/
 static inline pgd_t native_make_pgd(pgdval_t val)
 {
 	return (pgd_t) { val };
 }
 
+/*
+从pgd_t结构中取出地址值
+*/
 static inline pgdval_t native_pgd_val(pgd_t pgd)
 {
 	return pgd.pgd;
 }
 
+/*
+取低12bit中的标志
+*/
 static inline pgdval_t pgd_flags(pgd_t pgd)
 {
 	return native_pgd_val(pgd) & PTE_FLAGS_MASK;
 }
 
 #if PAGETABLE_LEVELS > 3
+/*
+使用3级以上页表时，比如64位机使用4级页表时
+则需要使用页上级目录
+*/
+
+/*
+页上级目录项
+*/
 typedef struct { pudval_t pud; } pud_t;
 
 static inline pud_t native_make_pud(pmdval_t val)
@@ -219,6 +250,9 @@ static inline pudval_t native_pud_val(pud_t pud)
 	return pud.pud;
 }
 #else
+/*
+3级或以下页表不使用页中间目录
+*/
 #include <asm-generic/pgtable-nopud.h>
 
 static inline pudval_t native_pud_val(pud_t pud)
@@ -228,6 +262,13 @@ static inline pudval_t native_pud_val(pud_t pud)
 #endif
 
 #if PAGETABLE_LEVELS > 2
+/*
+使用2级以上页表时，需要使用页中间目录
+*/
+
+/*
+页中间目录项
+*/
 typedef struct { pmdval_t pmd; } pmd_t;
 
 static inline pmd_t native_make_pmd(pmdval_t val)
@@ -240,6 +281,9 @@ static inline pmdval_t native_pmd_val(pmd_t pmd)
 	return pmd.pmd;
 }
 #else
+/*
+2级页表不需要使用页中间目录
+*/
 #include <asm-generic/pgtable-nopmd.h>
 
 static inline pmdval_t native_pmd_val(pmd_t pmd)

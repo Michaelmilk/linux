@@ -151,6 +151,21 @@ enum fixed_addresses {
 
 extern void reserve_top_address(unsigned long reserve);
 
+/*
+
++-------------------+ <- 4GB
+|		4KB			|
++-------------------+ <- FIXADDR_TOP
+|					|
+| FIXADDR_SIZE		|
++-------------------+ <- FIXADDR_START
+| FIXADDR_BOOT_SIZE |
++-------------------+ <- FIXADDR_BOOT_START
+|					|
+|					|
++-------------------+
+
+*/
 #define FIXADDR_SIZE	(__end_of_permanent_fixed_addresses << PAGE_SHIFT)
 #define FIXADDR_BOOT_SIZE	(__end_of_fixed_addresses << PAGE_SHIFT)
 #define FIXADDR_START		(FIXADDR_TOP - FIXADDR_SIZE)
@@ -186,7 +201,13 @@ static inline void __set_fixmap(enum fixed_addresses idx,
 #define clear_fixmap(idx)			\
 	__set_fixmap(idx, 0, __pgprot(0))
 
+/*
+根据枚举值@x计算其对应的虚拟页面起始地址
+*/
 #define __fix_to_virt(x)	(FIXADDR_TOP - ((x) << PAGE_SHIFT))
+/*
+根据虚拟地址@x计算其对应的枚举值
+*/
 #define __virt_to_fix(x)	((FIXADDR_TOP - ((x)&PAGE_MASK)) >> PAGE_SHIFT)
 
 extern void __this_fixmap_does_not_exist(void);

@@ -579,6 +579,8 @@ static inline int pgd_none(pgd_t pgd)
  */
 /*
 计算地址@address对应的页目录索引
+@address为虚拟地址
+对于2级页表，即取其高10bit的值，为页目录索引
 */
 #define pgd_index(address) (((address) >> PGDIR_SHIFT) & (PTRS_PER_PGD - 1))
 

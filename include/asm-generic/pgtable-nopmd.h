@@ -16,9 +16,15 @@ struct mm_struct;
  */
 typedef struct { pud_t pud; } pmd_t;
 
+/*
+对于2级页表，为22
+*/
 #define PMD_SHIFT	PUD_SHIFT
 #define PTRS_PER_PMD	1
 #define PMD_SIZE  	(1UL << PMD_SHIFT)
+/*
+高10bit
+*/
 #define PMD_MASK  	(~(PMD_SIZE-1))
 
 /*

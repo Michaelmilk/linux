@@ -22,20 +22,25 @@
 
 static struct resource system_rom_resource = {
 	.name	= "System ROM",
+	/* 960K */
 	.start	= 0xf0000,
+	/* 1M - 1 */
 	.end	= 0xfffff,
 	.flags	= IORESOURCE_BUSY | IORESOURCE_READONLY | IORESOURCE_MEM
 };
 
 static struct resource extension_rom_resource = {
 	.name	= "Extension ROM",
+	/* 896K */
 	.start	= 0xe0000,
+	/* 960K - 1 */
 	.end	= 0xeffff,
 	.flags	= IORESOURCE_BUSY | IORESOURCE_READONLY | IORESOURCE_MEM
 };
 
 static struct resource adapter_rom_resources[] = { {
 	.name 	= "Adapter ROM",
+	/* 800K */
 	.start	= 0xc8000,
 	.end	= 0,
 	.flags	= IORESOURCE_BUSY | IORESOURCE_READONLY | IORESOURCE_MEM
@@ -193,6 +198,9 @@ static int __init romchecksum(const unsigned char *rom, unsigned long length)
 	return !length && !sum;
 }
 
+/*
+ÃΩ≤‚‘§¡ÙROM◊ ‘¥
+*/
 void __init probe_roms(void)
 {
 	const unsigned char *rom;

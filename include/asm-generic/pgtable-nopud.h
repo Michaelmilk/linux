@@ -12,9 +12,21 @@
  */
 typedef struct { pgd_t pgd; } pud_t;
 
+/*
+对于2级页表，为22
+*/
 #define PUD_SHIFT	PGDIR_SHIFT
+/*
+没有页上级目录时，则只定义1个指针，以便进行兼容
+*/
 #define PTRS_PER_PUD	1
+/*
+
+*/
 #define PUD_SIZE  	(1UL << PUD_SHIFT)
+/*
+对于2级页表，掩码取高10bit
+*/
 #define PUD_MASK  	(~(PUD_SIZE-1))
 
 /*

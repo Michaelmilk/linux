@@ -7,10 +7,16 @@
  * newer 3-level PAE-mode page tables.
  */
 #ifdef CONFIG_X86_PAE
+/*
+32位下启用了PAE，则使用3级页表
+*/
 # include <asm/pgtable-3level_types.h>
 # define PMD_SIZE	(1UL << PMD_SHIFT)
 # define PMD_MASK	(~(PMD_SIZE - 1))
 #else
+/*
+未启用则使用2级页表
+*/
 # include <asm/pgtable-2level_types.h>
 #endif
 
@@ -24,6 +30,9 @@
  * The vmalloc() routines leaves a hole of 4kB between each vmalloced
  * area for the same reason. ;)
  */
+/*
+vmalloc开始前预留8MB空间
+*/
 #define VMALLOC_OFFSET	(8 * 1024 * 1024)
 
 #ifndef __ASSEMBLY__
@@ -50,6 +59,10 @@ extern bool __vmalloc_start_set; /* set once high_memory is set */
 #define MODULES_END	VMALLOC_END
 #define MODULES_LEN	(MODULES_VADDR - MODULES_END)
 
+/*
+低端物理内存的上限值
+为物理地址
+*/
 #define MAXMEM	(VMALLOC_END - PAGE_OFFSET - __VMALLOC_RESERVE)
 
 #endif /* _ASM_X86_PGTABLE_32_DEFS_H */

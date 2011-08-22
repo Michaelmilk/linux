@@ -356,16 +356,28 @@ static int __init early_ioremap_debug_setup(char *str)
 early_param("early_ioremap_debug", early_ioremap_debug_setup);
 
 static __initdata int after_paging_init;
+/*
+bootmem pte
+一项页表
+*/
 static pte_t bm_pte[PAGE_SIZE/sizeof(pte_t)] __page_aligned_bss;
 
+/*
+@addr	: 虚拟地址
+*/
 static inline pmd_t * __init early_ioremap_pmd(unsigned long addr)
 {
 	/* Don't assume we're using swapper_pg_dir at this point */
+	/* 这里不假定正在使用的是swapper_pg_dir
+	   cr3内为页目录的物理地址 */
 	pgd_t *base = __va(read_cr3());
+	/* 计算页目录项，取得页目录项 */
 	pgd_t *pgd = &base[pgd_index(addr)];
 	pud_t *pud = pud_offset(pgd, addr);
 	pmd_t *pmd = pmd_offset(pud, addr);
 
+	/* 返回页中间目录
+	   对于2级页表，pmd = pud = pgd，3者指向同一个页目录项 */
 	return pmd;
 }
 
@@ -392,8 +404,10 @@ void __init early_ioremap_init(void)
 	for (i = 0; i < FIX_BTMAPS_SLOTS; i++)
 		slot_virt[i] = __fix_to_virt(FIX_BTMAP_BEGIN - NR_FIX_BTMAPS*i);
 
+	/* 计算出FIX_BTMAP_BEGIN所在的页目录项 */
 	pmd = early_ioremap_pmd(fix_to_virt(FIX_BTMAP_BEGIN));
 	memset(bm_pte, 0, sizeof(bm_pte));
+	/* 给固定映射的虚拟地址对应的页目录项分配一个页表 */
 	pmd_populate_kernel(&init_mm, pmd, bm_pte);
 
 	/*
@@ -402,9 +416,13 @@ void __init early_ioremap_init(void)
 	 */
 /* 4G空间的最顶1页 */
 #define __FIXADDR_TOP (-PAGE_SIZE)
+	/* FIX_BTMAP_BEGIN与FIX_BTMAP_END应该在同一个页目录项内
+	   即应该在同一个页表中 */
 	BUILD_BUG_ON((__fix_to_virt(FIX_BTMAP_BEGIN) >> PMD_SHIFT)
 		     != (__fix_to_virt(FIX_BTMAP_END) >> PMD_SHIFT));
 #undef __FIXADDR_TOP
+	/* 计算出FIX_BTMAP_END所在的页目录项
+	   并与FIX_BTMAP_BEGIN的进行比较 */
 	if (pmd != early_ioremap_pmd(fix_to_virt(FIX_BTMAP_END))) {
 		WARN_ON(1);
 		printk(KERN_WARNING "pmd %p != %p\n",

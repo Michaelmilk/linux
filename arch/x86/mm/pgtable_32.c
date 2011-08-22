@@ -19,6 +19,9 @@
 #include <asm/tlbflush.h>
 #include <asm/io.h>
 
+/*
+128MB
+*/
 unsigned int __VMALLOC_RESERVE = 128 << 20;
 
 /*
@@ -95,6 +98,10 @@ void set_pmd_pfn(unsigned long vaddr, unsigned long pfn, pgprot_t flags)
 	__flush_tlb_one(vaddr);
 }
 
+/*
+专用页面映射区的虚拟地址上限
+最顶的4KB为预留区
+*/
 unsigned long __FIXADDR_TOP = 0xfffff000;
 EXPORT_SYMBOL(__FIXADDR_TOP);
 

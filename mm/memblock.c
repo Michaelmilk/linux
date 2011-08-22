@@ -410,6 +410,9 @@ static long __init_memblock memblock_add_region(struct memblock_type *type,
 	return 0;
 }
 
+/*
+加入全局变量memblock的字段memory类型中
+*/
 long __init_memblock memblock_add(phys_addr_t base, phys_addr_t size)
 {
 	return memblock_add_region(&memblock.memory, base, size);
@@ -763,6 +766,22 @@ static void __init_memblock memblock_dump(struct memblock_type *region, char *na
 	}
 }
 
+/*
+打印出memblock中的信息
+
+例如对于1台512MB内存的机器，将可能输出
+
+MEMBLOCK configuration:
+ memory size = 0x1ff7f800
+ memory.cnt  = 0x3
+ memory[0x0]    [0x00000000010000-0x0000000009f7ff], 0x8f800 bytes
+ memory[0x1]    [0x00000000100000-0x0000001feeffff], 0x1fdf0000 bytes
+ memory[0x2]    [0x0000001ff00000-0x0000001fffffff], 0x100000 bytes
+ reserved.cnt  = 0x3
+ reserved[0x0]  [0x0000000009f800-0x000000000fffff], 0x60800 bytes
+ reserved[0x1]  [0x00000001000000-0x000000015cf1bf], 0x5cf1c0 bytes
+ reserved[0x2]  [0x0000001d781000-0x0000001fedffff], 0x275f000 bytes
+*/
 void __init_memblock memblock_dump_all(void)
 {
 	if (!memblock_debug)
@@ -829,6 +848,7 @@ void __init memblock_init(void)
 	memblock.reserved.regions[0].size = 0;
 	memblock.reserved.cnt = 1;
 
+	/* 上限初始化为最大值 */
 	memblock.current_limit = MEMBLOCK_ALLOC_ANYWHERE;
 }
 

@@ -162,6 +162,9 @@ static inline bool is_ISA_range(u64 s, u64 e)
 #ifdef __KERNEL__
 #include <linux/ioport.h>
 
+/*
+1MB
+*/
 #define HIGH_MEMORY	(1024*1024)
 #endif /* __KERNEL__ */
 

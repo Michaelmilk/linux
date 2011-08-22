@@ -4812,6 +4812,20 @@ static void check_for_regular_memory(pg_data_t *pgdat)
  * starts where the previous one ended. For example, ZONE_DMA32 starts
  * at arch_max_dma_pfn.
  */
+/*
+
+打印各区信息，例如:
+
+Zone PFN ranges:
+  DMA      0x00000010 -> 0x00001000
+  Normal   0x00001000 -> 0x00020000
+  HighMem  empty
+Movable zone start PFN for each node
+early_node_map[3] active PFN ranges
+    0: 0x00000010 -> 0x0000009f
+    0: 0x00000100 -> 0x0001fef0
+    0: 0x0001ff00 -> 0x00020000
+*/
 void __init free_area_init_nodes(unsigned long *max_zone_pfn)
 {
 	unsigned long nid;

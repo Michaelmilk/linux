@@ -37,7 +37,13 @@
  * user can e.g. boot the original kernel with mem=1G while still booting the
  * next kernel with full memory.
  */
+/*
+e820在函数setup_memory_map()中处理赋值
+*/
 struct e820map e820;
+/*
+e820_saved在函数setup_memory_map()中复制e820
+*/
 struct e820map e820_saved;
 
 /* For PCI or other memory-mapped resources */
@@ -424,6 +430,9 @@ static int __init __append_e820_map(struct e820entry *biosmap, int nr_map)
  * will have given us a memory map that we can use to properly
  * set up memory.  If we aren't, we'll fake a memory map.
  */
+/*
+将@biosmap映射到全局变量e820中
+*/
 static int __init append_e820_map(struct e820entry *biosmap, int nr_map)
 {
 	/* Only one memory region (or negative)? Ignore it */
@@ -778,6 +787,9 @@ u64 __init early_reserve_e820(u64 startt, u64 sizet, u64 align)
 	return addr;
 }
 
+/*
+该架构能够处理的最大页框号
+*/
 #ifdef CONFIG_X86_32
 # ifdef CONFIG_X86_PAE
 #  define MAX_ARCH_PFN		(1ULL<<(36-PAGE_SHIFT))
@@ -797,6 +809,7 @@ static unsigned long __init e820_end_pfn(unsigned long limit_pfn, unsigned type)
 	unsigned long last_pfn = 0;
 	unsigned long max_arch_pfn = MAX_ARCH_PFN;
 
+	/* 遍历寻找最大的页框号 */
 	for (i = 0; i < e820.nr_map; i++) {
 		struct e820entry *ei = &e820.map[i];
 		unsigned long start_pfn;
@@ -818,6 +831,7 @@ static unsigned long __init e820_end_pfn(unsigned long limit_pfn, unsigned type)
 			last_pfn = end_pfn;
 	}
 
+	/* 即使实际的物理内存很大，但是不能处理超过架构能力之外的页框 */
 	if (last_pfn > max_arch_pfn)
 		last_pfn = max_arch_pfn;
 
@@ -825,6 +839,11 @@ static unsigned long __init e820_end_pfn(unsigned long limit_pfn, unsigned type)
 			 last_pfn, max_arch_pfn);
 	return last_pfn;
 }
+
+/*
+根据E820读取到的内存列表信息
+计算架构允许的物理内存最大页框号
+*/
 unsigned long __init e820_end_of_ram_pfn(void)
 {
 	return e820_end_pfn(MAX_ARCH_PFN, E820_RAM);
@@ -1083,6 +1102,25 @@ char *__init default_machine_specific_memory_setup(void)
 
 /*
 把setup引导期间使用bios中断获取的e820信息映射到全局变量e820中
+
+并打印出e820中的信息
+
+例如对于1台512MB内存的机器，将可能输出
+
+BIOS-provided physical RAM map:
+ BIOS-e820: 0000000000000000 - 000000000009f800 (usable)
+ BIOS-e820: 000000000009f800 - 00000000000a0000 (reserved)
+ BIOS-e820: 00000000000ca000 - 00000000000cc000 (reserved)
+ BIOS-e820: 00000000000dc000 - 00000000000e4000 (reserved)
+ BIOS-e820: 00000000000e8000 - 0000000000100000 (reserved)
+ BIOS-e820: 0000000000100000 - 000000001fef0000 (usable)
+ BIOS-e820: 000000001fef0000 - 000000001feff000 (ACPI data)
+ BIOS-e820: 000000001feff000 - 000000001ff00000 (ACPI NVS)
+ BIOS-e820: 000000001ff00000 - 0000000020000000 (usable)
+ BIOS-e820: 00000000e0000000 - 00000000f0000000 (reserved)
+ BIOS-e820: 00000000fec00000 - 00000000fec10000 (reserved)
+ BIOS-e820: 00000000fee00000 - 00000000fee01000 (reserved)
+ BIOS-e820: 00000000fffe0000 - 0000000100000000 (reserved)
 */
 void __init setup_memory_map(void)
 {
@@ -1096,6 +1134,9 @@ void __init setup_memory_map(void)
 	e820_print_map(who);
 }
 
+/*
+把e820中的内存加入memblock中
+*/
 void __init memblock_x86_fill(void)
 {
 	int i;

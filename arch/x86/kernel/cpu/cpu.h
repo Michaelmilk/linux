@@ -9,6 +9,10 @@ struct cpu_model_info {
 };
 
 /* attempt to consolidate cpu attributes */
+/*
+consolidate: 合并
+用来描述cpu硬件信息
+*/
 struct cpu_dev {
 	const char	*c_vendor;
 

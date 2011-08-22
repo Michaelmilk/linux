@@ -24,6 +24,9 @@ enum cpuid_regs {
 	CR_EBX
 };
 
+/*
+scatter: ·ÖÉ¢
+*/
 void __cpuinit init_scattered_cpuid_features(struct cpuinfo_x86 *c)
 {
 	u32 max_level;

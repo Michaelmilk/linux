@@ -81,6 +81,11 @@ static const struct cpu_dev __cpuinitconst default_cpu = {
 	.c_x86_vendor	= X86_VENDOR_UNKNOWN,
 };
 
+/*
+在get_cpu_vendor()赋值
+用来指向当前cpu厂商结构
+例如指向intel_cpu_dev
+*/
 static const struct cpu_dev *this_cpu __cpuinitdata = &default_cpu;
 
 DEFINE_PER_CPU_PAGE_ALIGNED(struct gdt_page, gdt_page) = { .gdt = {
@@ -240,6 +245,8 @@ static int __init x86_serial_nr_setup(char *s)
 }
 __setup("serialnumber", x86_serial_nr_setup);
 #else
+/* !CONFIG_X86_32 */
+
 static inline int flag_is_changeable_p(u32 flag)
 {
 	return 1;
@@ -513,6 +520,8 @@ static void __cpuinit get_cpu_vendor(struct cpuinfo_x86 *c)
 		    (cpu_devs[i]->c_ident[1] &&
 		     !strcmp(v, cpu_devs[i]->c_ident[1]))) {
 
+			/* 使用this_cpu记录cpu厂商结构
+			   例如指向intel_cpu_dev */
 			this_cpu = cpu_devs[i];
 			c->x86_vendor = this_cpu->c_x86_vendor;
 			return;
@@ -557,6 +566,9 @@ void __cpuinit cpu_detect(struct cpuinfo_x86 *c)
 	}
 }
 
+/*
+获取cpu的能力信息
+*/
 void __cpuinit get_cpu_cap(struct cpuinfo_x86 *c)
 {
 	u32 tfms, xlvl;
@@ -643,6 +655,10 @@ static void __cpuinit identify_cpu_without_cpuid(struct cpuinfo_x86 *c)
  * WARNING: this function is only called on the BP.  Don't add code here
  * that is supposed to run on all CPUs.
  */
+/*
+匹配cpu厂商
+使用汇编指令cpuid从cpu硬件上读取一些信息来初始化@c中的一些字段
+*/
 static void __init early_identify_cpu(struct cpuinfo_x86 *c)
 {
 #ifdef CONFIG_X86_64
@@ -651,7 +667,9 @@ static void __init early_identify_cpu(struct cpuinfo_x86 *c)
 	c->x86_virt_bits = 48;
 #else
 	c->x86_clflush_size = 32;
+	/* 物理地址线数 */
 	c->x86_phys_bits = 32;
+	/* 虚拟地址位数 */
 	c->x86_virt_bits = 32;
 #endif
 	c->x86_cache_alignment = c->x86_clflush_size;
@@ -672,6 +690,9 @@ static void __init early_identify_cpu(struct cpuinfo_x86 *c)
 
 	get_cpu_cap(c);
 
+	/* 调用cpu的初始化函数
+	   例如intel的cpu，this_cpu指向结构intel_cpu_dev
+	   则调用early_init_intel() */
 	if (this_cpu->c_early_init)
 		this_cpu->c_early_init(c);
 
@@ -683,6 +704,11 @@ static void __init early_identify_cpu(struct cpuinfo_x86 *c)
 	setup_smep(c);
 }
 
+/*
+先准备好全局指针数组cpu_devs[]中各项厂商结构指针
+然后匹配cpu
+填充boot_cpu_data中一些字段的值
+*/
 void __init early_cpu_init(void)
 {
 	const struct cpu_dev *const *cdev;
@@ -692,11 +718,16 @@ void __init early_cpu_init(void)
 	printk(KERN_INFO "KERNEL supported cpus:\n");
 #endif
 
+	/* 遍历cpu硬件信息，__x86_cpu_dev_start与__x86_cpu_dev_end之间的指针
+	   由宏cpu_dev_register定义 */
 	for (cdev = __x86_cpu_dev_start; cdev < __x86_cpu_dev_end; cdev++) {
 		const struct cpu_dev *cpudev = *cdev;
 
+		/* 不超过已知的厂商个数 */
 		if (count >= X86_VENDOR_NUM)
 			break;
+		/* 使用全局变量cpu_devs[]记录各个厂商cpu的结构实例
+		   例如: intel_cpu_dev */
 		cpu_devs[count] = cpudev;
 		count++;
 

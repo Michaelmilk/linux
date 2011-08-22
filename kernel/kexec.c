@@ -1339,6 +1339,9 @@ static int __init parse_crashkernel_simple(char 		*cmdline,
  * That function is the entry point for command line parsing and should be
  * called from the arch-specific code.
  */
+/*
+解析命令行参数crashkernel=
+*/
 int __init parse_crashkernel(char 		 *cmdline,
 			     unsigned long long system_ram,
 			     unsigned long long *crash_size,

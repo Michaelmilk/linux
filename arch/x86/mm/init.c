@@ -117,6 +117,12 @@ static int __meminit save_mr(struct map_range *mr, int nr_range,
  * This runs before bootmem is initialized and gets pages directly from
  * the physical memory. To access them they are temporarily mapped.
  */
+/*
+将直接映射的小于896MB的常规内存映射页表中
+
+@start	: 物理地址
+@end	: 物理地址
+*/
 unsigned long __init_refok init_memory_mapping(unsigned long start,
 					       unsigned long end)
 {

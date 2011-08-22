@@ -120,7 +120,17 @@
  * The direct mapping extends to max_pfn_mapped, so that we can directly access
  * apertures, ACPI and other tables without having to play with fixmaps.
  */
+/*
+aperture: 空隙
+
+常规内存中直接映射到页表的最大页框号
+*/
 unsigned long max_low_pfn_mapped;
+/*
+initial_page_table中已经映射的最大页框号
+max_pfn_mapped在arch/x86/kernel/head_32.S中被赋值
+然后在setup_arch()中更新该值
+*/
 unsigned long max_pfn_mapped;
 
 #ifdef CONFIG_DMI
@@ -214,6 +224,8 @@ struct ist_info ist_info;
 #endif
 
 #else
+/* !CONFIG_X86_32 */
+
 struct cpuinfo_x86 boot_cpu_data __read_mostly = {
 	.x86_phys_bits = MAX_PHYSMEM_BITS,
 };
@@ -242,8 +254,17 @@ extern int root_mountflags;
 
 unsigned long saved_video_mode;
 
+/*
+0x07FF = 2047
+*/
 #define RAMDISK_IMAGE_START_MASK	0x07FF
+/*
+0x8000 = 32K
+*/
 #define RAMDISK_PROMPT_FLAG		0x8000
+/*
+0x4000 = 16K
+*/
 #define RAMDISK_LOAD_FLAG		0x4000
 
 static char __initdata command_line[COMMAND_LINE_SIZE];
@@ -324,6 +345,10 @@ static void __init reserve_brk(void)
 #ifdef CONFIG_BLK_DEV_INITRD
 
 #define MAX_MAP_CHUNK	(NR_FIX_BTMAPS << PAGE_SHIFT)
+/*
+将高端内存中的RAMDISK进行重定向
+移动到常规内存中
+*/
 static void __init relocate_initrd(void)
 {
 	/* Assume only end is not page aligned */
@@ -411,6 +436,7 @@ static void __init reserve_initrd(void)
 			ramdisk_end);
 
 
+	/* RAMDISK都在常规内存中 */
 	if (ramdisk_end <= end_of_lowmem) {
 		/* All in lowmem, easy case */
 		/*
@@ -432,13 +458,19 @@ static void __init reserve_initrd(void)
 }
 #endif /* CONFIG_BLK_DEV_INITRD */
 
+/*
+解析使用struct setup_data链表组织的setup数据
+*/
 static void __init parse_setup_data(void)
 {
 	struct setup_data *data;
 	u64 pa_data;
 
+	/* 引导协议2.09以前不支持 */
 	if (boot_params.hdr.version < 0x0209)
 		return;
+	/* 取得setup_data的物理地址，链表起点
+	   对于hdr.setup_data字段参考Documentation/x86/boot.txt */
 	pa_data = boot_params.hdr.setup_data;
 	while (pa_data) {
 		u32 data_len, map_len;
@@ -489,6 +521,7 @@ static void __init e820_reserve_setup_data(void)
 		return;
 
 	sanitize_e820_map(e820.map, ARRAY_SIZE(e820.map), &e820.nr_map);
+	/* 也更新e820_saved */
 	memcpy(&e820_saved, &e820, sizeof(struct e820map));
 	printk(KERN_INFO "extended physical RAM map:\n");
 	e820_print_map("reserve setup_data");
@@ -539,6 +572,9 @@ static inline unsigned long long get_total_mem(void)
 # define CRASH_KERNEL_ADDR_MAX	(896 << 20)
 #endif
 
+/*
+为Kdump机制预留crash kernel空间
+*/
 static void __init reserve_crashkernel(void)
 {
 	unsigned long long total_mem;
@@ -637,6 +673,9 @@ static __init void reserve_ibft_region(void)
 		memblock_x86_reserve_range(addr, addr + size, "* ibft");
 }
 
+/*
+低内存(1MB以下)预留的大小
+*/
 static unsigned reserve_low = CONFIG_X86_RESERVE_LOW << 10;
 
 static void __init trim_bios_range(void)
@@ -650,6 +689,8 @@ static void __init trim_bios_range(void)
 	 * since some BIOSes are known to corrupt low memory.  See the
 	 * Kconfig help text for X86_RESERVE_LOW.
 	 */
+	/* 预留前64KB
+	   这段内存属于BIOS，但通常没有列入E820读取的列表中 */
 	e820_update_range(0, ALIGN(reserve_low, PAGE_SIZE),
 			  E820_RAM, E820_RESERVED);
 
@@ -700,6 +741,9 @@ early_param("reservelow", parse_reservelow);
 void __init setup_arch(char **cmdline_p)
 {
 #ifdef CONFIG_X86_32
+	/* new_cpu_data和boot_cpu_data都定义在本文件
+	   new_cpu_data部分字段由arch/x86/kernel/head_32.S中的汇编码填充
+  	   将cpu信息复制到boot_cpu_data中 */
 	memcpy(&boot_cpu_data, &new_cpu_data, sizeof(new_cpu_data));
 	visws_early_detect();
 
@@ -707,7 +751,8 @@ void __init setup_arch(char **cmdline_p)
 	 * copy kernel address range established so far and switch
 	 * to the proper swapper page table
 	 */
-	/* 复制内核使用的1G内存所对应的256项页目录到swapper_pg_dir中 */
+	/* 复制内核使用的1G内存所对应的256项页目录到swapper_pg_dir中
+	   initial_page_table和swapper_pg_dir都定义在arch/x86/kernel/head_32.S中 */
 	clone_pgd_range(swapper_pg_dir     + KERNEL_PGD_BOUNDARY,
 			initial_page_table + KERNEL_PGD_BOUNDARY,
 			KERNEL_PGD_PTRS);
@@ -760,6 +805,7 @@ void __init setup_arch(char **cmdline_p)
 	rd_prompt = ((boot_params.hdr.ram_size & RAMDISK_PROMPT_FLAG) != 0);
 	rd_doload = ((boot_params.hdr.ram_size & RAMDISK_LOAD_FLAG) != 0);
 #endif
+	/* EFI: Extensible Firmware Interface 可扩展固件接口 */
 #ifdef CONFIG_EFI
 	if (!strncmp((char *)&boot_params.efi_info.efi_loader_signature,
 #ifdef CONFIG_X86_32
@@ -776,6 +822,8 @@ void __init setup_arch(char **cmdline_p)
 	/* 调用x86_init_noop()函数 */
 	x86_init.oem.arch_setup();
 
+	/* 设置iomem的上限，受cpu的地址线数量限制
+	   x86_phys_bits在early_identify_cpu()中被设置为32 */
 	iomem_resource.end = (1ULL << boot_cpu_data.x86_phys_bits) - 1;
 	setup_memory_map();
 	parse_setup_data();
@@ -850,6 +898,8 @@ void __init setup_arch(char **cmdline_p)
 	if (efi_enabled)
 		efi_init();
 
+	/* DMI: Desktop Management Interface
+	   桌面管理接口，包括硬件信息和BIOS */
 	dmi_scan_machine();
 
 	/*
@@ -862,6 +912,7 @@ void __init setup_arch(char **cmdline_p)
 	x86_init.resources.probe_roms();
 
 	/* after parse_early_param, so could debug it */
+	/* 将节点加入iomem资源树 */
 	insert_resource(&iomem_resource, &code_resource);
 	insert_resource(&iomem_resource, &data_resource);
 	insert_resource(&iomem_resource, &bss_resource);
@@ -883,6 +934,7 @@ void __init setup_arch(char **cmdline_p)
 	 * partially used pages are not usable - thus
 	 * we are rounding upwards:
 	 */
+	/* 实际存在并架构允许的物理内存最大页框号 */
 	max_pfn = e820_end_of_ram_pfn();
 
 	/* update e820 for memory not covered by WB MTRRs */
@@ -984,6 +1036,8 @@ void __init setup_arch(char **cmdline_p)
 	/*
 	 * Parse the ACPI tables for possible boot-time SMP configuration.
 	 */
+	/* ACPI: Advanced Configuration and Power Management Interface
+			 高级配置和电源管理接口 */
 	acpi_boot_table_init();
 
 	early_acpi_boot_init();
@@ -1019,6 +1073,8 @@ void __init setup_arch(char **cmdline_p)
 	map_vsyscall();
 #endif
 
+	/* APIC: Advanced Programmable Interrupt Controller
+			 高级可编程中断控制器 */
 	generic_apic_probe();
 
 	early_quirks();

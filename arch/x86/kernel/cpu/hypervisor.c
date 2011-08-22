@@ -63,6 +63,9 @@ void __cpuinit init_hypervisor(struct cpuinfo_x86 *c)
 		x86_hyper->set_cpu_features(c);
 }
 
+/*
+hypervisor: 系统管理程序
+*/
 void __init init_hypervisor_platform(void)
 {
 
@@ -73,6 +76,8 @@ void __init init_hypervisor_platform(void)
 
 	init_hypervisor(&boot_cpu_data);
 
+	/* 例如探测后x86_hyper指向x86_hyper_vmware
+	   则调用vmware_platform_setup() */
 	if (x86_hyper->init_platform)
 		x86_hyper->init_platform();
 }

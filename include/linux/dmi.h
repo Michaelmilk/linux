@@ -108,6 +108,7 @@ extern int dmi_walk(void (*decode)(const struct dmi_header *, void *),
 extern bool dmi_match(enum dmi_field f, const char *str);
 
 #else
+/* !CONFIG_DMI */
 
 static inline int dmi_check_system(const struct dmi_system_id *list) { return 0; }
 static inline const char * dmi_get_system_info(int field) { return NULL; }

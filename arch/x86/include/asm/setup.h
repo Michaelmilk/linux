@@ -11,6 +11,10 @@
 /*
  * Reserved space for vmalloc and iomap - defined in asm/page.h
  */
+/*
+MAXMEM所在的页框号
+简单的认为是896MB对应的页框号
+*/
 #define MAXMEM_PFN	PFN_DOWN(MAXMEM)
 #define MAX_NONPAE_PFN	(1 << 20)
 
@@ -70,6 +74,9 @@ extern struct boot_params boot_params;
  * Do NOT EVER look at the BIOS memory size location.
  * It does not work on many machines.
  */
+/*
+636KB
+*/
 #define LOWMEMSIZE()	(0x9f000)
 
 /* exceedingly early brk-like allocator */

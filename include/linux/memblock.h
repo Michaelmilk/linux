@@ -40,7 +40,9 @@ struct memblock_type {
 记录物理内存使用情况
 */
 struct memblock {
+	/* 该字段的值在setup_arch()中由get_max_mapped()获取 */
 	phys_addr_t current_limit;
+	/* 该字段的值在函数memblock_analyze()中更新 */
 	phys_addr_t memory_size;	/* Updated by memblock_analyze() */
 	/* 标记可用内存区域 */
 	struct memblock_type memory;

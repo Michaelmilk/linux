@@ -384,6 +384,9 @@ static inline pte_t *kmap_get_fixmap_pte(unsigned long vaddr)
 			vaddr), vaddr), vaddr);
 }
 
+/*
+专用页面映射区
+*/
 static void __init kmap_init(void)
 {
 	unsigned long kmap_vstart;
@@ -398,6 +401,9 @@ static void __init kmap_init(void)
 }
 
 #ifdef CONFIG_HIGHMEM
+/*
+高端内存映射区
+*/
 static void __init permanent_kmaps_init(pgd_t *pgd_base)
 {
 	unsigned long vaddr;
@@ -533,6 +539,10 @@ pteval_t __supported_pte_mask __read_mostly = ~(_PAGE_NX | _PAGE_GLOBAL | _PAGE_
 EXPORT_SYMBOL_GPL(__supported_pte_mask);
 
 /* user-defined highmem size */
+/*
+命令行参数配置的高端内存大小
+转换为页个数
+*/
 static unsigned int highmem_pages = -1;
 
 /*
@@ -560,20 +570,28 @@ early_param("highmem", parse_highmem);
  * artificially via the highmem=x boot parameter then create
  * it:
  */
+/*
+所有的物理内存都为常规内存
+但是如果命令行参数配置了highmem
+则从常规内存中创建高端内存
+*/
 void __init lowmem_pfn_init(void)
 {
 	/* max_low_pfn is 0, we already have early_res support */
+	/* 记录常规内存最大页框号 */
 	max_low_pfn = max_pfn;
 
 	if (highmem_pages == -1)
 		highmem_pages = 0;
 #ifdef CONFIG_HIGHMEM
+	/* 超过了物理内存 */
 	if (highmem_pages >= max_pfn) {
 		printk(KERN_ERR MSG_HIGHMEM_TOO_BIG,
 			pages_to_mb(highmem_pages), pages_to_mb(max_pfn));
 		highmem_pages = 0;
 	}
 	if (highmem_pages) {
+		/* 留给常规内存的大小不能小于64MB */
 		if (max_low_pfn - highmem_pages < 64*1024*1024/PAGE_SIZE) {
 			printk(KERN_ERR MSG_LOWMEM_TOO_SMALL,
 				pages_to_mb(highmem_pages));
@@ -596,8 +614,12 @@ void __init lowmem_pfn_init(void)
  * We have more RAM than fits into lowmem - we try to put it into
  * highmem, also taking the highmem=x boot parameter into account:
  */
+/*
+物理内存大于常规内存896MB
+*/
 void __init highmem_pfn_init(void)
 {
+	/* 常规内存对应的最大页框号 */
 	max_low_pfn = MAXMEM_PFN;
 
 	if (highmem_pages == -1)
@@ -619,9 +641,14 @@ void __init highmem_pfn_init(void)
 		printk(KERN_WARNING "Use a HIGHMEM64G enabled kernel.\n");
 	else
 		printk(KERN_WARNING "Use a HIGHMEM enabled kernel.\n");
+	/* 如果没有配置CONFIG_HIGHMEM的话
+	   则会截断，只能使用到896MB */
 	max_pfn = MAXMEM_PFN;
 #else /* !CONFIG_HIGHMEM */
 #ifndef CONFIG_HIGHMEM64G
+	/* 如果没有配置CONFIG_HIGHMEM64G的话
+	   那么最大页框号不会超过4GB对应的页框号
+	   超过了则截断，只能处理到4GB */
 	if (max_pfn > MAX_NONPAE_PFN) {
 		max_pfn = MAX_NONPAE_PFN;
 		printk(KERN_WARNING MSG_HIGHMEM_TRIMMED);
@@ -633,17 +660,39 @@ void __init highmem_pfn_init(void)
 /*
  * Determine low and high memory ranges:
  */
+/*
+根据配置
+重新调整
+设置常规内存最大页框号max_low_pfn
+设置可以使用的物理内存最大页框号max_pfn
+*/
 void __init find_low_pfn_range(void)
 {
 	/* it could update max_pfn */
 
+	/* 物理内存小于常规内存896MB */
 	if (max_pfn <= MAXMEM_PFN)
 		lowmem_pfn_init();
+	/* 大于896MB */
 	else
 		highmem_pfn_init();
 }
 
 #ifndef CONFIG_NEED_MULTIPLE_NODES
+/*
+物理内存
++---------------+ <- max_pfn 		highend_pfn		num_physpages
+|				|
+|				|
+|				| <- max_low_pfn 	highstart_pfn
+|				|
+|				|
+|				|
+|				|
++---------------+
+
+
+*/
 void __init initmem_init(void)
 {
 #ifdef CONFIG_HIGHMEM
@@ -655,6 +704,7 @@ void __init initmem_init(void)
 	printk(KERN_NOTICE "%ldMB HIGHMEM available.\n",
 		pages_to_mb(highend_pfn - highstart_pfn));
 	num_physpages = highend_pfn;
+	/* 高端内存开始的虚拟地址 */
 	high_memory = (void *) __va(highstart_pfn * PAGE_SIZE - 1) + 1;
 #else
 	memblock_x86_register_active_regions(0, 0, max_low_pfn);
@@ -676,6 +726,7 @@ void __init initmem_init(void)
 
 static void __init zone_sizes_init(void)
 {
+	/* 各个区中最大的页框号 */
 	unsigned long max_zone_pfns[MAX_NR_ZONES];
 	memset(max_zone_pfns, 0, sizeof(max_zone_pfns));
 #ifdef CONFIG_ZONE_DMA

@@ -184,6 +184,8 @@ void __init setup_per_cpu_areas(void)
 	 * sparse unit mapping and vmalloc area isn't spacious enough
 	 * on 32bit.  Use page in that case.
 	 */
+	/* sparse: ·ÖÉ¢µÄ
+	   spacious: ¿í³¨µÄ */
 #ifdef CONFIG_X86_32
 	if (pcpu_chosen_fc == PCPU_FC_AUTO && pcpu_need_numa())
 		pcpu_chosen_fc = PCPU_FC_PAGE;

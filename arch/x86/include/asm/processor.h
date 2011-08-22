@@ -646,6 +646,7 @@ static inline void cpuid(unsigned int op,
 {
 	*eax = op;
 	*ecx = 0;
+	/* 没有配置CONFIG_PARAVIRT时，调用native_cpuid() */
 	__cpuid(eax, ebx, ecx, edx);
 }
 

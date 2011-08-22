@@ -10,6 +10,9 @@
 
 #include "do_mounts.h"
 
+/*
+RAMDISK的起始虚拟地址
+*/
 unsigned long initrd_start, initrd_end;
 int initrd_below_start_ok;
 unsigned int real_root_dev;	/* do_proc_dointvec cannot handle kdev_t */
