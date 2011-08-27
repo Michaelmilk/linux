@@ -86,6 +86,9 @@ STATIC int INIT gunzip(unsigned char *buf, int len,
 		len = fill(zbuf, GZIP_IOBUF_SIZE);
 
 	/* verify the gzip header */
+	/* 检查压缩文件的头
+	   查看arch/x86/boot/compressed/vmlinux.bin.gz的2进制文件
+	   前3个字节为0x1f 0x8b 0x08 */
 	if (len < 10 ||
 	   zbuf[0] != 0x1f || zbuf[1] != 0x8b || zbuf[2] != 0x08) {
 		if (pos)
