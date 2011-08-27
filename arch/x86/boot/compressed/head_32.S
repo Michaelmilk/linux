@@ -41,6 +41,12 @@
 由grub复制在物理地址0x100000处
 */
 
+/*
+__HEAD在include/linux/init.h内定义为
+#define __HEAD		.section	".head.text","ax"
+所以下面这段代码是连接在arch/x86/boot/compressed/vmlinux.lds.S中.head.text节的
+*/
+
 	__HEAD
 ENTRY(startup_32)
 	/* 对连接好的arch/x86/boot/compressed/vmlinux使用objdump -d得到的信息
@@ -59,7 +65,8 @@ ENTRY(startup_32)
 
 	/* 清除IF标志，关闭中断 */
 	cli
-	/* 引导数据段放入eax寄存器
+	/* 引导数据段选择子放入eax寄存器
+	   这里已经进入保护模式了
 	   __BOOT_DS定义在arch/x86/include/asm/segment.h中
 	   参考Documentation/x86/boot.txt */
 	movl	$__BOOT_DS, %eax
@@ -105,6 +112,12 @@ ENTRY(startup_32)
  */
 
 /*
+此时%ebp内的值为boot loader加载内核的物理地址
+下面会计算一个临时地址存入%ebx内
+该临时地址保存未解压的代码
+*/
+
+/*
 relocate : 迁移
 根据内核不同的配置做不同的处理
 计算解压后内核代码的物理地址
@@ -147,6 +160,15 @@ relocate : 迁移
  * where decompression in place becomes safe.
  */
 
+/*
+-------------------------------------------------------------------------
+      ^        ^   alignment ^  z_extract_offset  ^ 未解压代码 ^     ^
+  0x100000    _bss                                            _bss
+     %ebp     %esi                               %ebx         %edi  %esp
+
+
+*/
+
 	/* esi内为全局变量boot_params的指针 */
 	pushl	%esi
 	leal	(_bss-4)(%ebp), %esi
@@ -158,7 +180,7 @@ relocate : 迁移
 	/* std: set direction flag
 	   从后往前移动 */
 	std
-	/* 重复执行，开始移动代码 */
+	/* 重复执行，开始复制代码 */
 	rep	movsl
 	cld
 	/* 出栈，%esi依然指向全局变量boot_params */
@@ -189,20 +211,30 @@ relocated:
 	leal	_bss(%ebx), %edi
 	leal	_ebss(%ebx), %ecx
 	subl	%edi, %ecx
+	/* 计算循环次数 */
 	shrl	$2, %ecx
+	/* 将%eax内的值，即0，存入%edi指向的空间，%edi默认使用附加段%es
+	   达到bss清0的效果 */
 	rep	stosl
 
 /*
  * Adjust our own GOT
  */
+/*
+将%ebx中的值加到_got与_egot之间的每个值上
+*/
 	leal	_got(%ebx), %edx
 	leal	_egot(%ebx), %ecx
 1:
 	cmpl	%ecx, %edx
-	/* jae: jump if above or equel */
+	/* jae: jump if above or equel
+	   作为循环结束的条件 */
 	jae	2f
+	/* 将值增加%ebs */
 	addl	%ebx, (%edx)
+	/* 每次循环后移4个字节 */
 	addl	$4, %edx
+	/* 循环，继续加 */
 	jmp	1b
 2:
 
@@ -218,6 +250,17 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 				  unsigned char *output)
 在栈中准备decompress_kernel()函数的参数
 然后调用decompress_kernel()函数
+
+这里为函数传递的参数值
+参考arch/x86/boot/compressed/mkpiggy.c
+*/
+
+/*
+---------------------------------------------------------
+      ^                  ^                ^ 未解压代码 ^
+  0x100000             output             X
+                        %ebp            %ebx
+
 */
 
 	/* %ebx为临时的包含未解压代码的起始地址
@@ -230,8 +273,10 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 	/* 压缩文件的地址 */
 	leal	input_data(%ebx), %eax
 	pushl	%eax		/* input_data */
+	/* 取boot_heap的物理地址 */
 	leal	boot_heap(%ebx), %eax
 	pushl	%eax		/* heap area */
+	/* %esi内为全局变量boot_params的指针 */
 	pushl	%esi		/* real mode pointer */
 
 	/* 调用decompress_kernel()函数 */
@@ -246,6 +291,7 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 /*
  * Find the address of the relocations.
  */
+ 	/* z_output_len为解压后文件的长度 */
 	leal	z_output_len(%ebp), %edi
 
 /*
@@ -253,12 +299,17 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
  * and where it was actually loaded.
  */
 	movl	%ebp, %ebx
+	/* %ebx - $LOAD_PHYSICAL_ADDR */
 	subl	$LOAD_PHYSICAL_ADDR, %ebx
+	/* 如果EFLAGS中的zero位为0
+	   即2者相等的话，则什么也不用干，直接跳至标号2f处
+	   否则就需要进行代码移动 */
 	jz	2f	/* Nothing to be done if loaded at compiled addr. */
 /*
  * Process relocations.
  */
 
+	/* 递减，从后往前复制 */
 1:	subl	$4, %edi
 	movl	(%edi), %ecx
 	testl	%ecx, %ecx
@@ -272,6 +323,8 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
  * Jump to the decompressed kernel.
  */
 	xorl	%ebx, %ebx
+	/* 跳转到解压后的代码
+	   arch/x86/kernel/head_32.S中的startup_32 */
 	jmp	*%ebp
 
 /*

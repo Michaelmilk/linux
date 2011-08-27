@@ -329,6 +329,15 @@ static void parse_elf(void *output)
 
 /*
 asmlinkage通过堆栈传递参数
+
+这里已经进入保护模式
+但是基址为0，所以指针的值是等于物理地址的
+
+@rmode		: 数据的指针，指向全局变量boot_params
+@heap		: 堆指针
+@input_data	: 压缩文件arch/x86/boot/compressed/vmlinux.bin.gz的线性地址
+@input_len	: 压缩文件的长度
+@output		: 解压后文件的输出地址
 */
 asmlinkage void decompress_kernel(void *rmode, memptr heap,
 				  unsigned char *input_data,
@@ -342,6 +351,8 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 	if (cmdline_find_option_bool("debug"))
 		debug = 1;
 
+	/* 准备视频输出的地址和端口
+	   用于此处调试向显示器输出信息 */
 	if (real_mode->screen_info.orig_video_mode == 7) {
 		/* 0xb0000 = 704K, 0x3b4 = 948 */
 		vidmem = (char *) 0xb0000;
@@ -376,6 +387,10 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 	if (heap > ((-__PAGE_OFFSET-(128<<20)-1) & 0x7fffffff))
 		error("Destination address too large");
 #endif
+/*
+如果没有定义内核重定向的话
+则输出地址只能是宏计算出的加载物理地址
+*/
 #ifndef CONFIG_RELOCATABLE
 	if ((unsigned long)output != LOAD_PHYSICAL_ADDR)
 		error("Wrong destination address");
