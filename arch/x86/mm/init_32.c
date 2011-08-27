@@ -237,6 +237,11 @@ static inline int is_kernel_text(unsigned long addr)
  * of max_low_pfn pages, by creating page tables starting from address
  * PAGE_OFFSET:
  */
+/*
+映射物理内存到内核虚拟地址空间
+映射常规内存
+页表对应的虚拟地址从3G开始
+*/
 unsigned long __init
 kernel_physical_mapping_init(unsigned long start,
 			     unsigned long end,
@@ -281,6 +286,7 @@ repeat:
 	pfn = start_pfn;
 	pgd_idx = pgd_index((pfn<<PAGE_SHIFT) + PAGE_OFFSET);
 	pgd = pgd_base + pgd_idx;
+	/* 遍历页目录表 */
 	for (; pgd_idx < PTRS_PER_PGD; pgd++, pgd_idx++) {
 		pmd = one_md_table_init(pgd);
 
@@ -292,6 +298,8 @@ repeat:
 #else
 		pmd_idx = 0;
 #endif
+		/* 遍历页中间目录表
+		   对应2级页表，则PTRS_PER_PMD为1 */
 		for (; pmd_idx < PTRS_PER_PMD && pfn < end_pfn;
 		     pmd++, pmd_idx++) {
 			unsigned int addr = pfn * PAGE_SIZE + PAGE_OFFSET;
@@ -331,6 +339,7 @@ repeat:
 
 			pte_ofs = pte_index((pfn<<PAGE_SHIFT) + PAGE_OFFSET);
 			pte += pte_ofs;
+			/* 遍历页表项 */
 			for (; pte_ofs < PTRS_PER_PTE && pfn < end_pfn;
 			     pte++, pfn++, pte_ofs++, addr += PAGE_SIZE) {
 				pgprot_t prot = PAGE_KERNEL;
@@ -470,14 +479,19 @@ void __init native_pagetable_setup_start(pgd_t *base)
 	 * Remove any mappings which extend past the end of physical
 	 * memory from the boot time page table:
 	 */
+	/* 遍历高端内存的页框号 */
 	for (pfn = max_low_pfn + 1; pfn < 1<<(32-PAGE_SHIFT); pfn++) {
+		/* 转换为对应的虚拟地址 */
 		va = PAGE_OFFSET + (pfn<<PAGE_SHIFT);
 		pgd = base + pgd_index(va);
+		/* 检查页目录项的_PAGE_PRESENT标志位 */
 		if (!pgd_present(*pgd))
 			break;
 
+		/* 对于2级页表，pmd = pud = pgd */
 		pud = pud_offset(pgd, va);
 		pmd = pmd_offset(pud, va);
+		/* 检查pmd的_PAGE_PRESENT标志位 */
 		if (!pmd_present(*pmd))
 			break;
 
@@ -485,8 +499,11 @@ void __init native_pagetable_setup_start(pgd_t *base)
 		if (!pte_present(*pte))
 			break;
 
+		/* 将页表中的值清0 */
 		pte_clear(NULL, va, pte);
 	}
+	/* 未定义CONFIG_PARAVIRT时
+	   paravirt_alloc_pmd()函数为空 */
 	paravirt_alloc_pmd(&init_mm, __pa(base) >> PAGE_SHIFT);
 }
 
@@ -757,10 +774,18 @@ void __init setup_bootmem_allocator(void)
  * This routines also unmaps the page at virtual kernel address 0, so
  * that we can trap those pesky NULL-reference errors in the kernel.
  */
+/*
+pesky: 讨厌的
+
+在arch/x86/kernel/head_32.S中只初始化了部分页表
+
+这里也会取消掉虚拟地址0的映射，以便检查NULL指针引用
+*/
 void __init paging_init(void)
 {
 	pagetable_init();
 
+	/* 刷新TLB缓存 */
 	__flush_tlb_all();
 
 	kmap_init();
@@ -828,6 +853,19 @@ void __init mem_init(void)
 	datasize =  (unsigned long) &_edata - (unsigned long) &_etext;
 	initsize =  (unsigned long) &__init_end - (unsigned long) &__init_begin;
 
+	/* 打印内存信息，例如:
+
+Memory: 472884k/524288k available (3285k kernel code, 50888k reserved, 1654k data, 420k init, 0k highmem)
+virtual kernel memory layout:
+    fixmap  : 0xffe6f000 - 0xfffff000   (1600 kB)
+    pkmap   : 0xffa00000 - 0xffc00000   (2048 kB)
+    vmalloc : 0xe0800000 - 0xff9fe000   ( 497 MB)
+    lowmem  : 0xc0000000 - 0xe0000000   ( 512 MB)
+      .init : 0xc14d4000 - 0xc153d000   ( 420 kB)
+      .data : 0xc13354f8 - 0xc14d30c0   (1654 kB)
+      .text : 0xc1000000 - 0xc13354f8   (3285 kB)
+
+	*/
 	printk(KERN_INFO "Memory: %luk/%luk available (%dk kernel code, "
 			"%dk reserved, %dk data, %dk init, %ldk highmem)\n",
 		nr_free_pages() << (PAGE_SHIFT-10),

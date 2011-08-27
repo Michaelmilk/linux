@@ -252,6 +252,10 @@ enum zone_type {
  * match the requested limits. See gfp_zone() in include/linux/gfp.h
  */
 
+/*
+根据定义的内存区域数量
+匹配移位的个数
+*/
 #if MAX_NR_ZONES < 2
 #define ZONES_SHIFT 0
 #elif MAX_NR_ZONES <= 2
@@ -410,6 +414,7 @@ struct zone {
 	/*
 	 * Discontig memory support fields.
 	 */
+	/* 回指指针，指向该zone结构实例所属的pglist_data实例 */
 	struct pglist_data	*zone_pgdat;
 	/* zone_start_pfn == zone_start_paddr >> PAGE_SHIFT */
 	unsigned long		zone_start_pfn;
@@ -558,6 +563,8 @@ struct zonelist_cache {
 	unsigned long last_full_zap;		/* when last zap'd (jiffies) */
 };
 #else
+/* !CONFIG_NUMA */
+
 #define MAX_ZONELISTS 1
 struct zonelist_cache;
 #endif
@@ -620,6 +627,13 @@ extern struct page *mem_map;
  * Memory statistics and page replacement data structures are maintained on a
  * per-zone basis.
  */
+/*
+denote: 表示
+
+内存节点描述符
+在NUMA系统中，每个节点关联到一个处理器
+在UMA系统中，则只有1个该结构的实例
+*/
 struct bootmem_data;
 typedef struct pglist_data {
 	/* 属于该节点的zone */
@@ -713,8 +727,15 @@ unsigned long __init node_memmap_size_bytes(int, unsigned long, unsigned long);
  */
 #define zone_idx(zone)		((zone) - (zone)->zone_pgdat->node_zones)
 
+/*
+populate: 填充
+
+判断该区域是否已经填充过物理页
+*/
 static inline int populated_zone(struct zone *zone)
 {
+	/* 两次取反
+	   返回0或1 */
 	return (!!zone->present_pages);
 }
 
@@ -835,6 +856,10 @@ extern struct zone *next_zone(struct zone *zone);
  * The user only needs to declare the zone variable, for_each_zone
  * fills it in.
  */
+/*
+遍历所有节点的zone区域
+即依次遍历各个节点的node_zones[]数组中的zone
+*/
 #define for_each_zone(zone)			        \
 	for (zone = (first_online_pgdat())->node_zones; \
 	     zone;					\

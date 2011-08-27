@@ -288,9 +288,14 @@ static inline void irqd_clr_chained_irq_inprogress(struct irq_data *d)
  *
  * @release:		release function solely used by UML
  */
+/*
+用结构irq_chip来描述中断控制器
+*/
 struct irq_chip {
 	const char	*name;
+	/* 允许从给定的控制器的 irq 所产生的事件发生 */
 	unsigned int	(*irq_startup)(struct irq_data *data);
+	/* 禁止从给定的控制器的 irq 所产生的事件发生 */
 	void		(*irq_shutdown)(struct irq_data *data);
 	void		(*irq_enable)(struct irq_data *data);
 	void		(*irq_disable)(struct irq_data *data);

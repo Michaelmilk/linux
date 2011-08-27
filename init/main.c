@@ -105,6 +105,10 @@ extern void tc_init(void);
  */
 bool early_boot_irqs_disabled __read_mostly;
 
+/*
+系统状态
+初始值为0，即对应枚举状态SYSTEM_BOOTING
+*/
 enum system_states system_state __read_mostly;
 EXPORT_SYMBOL(system_state);
 

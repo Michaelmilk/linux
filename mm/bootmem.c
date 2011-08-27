@@ -193,16 +193,19 @@ static unsigned long __init free_all_bootmem_core(bootmem_data_t *bdata)
 	while (start < end) {
 		unsigned long *map, idx, vec;
 
+		/* 页面位图 */
 		map = bdata->node_bootmem_map;
 		idx = start - bdata->node_min_pfn;
 		vec = ~map[idx / BITS_PER_LONG];
 
+		/* 起始点已经对齐，vec全1的时候，则一次可以直接释放32个页 */
 		if (aligned && vec == ~0UL && start + BITS_PER_LONG < end) {
 			int order = ilog2(BITS_PER_LONG);
 
 			__free_pages_bootmem(pfn_to_page(start), order);
 			count += BITS_PER_LONG;
 		} else {
+		/* 逐一扫描当前vec的每1个bit */
 			unsigned long off = 0;
 
 			while (vec && off < BITS_PER_LONG) {

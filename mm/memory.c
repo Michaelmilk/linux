@@ -70,6 +70,9 @@
 #ifndef CONFIG_NEED_MULTIPLE_NODES
 /* use the per-pgdat data instead for discontigmem - mbligh */
 unsigned long max_mapnr;
+/*
+ÔÚalloc_node_mem_map()ÖÐ¸³Öµ
+*/
 struct page *mem_map;
 
 EXPORT_SYMBOL(max_mapnr);

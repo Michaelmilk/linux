@@ -694,9 +694,16 @@ static void __free_pages_ok(struct page *page, unsigned int order)
 /*
  * permit the bootmem allocator to evade page validation on high-order frees
  */
+/*
+evade: 避开
+
+设置@page的状态标志为空闲
+*/
 void __meminit __free_pages_bootmem(struct page *page, unsigned int order)
 {
 	if (order == 0) {
+		/* 由宏__CLEARPAGEFLAG定义
+		   清除page标志的Reserved位 */
 		__ClearPageReserved(page);
 		set_page_count(page, 0);
 		set_page_refcounted(page);
@@ -2426,8 +2433,13 @@ static unsigned int nr_free_zone_pages(int offset)
 	/* Just pick one node, since fallback list is circular */
 	unsigned int sum = 0;
 
+	/* 取当前cpu关联的内存节点中的node_zonelists[]数组
+	   一致性内存时，numa_node_id()返回0
+	   取到的zonelist为contig_page_data的node_zonelists[]数组 */
 	struct zonelist *zonelist = node_zonelist(numa_node_id(), GFP_KERNEL);
 
+	/* 遍历zonelist[]中映射的各个zone区域
+	   计算可用的pages数量之和 */
 	for_each_zone_zonelist(zone, z, zonelist, offset) {
 		unsigned long size = zone->present_pages;
 		unsigned long high = high_wmark_pages(zone);
@@ -2670,24 +2682,37 @@ static void zoneref_set_zone(struct zone *zone, struct zoneref *zoneref)
  *
  * Add all populated zones of a node to the zonelist.
  */
+/*
+
+@zone_type:	只传递了3个节点，@zone_type = 3
+*/
 static int build_zonelists_node(pg_data_t *pgdat, struct zonelist *zonelist,
 				int nr_zones, enum zone_type zone_type)
 {
 	struct zone *zone;
 
+	/* @zone_type不能超过MAX_NR_ZONES，否则pg_data_t中的数组就越界了
+	   MAX_NR_ZONES的值在编译内核的时候由Kbuild生成bounds.h中定义 */
 	BUG_ON(zone_type >= MAX_NR_ZONES);
+	/* 加1，转换为个数 */
 	zone_type++;
 
 	do {
+		/* 先将类型减1，变成node_zones[]数组的下标 */
 		zone_type--;
+		/* 取zone类型对应的数组项 */
 		zone = pgdat->node_zones + zone_type;
+		/* 如果该zone区域已经填充过物理内存 */
 		if (populated_zone(zone)) {
+			/* 设置_zonerefs[]数组对应项进行引用 */
 			zoneref_set_zone(zone,
 				&zonelist->_zonerefs[nr_zones++]);
+			/* 一致性内存，check_highest_zone()函数为空 */
 			check_highest_zone(zone_type);
 		}
 
 	} while (zone_type);
+	/* 返回_zonerefs[]数组下一个可用项的下标 */
 	return nr_zones;
 }
 
@@ -3091,11 +3116,22 @@ int local_memory_node(int node)
 
 #else	/* CONFIG_NUMA */
 
+/*
+设置current_zonelist_order
+*/
 static void set_zonelist_order(void)
 {
 	current_zonelist_order = ZONELIST_ORDER_ZONE;
 }
 
+/*
+将pg_data_t中的node_zones[]数组项
+映射到其node_zonelists[]._zonerefs[]中
+
+@pgdat: 当前内存节点
+		一致性内存的话，则__build_all_zonelists()中只循环一次
+		即@pgdat = &contig_page_data
+*/
 static void build_zonelists(pg_data_t *pgdat)
 {
 	int node, local_node;
@@ -3105,6 +3141,7 @@ static void build_zonelists(pg_data_t *pgdat)
 	local_node = pgdat->node_id;
 
 	zonelist = &pgdat->node_zonelists[0];
+	/* 先将本地cpu对应的内存节点下的zone区域进行引用 */
 	j = build_zonelists_node(pgdat, zonelist, 0, MAX_NR_ZONES - 1);
 
 	/*
@@ -3115,19 +3152,26 @@ static void build_zonelists(pg_data_t *pgdat)
 	 * zones coming right after the local ones are those from
 	 * node N+1 (modulo N)
 	 */
+	/* 遍历本地节点之后的内存节点
+	   将后面节点的zone区域映射到本地内存节点 */
 	for (node = local_node + 1; node < MAX_NUMNODES; node++) {
+		/* 该节点并未激活，则跳过 */
 		if (!node_online(node))
 			continue;
 		j = build_zonelists_node(NODE_DATA(node), zonelist, j,
 							MAX_NR_ZONES - 1);
 	}
+	/* 遍历本地节点之前的内存节点
+	   将前面节点的zone区域映射到本地内存节点 */
 	for (node = 0; node < local_node; node++) {
+		/* 该节点并未激活，则跳过 */
 		if (!node_online(node))
 			continue;
 		j = build_zonelists_node(NODE_DATA(node), zonelist, j,
 							MAX_NR_ZONES - 1);
 	}
 
+	/* 标记映射的结束位置 */
 	zonelist->_zonerefs[j].zone = NULL;
 	zonelist->_zonerefs[j].zone_idx = 0;
 }
@@ -3174,6 +3218,9 @@ static __init_refok int __build_all_zonelists(void *data)
 #ifdef CONFIG_NUMA
 	memset(node_load, 0, sizeof(node_load));
 #endif
+	/* 遍历所有节点
+	   一致性内存只有1个节点
+	   即contig_page_data */
 	for_each_online_node(nid) {
 		pg_data_t *pgdat = NODE_DATA(nid);
 
@@ -3194,6 +3241,7 @@ static __init_refok int __build_all_zonelists(void *data)
 	 * needs the percpu allocator in order to allocate its pagesets
 	 * (a chicken-egg dilemma).
 	 */
+	/* dilemma: 窘境 */
 	for_each_possible_cpu(cpu) {
 		setup_pageset(&per_cpu(boot_pageset, cpu), 0);
 
@@ -3222,11 +3270,20 @@ void __ref build_all_zonelists(void *data)
 {
 	set_zonelist_order();
 
+	/* 启动状态
+	   由start_kernel()函数过来 */
 	if (system_state == SYSTEM_BOOTING) {
 		__build_all_zonelists(NULL);
+		/* 未配置CONFIG_DEBUG_MEMORY_INIT时
+		   mminit_verify_zonelist()函数为空 */
 		mminit_verify_zonelist();
+		/* 未配置CONFIG_CPUSETS时
+		   cpuset_init_current_mems_allowed()函数为空 */
 		cpuset_init_current_mems_allowed();
 	} else {
+	/* 系统不是启动状态
+	   系统正在运行中的时候进行cpu热插拔或内存热插拔 */
+
 		/* we have to stop all cpus to guarantee there is no user
 		   of zonelist */
 #ifdef CONFIG_MEMORY_HOTPLUG
@@ -3441,11 +3498,14 @@ void __meminit memmap_init_zone(unsigned long size, int nid, unsigned long zone,
 			if (!early_pfn_in_nid(pfn, nid))
 				continue;
 		}
+		/* 根据页框号，取其对应的描述符page结构 */
 		page = pfn_to_page(pfn);
 		set_page_links(page, zone, nid, pfn);
 		mminit_verify_page_links(page, zone, nid, pfn);
 		init_page_count(page);
 		reset_page_mapcount(page);
+		/* 设置page的标志位为保留
+		   SetPageReserved由宏PAGEFLAG定义 */
 		SetPageReserved(page);
 		/*
 		 * Mark the block movable so that blocks are reserved for
@@ -3550,6 +3610,7 @@ static void setup_pageset(struct per_cpu_pageset *p, unsigned long batch)
 	pcp->count = 0;
 	pcp->high = 6 * batch;
 	pcp->batch = max(1UL, 1 * batch);
+	/* 初始化链表头节点 */
 	for (migratetype = 0; migratetype < MIGRATE_PCPTYPES; migratetype++)
 		INIT_LIST_HEAD(&pcp->lists[migratetype]);
 }
@@ -4137,6 +4198,8 @@ static unsigned long __meminit zone_absent_pages_in_node(int nid,
 }
 
 #else
+/* !CONFIG_ARCH_POPULATES_NODE_MAP */
+
 static inline unsigned long __meminit zone_spanned_pages_in_node(int nid,
 					unsigned long zone_type,
 					unsigned long *zones_size)
@@ -4156,6 +4219,9 @@ static inline unsigned long __meminit zone_absent_pages_in_node(int nid,
 
 #endif
 
+/*
+计算该节点@pgdat共需要多个page结构
+*/
 static void __meminit calculate_node_totalpages(struct pglist_data *pgdat,
 		unsigned long *zones_size, unsigned long *zholes_size)
 {
@@ -4267,6 +4333,10 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 
 	pgdat_resize_init(pgdat);
 	pgdat->nr_zones = 0;
+	/* 初始化该节点的等待队列
+	   当一个可阻塞进程在此节点是申请内存时，若内存不足
+	   则先将该进程放入这个等待队列
+	   唤醒kswapd内核线程将部分内存交换出到交换分区 */
 	init_waitqueue_head(&pgdat->kswapd_wait);
 	pgdat->kswapd_max_order = 0;
 	pgdat_page_cgroup_init(pgdat);
@@ -4345,6 +4415,9 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 	}
 }
 
+/*
+申请page结构数组空间
+*/
 static void __init_refok alloc_node_mem_map(struct pglist_data *pgdat)
 {
 	/* Skip empty nodes */
@@ -4365,7 +4438,9 @@ static void __init_refok alloc_node_mem_map(struct pglist_data *pgdat)
 		start = pgdat->node_start_pfn & ~(MAX_ORDER_NR_PAGES - 1);
 		end = pgdat->node_start_pfn + pgdat->node_spanned_pages;
 		end = ALIGN(end, MAX_ORDER_NR_PAGES);
+		/* 计算所需的page结构个数 */
 		size =  (end - start) * sizeof(struct page);
+		/* 申请page结构数组的空间 */
 		map = alloc_remap(pgdat->node_id, size);
 		if (!map)
 			map = alloc_bootmem_node_nopanic(pgdat, size);
@@ -4376,6 +4451,7 @@ static void __init_refok alloc_node_mem_map(struct pglist_data *pgdat)
 	 * With no DISCONTIG, the global mem_map is just set as node 0's
 	 */
 	if (pgdat == NODE_DATA(0)) {
+		/* 使用全局变量mem_map记录该page结构数组 */
 		mem_map = NODE_DATA(0)->node_mem_map;
 #ifdef CONFIG_ARCH_POPULATES_NODE_MAP
 		if (page_to_pfn(mem_map) != pgdat->node_start_pfn)
@@ -4841,6 +4917,7 @@ void __init free_area_init_nodes(unsigned long *max_zone_pfn)
 				sizeof(arch_zone_highest_possible_pfn));
 	arch_zone_lowest_possible_pfn[0] = find_min_pfn_with_active_regions();
 	arch_zone_highest_possible_pfn[0] = max_zone_pfn[0];
+	/* 计算各个区的最小和最大页框号 */
 	for (i = 1; i < MAX_NR_ZONES; i++) {
 		if (i == ZONE_MOVABLE)
 			continue;
@@ -4888,6 +4965,10 @@ void __init free_area_init_nodes(unsigned long *max_zone_pfn)
 	/* Initialise every node */
 	mminit_verify_pageflags_layout();
 	setup_nr_node_ids();
+	/* 遍历所有节点
+	   对于x86一致性内存来说，只有1个节点，即contig_page_data
+	   这里就是要初始化contig_page_data中的各个字段
+	    */
 	for_each_online_node(nid) {
 		pg_data_t *pgdat = NODE_DATA(nid);
 		free_area_init_node(nid, NULL,

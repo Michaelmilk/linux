@@ -462,8 +462,15 @@ static inline unsigned long pmd_index(unsigned long address)
  * this function returns the index of the entry in the pte page which would
  * control the given virtual address
  */
+/*
+@address: 虚拟地址
+
+取虚拟地址对应的页表索引
+*/
 static inline unsigned long pte_index(unsigned long address)
 {
+	/* 右移12bit，按位与页表指针个数的掩码
+	   对于2级页表，即取中间的10个bit，得到页表的索引 */
 	return (address >> PAGE_SHIFT) & (PTRS_PER_PTE - 1);
 }
 

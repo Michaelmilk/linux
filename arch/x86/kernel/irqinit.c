@@ -103,6 +103,7 @@ int vector_used_by_percpu_irq(unsigned int vector)
 
 void __init init_ISA_irqs(void)
 {
+	/* 指向全局变量i8259A_chip */
 	struct irq_chip *chip = legacy_pic->chip;
 	const char *name = chip->name;
 	int i;
@@ -110,6 +111,7 @@ void __init init_ISA_irqs(void)
 #if defined(CONFIG_X86_64) || defined(CONFIG_X86_LOCAL_APIC)
 	init_bsp_APIC();
 #endif
+	/* 调用init_8259A()函数 */
 	legacy_pic->init(0);
 
 	for (i = 0; i < legacy_pic->nr_legacy_irqs; i++)
@@ -137,6 +139,7 @@ void __init init_IRQ(void)
 	for (i = 0; i < legacy_pic->nr_legacy_irqs; i++)
 		per_cpu(vector_irq, 0)[IRQ0_VECTOR + i] = i;
 
+	/* 调用native_init_IRQ()函数 */
 	x86_init.irqs.intr_init();
 }
 
@@ -300,6 +303,7 @@ void __init native_init_IRQ(void)
 	int i;
 
 	/* Execute any quirks before the call gates are initialised: */
+	/* 调用init_ISA_irqs()函数 */
 	x86_init.irqs.pre_vector_init();
 
 	apic_intr_init();

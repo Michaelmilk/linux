@@ -44,6 +44,9 @@ struct irq_desc {
 #ifdef CONFIG_IRQ_PREFLOW_FASTEOI
 	irq_preflow_handler_t	preflow_handler;
 #endif
+	/* 指向 struct irqaction 结构组成的队列的头
+	   正常情况下每个 irq 只有一个操作，因此链表的正常长度是 1 或 0。
+	   但是，如果 IRQ 被两个或多个设备所共享，那么这个队列就有多个操作了 */
 	struct irqaction	*action;	/* IRQ action list */
 	unsigned int		status_use_accessors;
 	unsigned int		core_internal_state__do_not_mess_with_it;

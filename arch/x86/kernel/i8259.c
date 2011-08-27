@@ -305,6 +305,7 @@ static void init_8259A(int auto_eoi)
 
 	raw_spin_lock_irqsave(&i8259A_lock, flags);
 
+	/* ÆÁ±ÎËùÓÐÖÐ¶Ï */
 	outb(0xff, PIC_MASTER_IMR);	/* mask all of 8259A-1 */
 	outb(0xff, PIC_SLAVE_IMR);	/* mask all of 8259A-2 */
 
