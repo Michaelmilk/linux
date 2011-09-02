@@ -44,6 +44,14 @@ static void generic_swap(void *a, void *b, int size)
  * it less suitable for kernel use.
  */
 
+/*
+使用堆排序
+平均和最坏复杂度为O(n log n)
+快排平均会快20%
+但是最坏复杂度到达O(n*n)
+而且需要额外的内存
+不适合内核使用
+*/
 void sort(void *base, size_t num, size_t size,
 	  int (*cmp_func)(const void *, const void *),
 	  void (*swap_func)(void *, void *, int size))

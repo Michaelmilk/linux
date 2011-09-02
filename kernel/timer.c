@@ -57,11 +57,27 @@ EXPORT_SYMBOL(jiffies_64);
 /*
  * per-CPU timer vector definitions:
  */
+/*
+通过配置文件中配置的0和1
+得到不同的链表头节点的个数
+*/
 #define TVN_BITS (CONFIG_BASE_SMALL ? 4 : 6)
 #define TVR_BITS (CONFIG_BASE_SMALL ? 6 : 8)
+/*
+64
+*/
 #define TVN_SIZE (1 << TVN_BITS)
+/*
+256
+*/
 #define TVR_SIZE (1 << TVR_BITS)
+/*
+63
+*/
 #define TVN_MASK (TVN_SIZE - 1)
+/*
+255
+*/
 #define TVR_MASK (TVR_SIZE - 1)
 
 struct tvec {
@@ -792,6 +808,15 @@ unsigned long apply_slack(struct timer_list *timer, unsigned long expires)
  * (ie. mod_timer() of an inactive timer returns 0, mod_timer() of an
  * active timer returns 1.)
  */
+/*
+修改一个定时器节点的超时时间
+@timer	: 待修改的定时器
+@expires: 新的超时时间
+
+返回值表示是否修改了一个已经在等待中的定时器
+0表示修改了一个未激活的定时器
+1表示修改了一个活动的定时器，即其已经在循环链表中了
+*/
 int mod_timer(struct timer_list *timer, unsigned long expires)
 {
 	expires = apply_slack(timer, expires);
@@ -1062,6 +1087,7 @@ static void call_timer_fn(struct timer_list *timer, void (*fn)(unsigned long),
 	lock_map_acquire(&lockdep_map);
 
 	trace_timer_expire_entry(timer);
+	/* 执行定时器的回调函数 */
 	fn(data);
 	trace_timer_expire_exit(timer);
 
@@ -1108,11 +1134,15 @@ static inline void __run_timers(struct tvec_base *base)
 					!cascade(base, &base->tv4, INDEX(2)))
 			cascade(base, &base->tv5, INDEX(3));
 		++base->timer_jiffies;
+		/* 将以tv1.vec中下标index处的list_head为头节点的链表
+		   交换给头节点work_list，作为此次检查的工作链表 */
 		list_replace_init(base->tv1.vec + index, &work_list);
+		/* 遍历该超时链表，逐个处理该链表中的timer_list节点 */
 		while (!list_empty(head)) {
 			void (*fn)(unsigned long);
 			unsigned long data;
 
+			/* timer指向链表中的第一个timer_list节点 */
 			timer = list_first_entry(head, struct timer_list,entry);
 			fn = timer->function;
 			data = timer->data;
@@ -1120,9 +1150,11 @@ static inline void __run_timers(struct tvec_base *base)
 			timer_stats_account_timer(timer);
 
 			base->running_timer = timer;
+			/* 将timer节点从链表中移除 */
 			detach_timer(timer, 1);
 
 			spin_unlock_irq(&base->lock);
+			/* 调用timer的回调函数 */
 			call_timer_fn(timer, fn, data);
 			spin_lock_irq(&base->lock);
 		}
@@ -1304,12 +1336,16 @@ void update_process_times(int user_tick)
 /*
  * This function runs timers and the timer-tq in bottom half context.
  */
+/*
+定时器的软中断处理函数
+*/
 static void run_timer_softirq(struct softirq_action *h)
 {
 	struct tvec_base *base = __this_cpu_read(tvec_bases);
 
 	hrtimer_run_pending();
 
+	/* 有定时器到期 */
 	if (time_after_eq(jiffies, base->timer_jiffies))
 		__run_timers(base);
 }

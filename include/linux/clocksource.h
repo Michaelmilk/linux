@@ -157,6 +157,10 @@ extern u64 timecounter_cyc2time(struct timecounter *tc,
  * @suspend:		suspend function for the clocksource, if necessary
  * @resume:		resume function for the clocksource, if necessary
  */
+/*
+对硬件设备的抽象
+描述时钟源信息
+*/
 struct clocksource {
 	/*
 	 * Hotpath data, fits in a single cache line when the

@@ -1466,6 +1466,7 @@ static struct dmi_system_id __initdata acpi_dmi_table_late[] = {
 		     DMI_MATCH(DMI_PRODUCT_NAME, "HP Compaq 6715b"),
 		     },
 	 },
+	/* 空项，作为遍历acpi_dmi_table_late[]数组时结束的判断条件 */
 	{}
 };
 
@@ -1538,6 +1539,10 @@ int __init early_acpi_boot_init(void)
 	return 0;
 }
 
+/*
+ACPI: Advanced Configuration and Power Management Interface
+	  高级配置和电源管理接口
+*/
 int __init acpi_boot_init(void)
 {
 	/* those are executed after early-quirks are executed */
@@ -1615,6 +1620,9 @@ static int __init parse_pci(char *arg)
 }
 early_param("pci", parse_pci);
 
+/*
+MPS: MultiProcessor Specification 多重处理器规范
+*/
 int __init acpi_mps_check(void)
 {
 #if defined(CONFIG_X86_LOCAL_APIC) && !defined(CONFIG_X86_MPPARSE)

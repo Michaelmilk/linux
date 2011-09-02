@@ -340,12 +340,16 @@ static struct page_address_slot *page_slot(struct page *page)
  *
  * Returns the page's virtual address.
  */
+/*
+返回虚拟地址
+*/
 void *page_address(struct page *page)
 {
 	unsigned long flags;
 	void *ret;
 	struct page_address_slot *pas;
 
+	/* 如果不是高端内存，则直接映射转换 */
 	if (!PageHighMem(page))
 		return lowmem_page_address(page);
 

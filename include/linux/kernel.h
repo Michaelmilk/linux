@@ -58,12 +58,18 @@
 #define DIV_ROUND_UP(n,d) (((n) + (d) - 1) / (d))
 
 /* The `const' in roundup() prevents gcc-3.3 from calling __divdi3 */
+/*
+向x上取y的倍数
+*/
 #define roundup(x, y) (					\
 {							\
 	const typeof(y) __y = y;			\
 	(((x) + (__y - 1)) / __y) * __y;		\
 }							\
 )
+/*
+向x下取y的倍数
+*/
 #define rounddown(x, y) (				\
 {							\
 	typeof(x) __x = (x);				\

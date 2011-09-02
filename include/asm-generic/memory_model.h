@@ -31,6 +31,10 @@
 页框号到其page结构的映射
 */
 #define __pfn_to_page(pfn)	(mem_map + ((pfn) - ARCH_PFN_OFFSET))
+/*
+从page结构计算其所描述的物理页框的页框号
+这个计算方法只适用于小于896MB的常规内存的转换
+*/
 #define __page_to_pfn(page)	((unsigned long)((page) - mem_map) + \
 				 ARCH_PFN_OFFSET)
 #elif defined(CONFIG_DISCONTIGMEM)

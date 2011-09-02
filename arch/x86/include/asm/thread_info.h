@@ -25,10 +25,18 @@ struct exec_domain;
 
 struct thread_info {
 	struct task_struct	*task;		/* main task structure */
+	/* 结构exec_domain代表了当前进程是属于哪一种规范的可执行程序。
+       Linux还可以执行其他符合UNIX标准的程序，
+       这些操作系统包括freeBSD Solaris等等。
+       不同的系统产生的可执行文件的差异存放在变量exec_domain中。 */
 	struct exec_domain	*exec_domain;	/* execution domain */
+	/* 当前进程的状态标记信息。每位都存放了一个相应的事件。 */
 	__u32			flags;		/* low level flags */
 	__u32			status;		/* thread synchronous flags */
+	/* 代表了该进程运行在哪个CPU上 */
 	__u32			cpu;		/* current CPU */
+	/* 各bit含义参见include/linux/hardirq.h
+	   例如:SOFTIRQ_SHIFT */
 	int			preempt_count;	/* 0 => preemptable,
 						   <0 => BUG */
 	mm_segment_t		addr_limit;

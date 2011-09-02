@@ -47,7 +47,7 @@ r_base = .
 	cli			# We should be safe anyway
 
 	movl	$0xA5A5A5A5, trampoline_status - r_base
-				# write marker for master knows we're running
+				# write marker for master knows we''re running
 
 	/* GDT tables in non default location kernel can be beyond 16MB and
 	 * lgdt will not be able to load the address as in real mode default
@@ -65,7 +65,7 @@ r_base = .
 	ljmpl	$__BOOT_CS, $(startup_32_smp-__PAGE_OFFSET)
 
 	# These need to be in the same 64K segment as the above;
-	# hence we don't use the boot_gdt_descr defined in head.S
+	# hence we don''t use the boot_gdt_descr defined in head.S
 boot_gdt_descr:
 	.word	__BOOT_DS + 7			# gdt limit
 	.long	boot_gdt - __PAGE_OFFSET	# gdt base

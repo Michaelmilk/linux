@@ -150,6 +150,10 @@ static void __cpuinit early_init_intel(struct cpuinfo_x86 *c)
  *	This is called before we do cpu ident work
  */
 
+/*
+ppro: Pentium Pro
+evasive: ¹æ±ÜµÄ
+*/
 int __cpuinit ppro_with_ram_bug(void)
 {
 	/* Uses data from early_cpu_detect now */

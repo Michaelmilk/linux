@@ -22,6 +22,9 @@
 #include "tick-internal.h"
 
 /* The registered clock event devices */
+/*
+时钟事件设备链表
+*/
 static LIST_HEAD(clockevent_devices);
 static LIST_HEAD(clockevents_released);
 

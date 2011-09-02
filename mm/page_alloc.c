@@ -177,6 +177,9 @@ static char * const zone_names[MAX_NR_ZONES] = {
 
 int min_free_kbytes = 1024;
 
+/*
+系统可用内存的页面数
+*/
 static unsigned long __meminitdata nr_kernel_pages;
 static unsigned long __meminitdata nr_all_pages;
 static unsigned long __meminitdata dma_reserve;
@@ -5404,6 +5407,18 @@ __setup("hashdist=", set_hashdist);
  *   quantity of entries
  * - limit is the number of hash buckets, not the total allocation size
  */
+/*
+@tablename	: 哈希表的名称
+@bucketsize	: 桶头节点的大小
+@numentries	: 桶的个数
+@scale		: 比例，当传参数@numentries为0，
+			  自动按系统内存计算桶头节点个数的时候
+			  限制计算出的节点数不超过2^scale字节比内存数的比例值
+@flags		:
+@_hash_shift:
+@_hash_mask	:
+@limit		: 桶个数的上限
+*/
 void *__init alloc_large_system_hash(const char *tablename,
 				     unsigned long bucketsize,
 				     unsigned long numentries,
@@ -5418,14 +5433,19 @@ void *__init alloc_large_system_hash(const char *tablename,
 	void *table = NULL;
 
 	/* allow the kernel cmdline to have a say */
+	/* 如果没有指定桶头节点个数的话
+	   则根据系统的可用页面数计算出一个节点个数 */
 	if (!numentries) {
 		/* round applicable memory size up to nearest megabyte */
 		numentries = nr_kernel_pages;
+		/* 先加上移8位的掩码，保证对齐后算出的不会是0 */
 		numentries += (1UL << (20 - PAGE_SHIFT)) - 1;
+		/* 左右移位，去掉低8位 */
 		numentries >>= 20 - PAGE_SHIFT;
 		numentries <<= 20 - PAGE_SHIFT;
 
 		/* limit to 1 bucket per 2^scale bytes of low memory */
+		/* 限制比例 */
 		if (scale > PAGE_SHIFT)
 			numentries >>= (scale - PAGE_SHIFT);
 		else
@@ -5435,13 +5455,16 @@ void *__init alloc_large_system_hash(const char *tablename,
 		if (unlikely(flags & HASH_SMALL)) {
 			/* Makes no sense without HASH_EARLY */
 			WARN_ON(!(flags & HASH_EARLY));
+			/* 至少要有偏移_hash_shift的数量 */
 			if (!(numentries >> *_hash_shift)) {
 				numentries = 1UL << *_hash_shift;
 				BUG_ON(!numentries);
 			}
+		/* 分配的空间至少要达到1页大小 */
 		} else if (unlikely((numentries * bucketsize) < PAGE_SIZE))
 			numentries = PAGE_SIZE / bucketsize;
 	}
+	/* 向上取到2的n次幂 */
 	numentries = roundup_pow_of_two(numentries);
 
 	/* limit allocation size to 1/16 total memory by default */
@@ -5450,13 +5473,17 @@ void *__init alloc_large_system_hash(const char *tablename,
 		do_div(max, bucketsize);
 	}
 
+	/* 不超过上限 */
 	if (numentries > max)
 		numentries = max;
 
+	/* 计算2为底的对数 */
 	log2qty = ilog2(numentries);
 
 	do {
+		/* 计算哈希桶头总共占用空间的大小 */
 		size = bucketsize << log2qty;
+		/* 置了HASH_EARLY标志的话，则从memblock中分配 */
 		if (flags & HASH_EARLY)
 			table = alloc_bootmem_nopanic(size);
 		else if (hashdist)
@@ -5472,8 +5499,15 @@ void *__init alloc_large_system_hash(const char *tablename,
 				kmemleak_alloc(table, size, 1, GFP_ATOMIC);
 			}
 		}
+	/* 1.如果申请失败
+	   2.申请的大小仍超过一页4kB大小
+	   3.将幂次减1，减1后幂次未降到0
+	   则循环申请较小的空间
+
+	   table申请成功的话就不用循环了 */
 	} while (!table && size > PAGE_SIZE && --log2qty);
 
+	/* 如果上面循环都无法分配哈希桶头空间的话，则panic */
 	if (!table)
 		panic("Failed to allocate %s hash table\n", tablename);
 
@@ -5483,11 +5517,13 @@ void *__init alloc_large_system_hash(const char *tablename,
 	       ilog2(size) - PAGE_SHIFT,
 	       size);
 
+	/* 保存2的幂次 */
 	if (_hash_shift)
 		*_hash_shift = log2qty;
 	if (_hash_mask)
 		*_hash_mask = (1 << log2qty) - 1;
 
+	/* 返回分配到的哈希桶的指针 */
 	return table;
 }
 

@@ -49,6 +49,7 @@
 
 #define _COMPONENT          ACPI_TABLES
 ACPI_MODULE_NAME("tbxface")
+;
 
 /* Local prototypes */
 static acpi_status acpi_tb_load_namespace(void);
@@ -260,6 +261,7 @@ acpi_status acpi_load_table(struct acpi_table_header *table_ptr)
 }
 
 ACPI_EXPORT_SYMBOL(acpi_load_table)
+;
 
 /*******************************************************************************
  *
@@ -337,6 +339,7 @@ acpi_get_table_header(char *signature,
 }
 
 ACPI_EXPORT_SYMBOL(acpi_get_table_header)
+;
 
 /*******************************************************************************
  *
@@ -376,6 +379,7 @@ acpi_status acpi_unload_table_id(acpi_owner_id id)
 }
 
 ACPI_EXPORT_SYMBOL(acpi_unload_table_id)
+;
 
 /*******************************************************************************
  *
@@ -446,6 +450,7 @@ acpi_get_table(char *signature,
 		       instance, out_table, &tbl_size);
 }
 ACPI_EXPORT_SYMBOL(acpi_get_table)
+;
 
 /*******************************************************************************
  *
@@ -500,6 +505,7 @@ acpi_get_table_by_index(u32 table_index, struct acpi_table_header **table)
 }
 
 ACPI_EXPORT_SYMBOL(acpi_get_table_by_index)
+;
 
 /*******************************************************************************
  *
@@ -644,6 +650,7 @@ acpi_status acpi_load_tables(void)
 }
 
 ACPI_EXPORT_SYMBOL(acpi_load_tables)
+;
 
 
 /*******************************************************************************
@@ -692,6 +699,7 @@ acpi_install_table_handler(acpi_tbl_handler handler, void *context)
 }
 
 ACPI_EXPORT_SYMBOL(acpi_install_table_handler)
+;
 
 /*******************************************************************************
  *
@@ -733,6 +741,7 @@ acpi_status acpi_remove_table_handler(acpi_tbl_handler handler)
 }
 
 ACPI_EXPORT_SYMBOL(acpi_remove_table_handler)
+;
 
 
 static int __init acpi_no_auto_ssdt_setup(char *s) {

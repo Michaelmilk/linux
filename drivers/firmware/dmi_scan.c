@@ -18,6 +18,9 @@ static char dmi_empty_string[] = "        ";
 /*
  * Catch too early calls to dmi_check_system():
  */
+/*
+在函数dmi_scan_machine()中标记dmi初始化完成
+*/
 static int dmi_initialized;
 
 static const char * __init dmi_string_nosave(const struct dmi_header *dm, u8 s)
@@ -54,6 +57,7 @@ static char * __init dmi_string(const struct dmi_header *dm, u8 s)
 		return dmi_empty_string;
 
 	len = strlen(bp) + 1;
+	/* 在堆中找一块内存用来保存信息 */
 	str = dmi_alloc(len);
 	if (str != NULL)
 		strcpy(str, bp);
@@ -67,6 +71,11 @@ static char * __init dmi_string(const struct dmi_header *dm, u8 s)
  *	We have to be cautious here. We have seen BIOSes with DMI pointers
  *	pointing to completely the wrong place for example
  */
+/*
+遍历解析@buf所指示的dmi信息
+调用@decode()函数保存信息
+根据函数调用链，即调用函数dmi_decode()
+*/
 static void dmi_table(u8 *buf, int len, int num,
 		      void (*decode)(const struct dmi_header *, void *),
 		      void *private_data)
@@ -126,8 +135,16 @@ static int __init dmi_checksum(const u8 *buf)
 	return sum == 0;
 }
 
+/*
+通过指针记录解析出的dmi信息
+由函数dmi_scan_machine()的调用链完成dmi信息的处理
+*/
 static char *dmi_ident[DMI_STRING_MAX];
 static LIST_HEAD(dmi_devices);
+/*
+如果配置了CONFIG_DMI
+则dmi_available会在函数dmi_scan_machine()中根据解析结果进行标记
+*/
 int dmi_available;
 
 /*
@@ -138,6 +155,8 @@ static void __init dmi_save_ident(const struct dmi_header *dm, int slot, int str
 	const char *d = (const char*) dm;
 	char *p;
 
+	/* 该插槽处指针已经指向一个字符串了
+	   直接返回，以免冲突覆盖 */
 	if (dmi_ident[slot])
 		return;
 
@@ -145,6 +164,7 @@ static void __init dmi_save_ident(const struct dmi_header *dm, int slot, int str
 	if (p == NULL)
 		return;
 
+	/* 指针记录dmi的信息位置 */
 	dmi_ident[slot] = p;
 }
 
@@ -416,6 +436,7 @@ static int __init dmi_present(const char __iomem *p)
 			       buf[14] >> 4, buf[14] & 0xF);
 		else
 			printk(KERN_INFO "DMI present.\n");
+		/* 从基址dmi_base开始解析 */
 		if (dmi_walk_early(dmi_decode) == 0) {
 			dmi_dump_ids();
 			return 0;
@@ -424,6 +445,12 @@ static int __init dmi_present(const char __iomem *p)
 	return 1;
 }
 
+/*
+DMI: Desktop Management Interface
+	 桌面管理接口，包括硬件信息和BIOS
+
+解析记录dmi信息
+*/
 void __init dmi_scan_machine(void)
 {
 	char __iomem *p, *q;
@@ -454,13 +481,18 @@ void __init dmi_scan_machine(void)
 		 * it's so early in setup that sucker gets confused into doing
 		 * what it shouldn't if we actually call it.
 		 */
+		/* 物理内存960KB开始的64KB空间
+		   即960KB ~ 1MB */
 		p = dmi_ioremap(0xF0000, 0x10000);
 		if (p == NULL)
 			goto error;
 
+		/* 遍历检查这64KB空间里的内容 */
 		for (q = p; q < p + 0x10000; q += 16) {
+			/* 检查是否含有_DMI_，完成信息的提取则返回0 */
 			rc = dmi_present(q);
 			if (!rc) {
+				/* 标记dmi可用 */
 				dmi_available = 1;
 				dmi_iounmap(p, 0x10000);
 				goto out;
@@ -471,6 +503,8 @@ void __init dmi_scan_machine(void)
  error:
 	printk(KERN_INFO "DMI not present or invalid.\n");
  out:
+	/* 标记dmi已初始化完成
+	   信息由指针数组dmi_ident[]记录 */
 	dmi_initialized = 1;
 }
 
@@ -484,11 +518,14 @@ static bool dmi_matches(const struct dmi_system_id *dmi)
 
 	WARN(!dmi_initialized, KERN_ERR "dmi check: not initialized yet.\n");
 
+	/* 遍历matches[]数组 */
 	for (i = 0; i < ARRAY_SIZE(dmi->matches); i++) {
 		int s = dmi->matches[i].slot;
+		/* 提前结束遍历 */
 		if (s == DMI_NONE)
 			break;
 		if (dmi_ident[s]
+			/* 已提取的系统dmi信息中含有参数@dmi的子串 */
 		    && strstr(dmi_ident[s], dmi->matches[i].substr))
 			continue;
 		/* No match */
@@ -524,9 +561,11 @@ int dmi_check_system(const struct dmi_system_id *list)
 	int count = 0;
 	const struct dmi_system_id *d;
 
+	/* 遍历@list */
 	for (d = list; !dmi_is_end_of_table(d); d++)
 		if (dmi_matches(d)) {
 			count++;
+			/* 调用对应的回调函数 */
 			if (d->callback && d->callback(d))
 				break;
 		}

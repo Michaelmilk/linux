@@ -36,6 +36,9 @@ struct timer_rand_state;
  * @dir:		/proc/irq/ procfs entry
  * @name:		flow handler name for /proc/interrupts output
  */
+/*
+ÃèÊöÖĞ¶ÏÔ´
+*/
 struct irq_desc {
 	struct irq_data		irq_data;
 	struct timer_rand_state *timer_rand_state;

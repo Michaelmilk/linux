@@ -277,6 +277,10 @@ static inline int gfp_zonelist(gfp_t flags)
  * For the normal case of non-DISCONTIGMEM systems the NODE_DATA() gets
  * optimized to &contig_page_data at compile-time.
  */
+/*
+对于一致性内存
+即取节点contig_page_data.node_zonelists[0]的指针
+*/
 static inline struct zonelist *node_zonelist(int nid, gfp_t flags)
 {
 	return NODE_DATA(nid)->node_zonelists + gfp_zonelist(flags);
@@ -300,6 +304,9 @@ __alloc_pages(gfp_t gfp_mask, unsigned int order,
 	return __alloc_pages_nodemask(gfp_mask, order, zonelist, NULL);
 }
 
+/*
+从节点@nid中按照@gfp_mask掩码分配2^order个page
+*/
 static inline struct page *alloc_pages_node(int nid, gfp_t gfp_mask,
 						unsigned int order)
 {

@@ -6,6 +6,11 @@
 #ifndef __ASSEMBLY__
 #ifdef	__KERNEL__
 
+/*
+声明一个位图
+先将bit的个数转换成需要几个long型数
+然后用一个long型数组表示
+*/
 #define DECLARE_BITMAP(name,bits) \
 	unsigned long name[BITS_TO_LONGS(bits)]
 #else

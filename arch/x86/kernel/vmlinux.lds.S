@@ -257,6 +257,7 @@ SECTIONS
 	:init
 #endif
 
+	/* 一些初始化使用的数据，函数等 */
 	INIT_DATA_SECTION(16)
 
 	/*

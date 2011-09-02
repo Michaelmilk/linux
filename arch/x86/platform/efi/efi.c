@@ -338,6 +338,9 @@ static void __init efi_free_boot_services(void)
 	}
 }
 
+/*
+EFI: Extensible Firmware Interface 可扩展固件接口
+*/
 void __init efi_init(void)
 {
 	efi_config_table_t *config_tables;

@@ -682,6 +682,12 @@ int __initdata changed_by_mtrr_cleanup;
  * initialized (i.e. before smp_init()).
  *
  */
+/*
+MTRR: Memory Type Range Register 存储区域类型寄存器
+
+规定了读写某段范围物理内存的策略
+用于优化cpu数据传送性能
+*/
 void __init mtrr_bp_init(void)
 {
 	u32 phys_addr;
@@ -701,6 +707,7 @@ void __init mtrr_bp_init(void)
 		 * Intel will implement it to when they extend the address
 		 * bus of the Xeon.
 		 */
+		/* MSR: Model Specific Register 特别模块寄存器 */
 		if (cpuid_eax(0x80000000) >= 0x80000008) {
 			phys_addr = cpuid_eax(0x80000008) & 0xff;
 			/* CPUID workaround for Intel 0F33/0F34 CPU */

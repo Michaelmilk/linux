@@ -605,6 +605,10 @@ void ipi_call_unlock_irq(void)
 #endif /* USE_GENERIC_SMP_HELPERS */
 
 /* Setup configured maximum number of CPUs to activate */
+/*
+通过此参数控制系统中实际激活使用的cpu个数
+可以通过命令行参数maxcpus设置
+*/
 unsigned int setup_max_cpus = NR_CPUS;
 EXPORT_SYMBOL(setup_max_cpus);
 
@@ -655,6 +659,10 @@ static int __init maxcpus(char *str)
 	return 0;
 }
 
+/*
+处理命令行中的参数maxcpus
+以此可以控制系统中实际使用的cpu个数
+*/
 early_param("maxcpus", maxcpus);
 
 /* Setup number of possible processor ids */
@@ -677,13 +685,17 @@ void __init smp_init(void)
 
 	/* FIXME: This should be done in userspace --RR */
 	for_each_present_cpu(cpu) {
+		/* 控制使用的cpu个数 */
 		if (num_online_cpus() >= setup_max_cpus)
 			break;
+		/* 跳过已经激活的cpu，比如引导时使用的cpu */
 		if (!cpu_online(cpu))
 			cpu_up(cpu);
 	}
 
 	/* Any cleanup work */
+	/* 打印系统中在线运行的cpu数量
+	   例如:Brought up 2 CPUs */
 	printk(KERN_INFO "Brought up %ld CPUs\n", (long)num_online_cpus());
 	smp_cpus_done(setup_max_cpus);
 }

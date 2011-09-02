@@ -420,6 +420,11 @@ struct rt_rq {
  * object.
  *
  */
+/*
+notion: ¸ÅÄî£¬ÒâÍ¼
+
+
+*/
 struct root_domain {
 	atomic_t refcount;
 	struct rcu_head rcu;
@@ -7971,6 +7976,7 @@ void __init sched_init(void)
 		init_sched_softirq_csd(&per_cpu(remote_sched_softirq_cb, i));
 #endif
 #endif
+		/* Î´ÅäÖÃCONFIG_SCHED_HRTICKÊ±£¬init_rq_hrtick()Îª¿Õ */
 		init_rq_hrtick(rq);
 		atomic_set(&rq->nr_iowait, 0);
 	}

@@ -26,6 +26,7 @@ static struct lock_class_key irq_desc_lock_class;
 static void __init init_irq_default_affinity(void)
 {
 	alloc_cpumask_var(&irq_default_affinity, GFP_NOWAIT);
+	/* 将irq_default_affinity位图中所有存在cpu的bit位置1 */
 	cpumask_setall(irq_default_affinity);
 }
 #else
@@ -249,6 +250,8 @@ int __init early_irq_init(void)
 	int count, i, node = first_online_node;
 	struct irq_desc *desc;
 
+	/* 设置默认的中断亲和力
+	   所有存在的cpu都可响应中断 */
 	init_irq_default_affinity();
 
 	printk(KERN_INFO "NR_IRQS:%d\n", NR_IRQS);
@@ -256,6 +259,7 @@ int __init early_irq_init(void)
 	desc = irq_desc;
 	count = ARRAY_SIZE(irq_desc);
 
+	/* 遍历irq_desc[]数组，逐项初始化 */
 	for (i = 0; i < count; i++) {
 		desc[i].kstat_irqs = alloc_percpu(unsigned int);
 		alloc_masks(&desc[i], GFP_KERNEL, node);

@@ -161,6 +161,9 @@ early_param("nox2apic", setup_nox2apic);
 #endif
 
 unsigned long mp_lapic_addr;
+/*
+APIC: Advanced Programmable Interrupt Controller 高级可编程中断控制器
+*/
 int disable_apic;
 /* Disable local APIC timer from the kernel commandline or via dmi quirk */
 static int disable_apic_timer __initdata;

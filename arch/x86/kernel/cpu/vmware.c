@@ -28,12 +28,33 @@
 #include <asm/hypervisor.h>
 
 #define CPUID_VMWARE_INFO_LEAF	0x40000000
+/*
+ascii码
+
+0x56: V
+0x4D: M
+0x58: X
+0x68: h
+*/
 #define VMWARE_HYPERVISOR_MAGIC	0x564D5868
 #define VMWARE_HYPERVISOR_PORT	0x5658
 
 #define VMWARE_PORT_CMD_GETVERSION	10
 #define VMWARE_PORT_CMD_GETHZ		45
 
+/*
+从VMWARE使用的管理端口
+IO端口0x5658读入数据
+
+输入时
+%eax中存放magic字
+%ecx中存放命令字
+%dx中存放IO端口号
+%ebx中存放全1
+
+输出时
+根据不同的命令，寄存器中存放不同的结果
+*/
 #define VMWARE_PORT(cmd, eax, ebx, ecx, edx)				\
 	__asm__("inl (%%dx)" :						\
 			"=a"(eax), "=c"(ecx), "=d"(edx), "=b"(ebx) :	\
@@ -42,6 +63,9 @@
 			"2"(VMWARE_HYPERVISOR_PORT), "3"(UINT_MAX) :	\
 			"memory");
 
+/*
+判断是否为VMWARE平台
+*/
 static inline int __vmware_platform(void)
 {
 	uint32_t eax, ebx, ecx, edx;
@@ -78,6 +102,8 @@ static void __init vmware_platform_setup(void)
 
 	VMWARE_PORT(GETHZ, eax, ebx, ecx, edx);
 
+	/* 输入时%ebx存放全1，HZ读取成功后则其值便不为全1了
+	   修改calibrate_tsc函数指针 */
 	if (ebx != UINT_MAX)
 		x86_platform.calibrate_tsc = vmware_get_tsc_khz;
 	else
@@ -90,6 +116,9 @@ static void __init vmware_platform_setup(void)
  * serial key should be enough, as this will always have a VMware
  * specific string when running under VMware hypervisor.
  */
+/*
+判断是否为VMWARE平台
+*/
 static bool __init vmware_platform(void)
 {
 	if (cpu_has_hypervisor) {

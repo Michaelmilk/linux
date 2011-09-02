@@ -39,6 +39,9 @@
  * minimum settable value for pid_max on the running system based
  * on similar defaults.  See kernel/pid.c:pidmap_init() for details.
  */
+/*
+heuristically: Æô·¢Ê½µÄ
+*/
 #define PIDS_PER_CPU_DEFAULT	1024
 #define PIDS_PER_CPU_MIN	8
 

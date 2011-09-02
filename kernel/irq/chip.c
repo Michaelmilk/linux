@@ -23,6 +23,9 @@
  *	@irq:	irq number
  *	@chip:	pointer to irq chip description structure
  */
+/*
+为硬中断号@irq设置中断处理控制器@chip
+*/
 int irq_set_chip(unsigned int irq, struct irq_chip *chip)
 {
 	unsigned long flags;

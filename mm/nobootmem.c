@@ -357,6 +357,9 @@ void * __init alloc_bootmem_section(unsigned long size,
 }
 #endif
 
+/*
+·µ»ØÐéÄâµØÖ·
+*/
 void * __init __alloc_bootmem_node_nopanic(pg_data_t *pgdat, unsigned long size,
 				   unsigned long align, unsigned long goal)
 {

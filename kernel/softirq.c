@@ -725,6 +725,7 @@ void __init softirq_init(void)
 
 	register_hotcpu_notifier(&remote_softirq_cpu_notifier);
 
+	/* 注册小任务的软中断处理函数 */
 	open_softirq(TASKLET_SOFTIRQ, tasklet_action);
 	open_softirq(HI_SOFTIRQ, tasklet_hi_action);
 }

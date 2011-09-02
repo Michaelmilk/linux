@@ -93,6 +93,7 @@ typedef struct desc_struct tss_desc;
 
 struct desc_ptr {
 	unsigned short size;
+	/* 中断描述符表，gdt等的物理地址 */
 	unsigned long address;
 } __attribute__((packed)) ;
 

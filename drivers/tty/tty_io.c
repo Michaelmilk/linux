@@ -3235,6 +3235,11 @@ void __init console_init(void)
 	 * set up the console device so that later boot sequences can
 	 * inform about problems etc..
 	 */
+	/* 调用.con_initcall.init节之间的函数
+	   在arch/x86/kernel/vmlinux.lds.S中通过宏INIT_DATA_SECTION的展开
+	   进而展开宏CON_INITCALL定义了节.con_initcall.init
+	   该节中的函数由宏console_initcall声明
+	   根据不同的配置，编译进各个函数 */
 	call = __con_initcall_start;
 	while (call < __con_initcall_end) {
 		(*call)();

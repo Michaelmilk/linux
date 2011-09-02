@@ -587,7 +587,7 @@ asmlinkage void __init start_kernel(void)
 	setup_log_buf(0);
 	/* 初始化pid hash表，便于从进程的PID获得对应的进程描述符指针 */
 	pidhash_init();
-	/* 虚拟文件系统的初始化 */
+	/* 虚拟文件系统哈希表的初始化 */
 	vfs_caches_init_early();
 	sort_main_extable();
 	/* trap_init()函数完成对系统保留中断向量(异常、非屏蔽中断以及系统调用)的初始化 */
@@ -721,6 +721,7 @@ asmlinkage void __init start_kernel(void)
 	check_bugs();
 
 	acpi_early_init(); /* before LAPIC and SMP init */
+	/* SFI: Simple Firmware Interface */
 	sfi_init_late();
 
 	ftrace_init();

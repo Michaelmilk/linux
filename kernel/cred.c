@@ -619,6 +619,9 @@ EXPORT_SYMBOL(revert_creds);
 /*
  * initialise the credentials stuff
  */
+/*
+credential: ÷§ È
+*/
 void __init cred_init(void)
 {
 	/* allocate a slab in which we can store credentials */

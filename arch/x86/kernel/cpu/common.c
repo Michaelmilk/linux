@@ -88,6 +88,9 @@ static const struct cpu_dev __cpuinitconst default_cpu = {
 */
 static const struct cpu_dev *this_cpu __cpuinitdata = &default_cpu;
 
+/*
+定义并初始化每cpu的gdt
+*/
 DEFINE_PER_CPU_PAGE_ALIGNED(struct gdt_page, gdt_page) = { .gdt = {
 #ifdef CONFIG_X86_64
 	/*

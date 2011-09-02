@@ -125,6 +125,7 @@ unsigned long mach_get_cmos_time(void)
 	status = CMOS_READ(RTC_CONTROL);
 	WARN_ON_ONCE(RTC_ALWAYS_BCD && (status & RTC_DM_BINARY));
 
+	/* 如果rtc使用的是bcd码，则进行相应的转换 */
 	if (RTC_ALWAYS_BCD || !(status & RTC_DM_BINARY)) {
 		sec = bcd2bin(sec);
 		min = bcd2bin(min);
@@ -185,6 +186,8 @@ void read_persistent_clock(struct timespec *ts)
 	unsigned long retval, flags;
 
 	spin_lock_irqsave(&rtc_lock, flags);
+	/* 调用mach_get_cmos_time()函数
+	   从CMOS中读取时间 */
 	retval = x86_platform.get_wallclock();
 	spin_unlock_irqrestore(&rtc_lock, flags);
 

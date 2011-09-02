@@ -332,6 +332,12 @@ static void __init cleanup_highmap(void)
 }
 #endif
 
+/*
+如果堆使用了的话
+则在memblock中标记预留
+
+例如:dmi_alloc() => extend_brk()函数会在堆上分配空间
+*/
 static void __init reserve_brk(void)
 {
 	if (_brk_end > _brk_start)
@@ -663,6 +669,9 @@ void __init reserve_standard_io_resources(void)
 
 }
 
+/*
+ibft: iSCSI Boot Format Table
+*/
 static __init void reserve_ibft_region(void)
 {
 	unsigned long addr, size = 0;
@@ -920,6 +929,8 @@ void __init setup_arch(char **cmdline_p)
 	trim_bios_range();
 #ifdef CONFIG_X86_32
 	if (ppro_with_ram_bug()) {
+		/* 将e820中从0x70000000ULL开始的256KB
+		   从E820_RAM更新为E820_RESERVED */
 		e820_update_range(0x70000000ULL, 0x40000ULL, E820_RAM,
 				  E820_RESERVED);
 		sanitize_e820_map(e820.map, ARRAY_SIZE(e820.map), &e820.nr_map);
@@ -934,7 +945,7 @@ void __init setup_arch(char **cmdline_p)
 	 * partially used pages are not usable - thus
 	 * we are rounding upwards:
 	 */
-	/* 实际存在并架构允许的物理内存最大页框号 */
+	/* 实际存在并且架构允许的物理内存最大页框号 */
 	max_pfn = e820_end_of_ram_pfn();
 
 	/* update e820 for memory not covered by WB MTRRs */

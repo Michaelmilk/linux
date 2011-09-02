@@ -200,6 +200,7 @@ static int __init romchecksum(const unsigned char *rom, unsigned long length)
 
 /*
 探测预留ROM资源
+记录在iomem_resource中
 */
 void __init probe_roms(void)
 {

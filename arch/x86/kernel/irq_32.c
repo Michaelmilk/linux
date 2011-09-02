@@ -119,10 +119,14 @@ execute_on_irq_stack(int overflow, struct irq_desc *desc, int irq)
 /*
  * allocate per-cpu stacks for hardirq and for softirq processing
  */
+/*
+percpu硬中断和软中断上下文所使用的内核栈的分配与初始化
+*/
 void __cpuinit irq_ctx_init(int cpu)
 {
 	union irq_ctx *irqctx;
 
+	/* 若已经设置过了，则返回 */
 	if (per_cpu(hardirq_ctx, cpu))
 		return;
 

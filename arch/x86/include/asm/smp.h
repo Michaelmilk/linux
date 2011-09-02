@@ -188,6 +188,11 @@ extern unsigned disabled_cpus __cpuinitdata;
  * from the initial startup. We map APIC_BASE very early in page_setup(),
  * so this is correct in the x86 case.
  */
+/*
+返回当前cpu的编号
+该编号是从0开始的
+其值在函数setup_per_cpu_areas()中初始化
+*/
 #define raw_smp_processor_id() (percpu_read(cpu_number))
 extern int safe_smp_processor_id(void);
 

@@ -315,6 +315,9 @@ EXPORT_SYMBOL(timespec_trunc);
  * machines where long is 32-bit! (However, as time_t is signed, we
  * will already get problems at other places on 2038-01-19 03:14:08)
  */
+/*
+·µ»Ø¾àÀë1970-01-01 00:00:00µÄÃëÊı
+*/
 unsigned long
 mktime(const unsigned int year0, const unsigned int mon0,
        const unsigned int day, const unsigned int hour,

@@ -720,6 +720,9 @@ static inline void set_page_links(struct page *page, enum zone_type zone,
  */
 #include <linux/vmstat.h>
 
+/*
+返回@page所描述的页框的虚拟地址
+*/
 static __always_inline void *lowmem_page_address(struct page *page)
 {
 	return __va(PFN_PHYS(page_to_pfn(page)));

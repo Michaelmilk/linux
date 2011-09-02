@@ -43,7 +43,9 @@ enum clock_event_nofitiers {
 /*
  * Clock event features
  */
+/* 表示可周期性的中断 */
 #define CLOCK_EVT_FEAT_PERIODIC		0x000001
+/* 表示单次中断 */
 #define CLOCK_EVT_FEAT_ONESHOT		0x000002
 /*
  * x86(64) specific misfeatures:
@@ -77,28 +79,42 @@ enum clock_event_nofitiers {
  * @cpumask:		cpumask to indicate for which CPUs this device works
  * @list:		list head for the management code
  */
+/*
+时钟的事件信息
+包括当硬件时钟中断发生时要执行那些操作（实际上保存了相应函数的指针）
+*/
 struct clock_event_device {
+	/* 时钟中断处理函数 */
 	void			(*event_handler)(struct clock_event_device *);
+	/* set_next_event函数的作用是设置定时器下一次发出时钟中断的时机 */
 	int			(*set_next_event)(unsigned long evt,
 						  struct clock_event_device *);
+	/* 下一次该设备发出中断的时间，单位:纳秒 */
 	ktime_t			next_event;
 	u64			max_delta_ns;
 	u64			min_delta_ns;
 	u32			mult;
 	u32			shift;
+	/* 当前设备的工作模式 */
 	enum clock_event_mode	mode;
+	/* 设备功能 */
 	unsigned int		features;
 	unsigned long		retries;
 
 	void			(*broadcast)(const struct cpumask *mask);
+	/* 改变设备工作模式的函数指针 */
 	void			(*set_mode)(enum clock_event_mode mode,
 					    struct clock_event_device *);
 	unsigned long		min_delta_ticks;
 	unsigned long		max_delta_ticks;
 
+	/* 设备名称 */
 	const char		*name;
+	/* 优先级 */
 	int			rating;
+	/* 中断请求号 */
 	int			irq;
+	/* 表示这个设备所属的cpu掩码 */
 	const struct cpumask	*cpumask;
 	struct list_head	list;
 } ____cacheline_aligned;

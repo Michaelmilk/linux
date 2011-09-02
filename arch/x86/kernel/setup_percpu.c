@@ -21,6 +21,9 @@
 #include <asm/cpu.h>
 #include <asm/stackprotector.h>
 
+/*
+定义percpu的cpu编号
+*/
 DEFINE_PER_CPU(int, cpu_number);
 EXPORT_PER_CPU_SYMBOL(cpu_number);
 
@@ -99,6 +102,9 @@ static bool __init pcpu_need_numa(void)
  * RETURNS:
  * Pointer to the allocated area on success, NULL on failure.
  */
+/*
+从memblock中预留
+*/
 static void * __init pcpu_alloc_bootmem(unsigned int cpu, unsigned long size,
 					unsigned long align)
 {
@@ -192,7 +198,9 @@ void __init setup_per_cpu_areas(void)
 #endif
 	rc = -EINVAL;
 	if (pcpu_chosen_fc != PCPU_FC_PAGE) {
+		/* 没有pse时，以页大小4KB为原子大小 */
 		const size_t atom_size = cpu_has_pse ? PMD_SIZE : PAGE_SIZE;
+		/* 8KB + 12KB - 0 = 20KB */
 		const size_t dyn_size = PERCPU_MODULE_RESERVE +
 			PERCPU_DYNAMIC_RESERVE - PERCPU_FIRST_CHUNK_RESERVE;
 
@@ -216,7 +224,9 @@ void __init setup_per_cpu_areas(void)
 	for_each_possible_cpu(cpu) {
 		per_cpu_offset(cpu) = delta + pcpu_unit_offsets[cpu];
 		per_cpu(this_cpu_off, cpu) = per_cpu_offset(cpu);
+		/* 为cpu编号赋值，供宏smp_processor_id返回当前cpu的编号 */
 		per_cpu(cpu_number, cpu) = cpu;
+		/* 设置percpu的gdt表中的GDT_ENTRY_PERCPU项 */
 		setup_percpu_segment(cpu);
 		setup_stack_canary_segment(cpu);
 		/*

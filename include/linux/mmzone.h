@@ -327,6 +327,8 @@ struct zone {
 	unsigned long		min_unmapped_pages;
 	unsigned long		min_slab_pages;
 #endif
+	/* percpu变量指针
+	   空间在setup_zone_pageset()中分配赋值 */
 	struct per_cpu_pageset __percpu *pageset;
 	/*
 	 * free areas of different sizes
@@ -865,6 +867,9 @@ extern struct zone *next_zone(struct zone *zone);
 	     zone;					\
 	     zone = next_zone(zone))
 
+/*
+遍历所有含有页面的zone区域
+*/
 #define for_each_populated_zone(zone)		        \
 	for (zone = (first_online_pgdat())->node_zones; \
 	     zone;					\

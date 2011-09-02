@@ -538,6 +538,11 @@ struct pid *find_ge_pid(int nr, struct pid_namespace *ns)
  * machine.  From a minimum of 16 slots up to 4096 slots at one gigabyte or
  * more.
  */
+/*
+pid_hash是依据系统内存大小分配的
+2^18 = 256K
+即按比例每256KB的内存可增加1个头节点数
+*/
 void __init pidhash_init(void)
 {
 	int i, pidhash_size;

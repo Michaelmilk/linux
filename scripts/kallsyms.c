@@ -669,6 +669,8 @@ static void sort_symbols(void)
 使用nm工具获取目标文件的符号信息后
 通过管道输入到本程序进行读取解析
 然后重定向输出到文件
+
+顶层Makefile中的cmd_kallsyms调用本程序
 */
 int main(int argc, char **argv)
 {

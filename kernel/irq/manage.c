@@ -73,6 +73,9 @@ void synchronize_irq(unsigned int irq)
 EXPORT_SYMBOL(synchronize_irq);
 
 #ifdef CONFIG_SMP
+/*
+中断亲和力bit位
+*/
 cpumask_var_t irq_default_affinity;
 
 /**
@@ -972,11 +975,13 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 			goto mismatch;
 
 		/* add new interrupt at end of irq queue */
+		/* 循环，并取得最后一个 irqaction 的 next 指针赋值给 p */
 		do {
 			thread_mask |= old->thread_mask;
 			old_ptr = &old->next;
 			old = *old_ptr;
 		} while (old);
+		/* 记录该中断线是共享的 */
 		shared = 1;
 	}
 
@@ -990,6 +995,8 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 	}
 	new->thread_mask = 1 << ffz(thread_mask);
 
+	/* 如果该中断没有设置共享，即第一次给该中断号设置中断处理程序
+	   则设置该 irq_desc 结构 */
 	if (!shared) {
 		init_waitqueue_head(&desc->wait_for_threads);
 
@@ -1064,6 +1071,7 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 	if (new->thread)
 		wake_up_process(new->thread);
 
+	/* 在/proc/irq目录下创建一个与中断号相对应的项 */
 	register_irq_proc(irq, desc);
 	new->dir = NULL;
 	register_handler_proc(irq, new);
@@ -1105,9 +1113,13 @@ out_thread:
  *
  * Used to statically setup interrupts in the early boot process.
  */
+/*
+设置中断描述符对应的中断响应操作
+*/
 int setup_irq(unsigned int irq, struct irqaction *act)
 {
 	int retval;
+	/* 从全局中断描述符结构数组irq_desc中得到对应中断号的中断描述结构 */
 	struct irq_desc *desc = irq_to_desc(irq);
 
 	chip_bus_lock(desc);

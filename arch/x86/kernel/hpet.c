@@ -109,6 +109,10 @@ static int __init disable_hpet(char *str)
 }
 __setup("nohpet", disable_hpet);
 
+/*
+命令行没有使用nohpet关闭hpet
+
+*/
 static inline int is_hpet_capable(void)
 {
 	return !boot_hpet_disable && hpet_address;

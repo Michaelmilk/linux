@@ -104,15 +104,25 @@ typedef irqreturn_t (*irq_handler_t)(int, void *);
  * @thread_mask:	bitmask for keeping track of @thread activity
  */
 struct irqaction {
+	/* 指向设备的中断响应函数，它在系统初始化时被置入
+	   当中断发生时，系统将自动调用该函数 */
 	irq_handler_t handler;
+	/* 指明中断类型，如正常中断、快速中断等 */
 	unsigned long flags;
+	/* 与设备相关的数据类型
+       中断响应函数可以根据需要将它转化成所需的数据结构
+       从而达到访问系统数据的功能
+       用于共享中断线
+       如果无需共享中断线，那么将该参数赋值为空值(NULL)就可以了 */
 	void *dev_id;
+	/* 指向下一个 irqaction */
 	struct irqaction *next;
 	int irq;
 	irq_handler_t thread_fn;
 	struct task_struct *thread;
 	unsigned long thread_flags;
 	unsigned long thread_mask;
+	/* 设备名 */
 	const char *name;
 	struct proc_dir_entry *dir;
 } ____cacheline_internodealigned_in_smp;

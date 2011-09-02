@@ -42,6 +42,10 @@ struct gdt_page {
 
 DECLARE_PER_CPU_PAGE_ALIGNED(struct gdt_page, gdt_page);
 
+/*
+取该@cpu的gdt
+每cpu的变量gdt在arch/x86/kernel/cpu/common.c中定义
+*/
 static inline struct desc_struct *get_cpu_gdt_table(unsigned int cpu)
 {
 	return per_cpu(gdt_page, cpu).gdt;
@@ -65,11 +69,24 @@ static inline void pack_gate(gate_desc *gate, unsigned type, unsigned long func,
 }
 
 #else
+/*
+ * 31          24         19   16                 7     4     0
+ * ------------------------------------------------------------
+ * |                             | |   | | | | | | | | |      |
+ * |      offset 31..24          |P|DPL|0|1|1|1|0|0|0|0|reser |
+ * |                             | |   | | | | | | | | | ved  |
+ * ------------------------------------------------------------
+ * |                             |                            |
+ * |   segment selector 15..0    |      offset 15..0          |
+ * |                             |                            |
+ * ------------------------------------------------------------
+ */
 static inline void pack_gate(gate_desc *gate, unsigned char type,
 			     unsigned long base, unsigned dpl, unsigned flags,
 			     unsigned short seg)
 {
 	gate->a = (seg << 16) | (base & 0xffff);
+	/* 0x80将P标志位置1 */
 	gate->b = (base & 0xffff0000) | (((0x80 | type | (dpl << 5)) & 0xff) << 8);
 }
 
@@ -137,6 +154,18 @@ native_write_gdt_entry(struct desc_struct *gdt, int entry, const void *desc, int
 	memcpy(&gdt[entry], desc, size);
 }
 
+/*
+ * 31          24         19   16                 7           0
+ * ------------------------------------------------------------
+ * |             | |B| |A|       | |   |1|0|E|W|A|            |
+ * | BASE 31..24 |G|/|0|V| LIMIT |P|DPL|  TYPE   | BASE 23:16 |
+ * |             | |D| |L| 19..16| |   |1|1|C|R|A|            |
+ * ------------------------------------------------------------
+ * |                             |                            |
+ * |        BASE 15..0           |       LIMIT 15..0          |
+ * |                             |                            |
+ * ------------------------------------------------------------
+ */
 static inline void pack_descriptor(struct desc_struct *desc, unsigned long base,
 				   unsigned long limit, unsigned char type,
 				   unsigned char flags)
@@ -327,6 +356,7 @@ static inline void _set_gate(int gate, unsigned type, void *addr,
  * Pentium F0 0F bugfix can have resulted in the mapped
  * IDT being write-protected.
  */
+/* 设置中断门函数，n 为中断向量号，addr为中断服务例程地址，特权级0 */
 static inline void set_intr_gate(unsigned int n, void *addr)
 {
 	BUG_ON((unsigned)n > 0xFF);
@@ -369,12 +399,14 @@ static inline void set_system_trap_gate(unsigned int n, void *addr)
 	_set_gate(n, GATE_TRAP, addr, 0x3, 0, __KERNEL_CS);
 }
 
+/* 设置陷阱门函数，n 为中断向量号，addr为中断服务例程地址 */
 static inline void set_trap_gate(unsigned int n, void *addr)
 {
 	BUG_ON((unsigned)n > 0xFF);
 	_set_gate(n, GATE_TRAP, addr, 0, 0, __KERNEL_CS);
 }
 
+/* 设置任务门函数，n 为中断向量号，addr为中断服务例程地址 */
 static inline void set_task_gate(unsigned int n, unsigned int gdt_entry)
 {
 	BUG_ON((unsigned)n > 0xFF);

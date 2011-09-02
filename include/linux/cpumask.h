@@ -675,6 +675,9 @@ extern const DECLARE_BITMAP(cpu_all_bits, NR_CPUS);
 #define cpu_all_mask to_cpumask(cpu_all_bits)
 
 /* First bits of cpu_bit_bitmap are in fact unset. */
+/*
+cpu_bit_bitmap在定义初始化的时候并未初始化下标[0]，其值默认为0
+*/
 #define cpu_none_mask to_cpumask(cpu_bit_bitmap[0])
 
 #define for_each_possible_cpu(cpu) for_each_cpu((cpu), cpu_possible_mask)

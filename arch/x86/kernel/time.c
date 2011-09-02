@@ -76,10 +76,15 @@ static struct irqaction irq0  = {
 
 void __init setup_default_timer_irq(void)
 {
+	/* 0号中断为时钟中断 */
 	setup_irq(0, &irq0);
 }
 
 /* Default timer init function */
+/*
+HPET: High Precision Event Timer 高精度事件定时器
+PIT	: Programmable Interval Timer 可编程间隔定时器
+*/
 void __init hpet_time_init(void)
 {
 	if (!hpet_enable())
@@ -89,6 +94,7 @@ void __init hpet_time_init(void)
 
 static __init void x86_late_time_init(void)
 {
+	/* 调用hpet_time_init()函数 */
 	x86_init.timers.timer_init();
 	tsc_init();
 }

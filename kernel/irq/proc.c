@@ -307,6 +307,9 @@ void register_handler_proc(unsigned int irq, struct irqaction *action)
 
 #define MAX_NAMELEN 10
 
+/*
+在/proc/irq目录下创建以irq号为名称的目录
+*/
 void register_irq_proc(unsigned int irq, struct irq_desc *desc)
 {
 	char name [MAX_NAMELEN];

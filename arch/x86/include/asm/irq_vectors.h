@@ -48,6 +48,9 @@
 
 #define IA32_SYSCALL_VECTOR		0x80
 #ifdef CONFIG_X86_32
+/*
+系统调用在中断描述符表中的下标
+*/
 # define SYSCALL_VECTOR			0x80
 #endif
 
@@ -55,6 +58,9 @@
  * Vectors 0x30-0x3f are used for ISA interrupts.
  *   round up to the next 16-vector boundary
  */
+/*
+中断线irq0在中断描述符表idt_table中的下标
+*/
 #define IRQ0_VECTOR			((FIRST_EXTERNAL_VECTOR + 16) & ~15)
 
 #define IRQ1_VECTOR			(IRQ0_VECTOR +  1)

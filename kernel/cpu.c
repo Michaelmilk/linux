@@ -513,6 +513,17 @@ void __cpuinit notify_cpu_starting(unsigned int cpu)
 #define MASK_DECLARE_4(x)	MASK_DECLARE_2(x), MASK_DECLARE_2(x+2)
 #define MASK_DECLARE_8(x)	MASK_DECLARE_4(x), MASK_DECLARE_4(x+4)
 
+/*
+[0][0] = 0,
+[1][0] = 1,
+[2][0] = 2,
+[3][0] = 4,
+[4][0] = 8,
+[5][0] = 16,
+[6][0] = 32,
+...
+
+*/
 const unsigned long cpu_bit_bitmap[BITS_PER_LONG+1][BITS_TO_LONGS(NR_CPUS)] = {
 
 	MASK_DECLARE_8(0),	MASK_DECLARE_8(8),

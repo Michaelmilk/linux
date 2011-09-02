@@ -85,6 +85,9 @@ static struct irqaction irq2 = {
 	.flags = IRQF_NO_THREAD,
 };
 
+/*
+每cpu的中断向量表
+*/
 DEFINE_PER_CPU(vector_irq_t, vector_irq) = {
 	[0 ... NR_VECTORS - 1] = -1,
 };
@@ -101,6 +104,9 @@ int vector_used_by_percpu_irq(unsigned int vector)
 	return 0;
 }
 
+/*
+ISA: Industrial Standard Architecture 工业标准结构总线
+*/
 void __init init_ISA_irqs(void)
 {
 	/* 指向全局变量i8259A_chip */
@@ -126,6 +132,7 @@ void __init init_IRQ(void)
 	 * We probably need a better place for this, but it works for
 	 * now ...
 	 */
+	/* 未定义CONFIG_OF时，为空函数 */
 	x86_add_irq_domains();
 
 	/*
@@ -315,10 +322,13 @@ void __init native_init_IRQ(void)
 	 */
 	for (i = FIRST_EXTERNAL_VECTOR; i < NR_VECTORS; i++) {
 		/* IA32_SYSCALL_VECTOR could be used in trap_init already. */
+		/* 系统调用的向量号0x80已经在trap_init()中标记使用了
+		   这里便跳过 */
 		if (!test_bit(i, used_vectors))
 			set_intr_gate(i, interrupt[i-FIRST_EXTERNAL_VECTOR]);
 	}
 
+	/* 对于8259A中断控制器，2号中断用于级联从中断控制器 */
 	if (!acpi_ioapic && !of_ioapic)
 		setup_irq(2, &irq2);
 
@@ -327,6 +337,7 @@ void __init native_init_IRQ(void)
 	 * External FPU? Set up irq13 if so, for
 	 * original braindamaged IBM FERR coupling.
 	 */
+	/* 外部数学协处理器连接到irq13线 */
 	if (boot_cpu_data.hard_math && !cpu_has_fpu)
 		setup_irq(FPU_IRQ, &fpu_irq);
 

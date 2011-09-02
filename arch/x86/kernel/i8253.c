@@ -23,6 +23,9 @@ EXPORT_SYMBOL(i8253_lock);
  * HPET replaces the PIT, when enabled. So we need to know, which of
  * the two timers is used
  */
+/*
+指向系统当前使用的clock_event_device
+*/
 struct clock_event_device *global_clock_event;
 
 /*
@@ -100,6 +103,9 @@ static struct clock_event_device pit_ce = {
  * Initialize the conversion factor and the min/max deltas of the clock event
  * structure and register the clock event source with the framework.
  */
+/*
+初始化8253芯片
+*/
 void __init setup_pit_timer(void)
 {
 	/*

@@ -47,6 +47,10 @@ e820_saved在函数setup_memory_map()中复制e820
 struct e820map e820_saved;
 
 /* For PCI or other memory-mapped resources */
+/*
+记录pci使用的内存开始物理地址
+在e820_setup_gap()中赋值
+*/
 unsigned long pci_mem_start = 0xaeedbabe;
 #ifdef CONFIG_PCI
 EXPORT_SYMBOL(pci_mem_start);
@@ -607,10 +611,23 @@ static void __init update_e820_saved(void)
 		return;
 	e820_saved.nr_map = nr_map;
 }
+/*
+4G
+*/
 #define MAX_GAP_END 0x100000000ull
 /*
  * Search for a gap in the e820 memory space from start_addr to end_addr.
  */
+/*
+在e820各个map之间寻找一个合适的gap区域
+
+@gapstart	: 保存开始地址
+@gapsize	: 传入时保存请求的gap大小，传出时保存实际请求到的gap大小
+@start_addr	: 允许的开始地址
+@end_addr	: 允许的结束地址
+
+@return		: 找到了需要的gap大小，则返回1，否则返回0
+*/
 __init int e820_search_gap(unsigned long *gapstart, unsigned long *gapsize,
 		unsigned long start_addr, unsigned long long end_addr)
 {
@@ -618,12 +635,17 @@ __init int e820_search_gap(unsigned long *gapstart, unsigned long *gapsize,
 	int i = e820.nr_map;
 	int found = 0;
 
+	/* 指定了@end_addr，并且合理，则使用指定的@end_addr
+	   否则使用MAX_GAP_END */
 	last = (end_addr && end_addr < MAX_GAP_END) ? end_addr : MAX_GAP_END;
 
+	/* 遍历e820中的各个map区域 */
 	while (--i >= 0) {
+		/* map中的起止物理地址 */
 		unsigned long long start = e820.map[i].addr;
 		unsigned long long end = start + e820.map[i].size;
 
+		/* 跳过小于@start_addr的区域 */
 		if (end < start_addr)
 			continue;
 
@@ -631,15 +653,20 @@ __init int e820_search_gap(unsigned long *gapstart, unsigned long *gapsize,
 		 * Since "last" is at most 4GB, we know we'll
 		 * fit in 32 bits if this condition is true
 		 */
+		/* 进入这个map区域后的gap进行检查 */
 		if (last > end) {
 			unsigned long gap = last - end;
 
+			/* 检查这个gap的大小是否满足请求的大小 */
 			if (gap >= *gapsize) {
+				/* 更新gap起始地址
+				   标记找到 */
 				*gapsize = gap;
 				*gapstart = end;
 				found = 1;
 			}
 		}
+		/* 标记下一轮的结束位置 */
 		if (start < last)
 			last = start;
 	}
@@ -652,12 +679,20 @@ __init int e820_search_gap(unsigned long *gapstart, unsigned long *gapsize,
  * for hotplug or unconfigured devices in.
  * Hopefully the BIOS let enough space left.
  */
+/*
+MMIO即内存映射I/O，它是PCI规范的一部分，I/O设备被放置在内存空间而不是I/O空间。
+从处理器的角度看，内存映射I/O后系统设备访问起来和内存一样。
+这样访问AGP/PCI-E显卡是的帧缓存，BIOS，PCI设备就可以使用读写内存一样的汇编指令完成，
+简化了程序设计的难度和接口的复杂性。
+*/
 __init void e820_setup_gap(void)
 {
 	unsigned long gapstart, gapsize;
 	int found;
 
+	/* 256M */
 	gapstart = 0x10000000;
+	/* 4M */
 	gapsize = 0x400000;
 	found  = e820_search_gap(&gapstart, &gapsize, 0, MAX_GAP_END);
 

@@ -47,8 +47,10 @@ detect_hypervisor_vendor(void)
 {
 	const struct hypervisor_x86 *h, * const *p;
 
+	/* 遍历hypervisors[]数组 */
 	for (p = hypervisors; p < hypervisors + ARRAY_SIZE(hypervisors); p++) {
 		h = *p;
+		/* 调用detect()函数，例如:vmware_platform() */
 		if (h->detect()) {
 			x86_hyper = h;
 			printk(KERN_INFO "Hypervisor detected: %s\n", h->name);
@@ -59,6 +61,7 @@ detect_hypervisor_vendor(void)
 
 void __cpuinit init_hypervisor(struct cpuinfo_x86 *c)
 {
+	/* 例如调用vmware_set_cpu_features()函数 */
 	if (x86_hyper && x86_hyper->set_cpu_features)
 		x86_hyper->set_cpu_features(c);
 }
@@ -69,6 +72,7 @@ hypervisor: 系统管理程序
 void __init init_hypervisor_platform(void)
 {
 
+	/* 探测厂商 */
 	detect_hypervisor_vendor();
 
 	if (!x86_hyper)

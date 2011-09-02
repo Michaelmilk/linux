@@ -64,6 +64,10 @@ int __init pci_subsys_init(void)
 	 * The init function returns an non zero value when
 	 * pci_legacy_init should be invoked.
 	 */
+	/* 调用init()函数
+	   如果init()返回非0的话，则继续调用pci_legacy_init()函数
+
+	   比如在acpi_boot_init()为init赋值为pci_acpi_init() */
 	if (x86_init.pci.init())
 		pci_legacy_init();
 
