@@ -788,7 +788,7 @@ static inline struct sk_buff *skb_get(struct sk_buff *skb)
 static inline int skb_cloned(const struct sk_buff *skb)
 {
 	return skb->cloned &&
-			/* 低16位表示skb线性数据区的引用计数 */
+			/* 低16位表示skb整个数据区的引用计数 */
 	       (atomic_read(&skb_shinfo(skb)->dataref) & SKB_DATAREF_MASK) != 1;
 }
 
@@ -809,7 +809,11 @@ static inline int skb_header_cloned(const struct sk_buff *skb)
 	if (!skb->cloned)
 		return 0;
 
+	/* 取数据区的引用计数 */
 	dataref = atomic_read(&skb_shinfo(skb)->dataref);
+	/* 低16bit为整个数据区的引用计数
+	   高16bit为payload部分的引用计数
+	   相减得出线性区的引用计数 */
 	dataref = (dataref & SKB_DATAREF_MASK) - (dataref >> SKB_DATAREF_SHIFT);
 	return dataref != 1;
 }
@@ -836,6 +840,9 @@ static inline void skb_header_release(struct sk_buff *skb)
  *	Returns true if more than one person has a reference to this
  *	buffer.
  */
+/*
+判断@skb指向的sk_buff结构实例是否有多个引用
+*/
 static inline int skb_shared(const struct sk_buff *skb)
 {
 	return atomic_read(&skb->users) != 1;
@@ -855,7 +862,8 @@ static inline int skb_shared(const struct sk_buff *skb)
  *	NULL is returned on a memory allocation failure.
  */
 /*
-如果@skb结构自身是共享的，则进行clone，分配一个新的skb
+如果@skb指向的sk_buff结构实例是共享的
+则进行clone，分配一个新的sk_buff实例
 然后将原@skb的引用计数减1，返回新的skb，clone失败的话会返回NULL
 
 否则返回原@skb

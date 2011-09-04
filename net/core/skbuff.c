@@ -808,6 +808,14 @@ EXPORT_SYMBOL(pskb_copy);
 
 /*
 为@skb扩展线性区buffer
+(如果@nhead和@ntail为0的话，则创建的是一个相同的线性区拷贝)
+@skb本身不会改变(因为传的是1级指针，只能改变其中的一些字段的值)
+@skb只能有一个引用
+成功的话返回0，扩展失败的话返回-ENOMEM
+最坏的情况是@skb没有任何变化
+
+因为@skb的线性区很可能已经被换掉
+所以原来指向@skb中线性区的一些指针需要重新加载
 
 @nhead	: 在头部新增的长度
 @ntail	: 在尾部新增的长度
@@ -828,19 +836,29 @@ int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
 	if (skb_shared(skb))
 		BUG();
 
+    /* 按照cpu的L1 cache线对齐 */
 	size = SKB_DATA_ALIGN(size);
 
 	/* Check if we can avoid taking references on fragments if we own
 	 * the last reference on skb->head. (see skb_release_data())
 	 */
+    /* 检查能否使用快速路径，避免分配新的线性区空间
+
+	   如果@skb不是clone的，即数据区为该@skb独享，可以尝试进入快速路径 */
 	if (!skb->cloned)
 		fastpath = true;
 	else {
+		/* 根据nohdr位标志获取数据区引用为1时的值，参考sk_buff中nohdr的定义 */
 		int delta = skb->nohdr ? (1 << SKB_DATAREF_SHIFT) + 1 : 1;
 
+		/* 判断数据区是否只有1个引用
+		   数据区只有1个引用，则可以进入快速路径 */
 		fastpath = atomic_read(&skb_shinfo(skb)->dataref) == delta;
 	}
 
+	/* 可以使用快速路径
+	   并且@skb申请的缓存大小足够扩展
+	   则直接在原buffer上移动数据 */
 	if (fastpath &&
 	    size + sizeof(struct skb_shared_info) <= ksize(skb->head)) {
 		memmove(skb->head + size, skb_shinfo(skb),
@@ -849,6 +867,7 @@ int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
 		memmove(skb->head + nhead, skb->head,
 			skb_tail_pointer(skb) - skb->head);
 		off = nhead;
+		/* 修改@skb中相关字段的值 */
 		goto adjust_others;
 	}
 
@@ -868,6 +887,8 @@ int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
 	       skb_shinfo(skb),
 	       offsetof(struct skb_shared_info, frags[skb_shinfo(skb)->nr_frags]));
 
+	/* 原数据区引用只有1个，但是没有使用快速路径，而是分配了新的数据区
+	   则直接释放掉原来的线性区buffer */
 	if (fastpath) {
 		kfree(skb->head);
 	} else {
@@ -884,7 +905,7 @@ int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
 
     /* 这里求偏移的方式有点不好理解
        skb->head是原数据区起始位置
-       在skb_release_data()里kfree(skb->head)时并没有将skb->head至为NULL
+       在skb_release_data()里kfree(skb->head)时并没有将skb->head置为NULL
        clone的skb也许并不会有释放动作
        而新分配的data指针可能与原数据区相差很远
        假定两个buffer紧挨着，画图示意下 */
