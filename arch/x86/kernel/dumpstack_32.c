@@ -17,6 +17,10 @@
 #include <asm/stacktrace.h>
 
 
+/*
+打印栈中指针对应的符号信息
+即函数的调用顺序
+*/
 void dump_trace(struct task_struct *task, struct pt_regs *regs,
 		unsigned long *stack, unsigned long bp,
 		const struct stacktrace_ops *ops, void *data)
@@ -42,11 +46,13 @@ void dump_trace(struct task_struct *task, struct pt_regs *regs,
 
 		context = (struct thread_info *)
 			((unsigned long)stack & (~(THREAD_SIZE - 1)));
+		/* print_trace_ops => print_context_stack() */
 		bp = ops->walk_stack(context, stack, bp, ops, data, NULL, &graph);
 
 		stack = (unsigned long *)context->previous_esp;
 		if (!stack)
 			break;
+		/* print_trace_ops => print_trace_stack() */
 		if (ops->stack(data, "IRQ") < 0)
 			break;
 		touch_nmi_watchdog();
@@ -54,6 +60,9 @@ void dump_trace(struct task_struct *task, struct pt_regs *regs,
 }
 EXPORT_SYMBOL(dump_trace);
 
+/*
+打印内核栈中的信息
+*/
 void
 show_stack_log_lvl(struct task_struct *task, struct pt_regs *regs,
 		   unsigned long *sp, unsigned long bp, char *log_lvl)
@@ -68,12 +77,17 @@ show_stack_log_lvl(struct task_struct *task, struct pt_regs *regs,
 			sp = (unsigned long *)&sp;
 	}
 
+	/* 栈顶指针 */
 	stack = sp;
+	/* 打印内核栈中kstack_depth_to_print条数目的指针信息 */
 	for (i = 0; i < kstack_depth_to_print; i++) {
+		/* 到达栈底了，提前结束循环 */
 		if (kstack_end(stack))
 			break;
+		/* 控制换行 */
 		if (i && ((i % STACKSLOTS_PER_LINE) == 0))
 			printk(KERN_CONT "\n");
+		/* 打印栈中信息 */
 		printk(KERN_CONT " %08lx", *stack++);
 		touch_nmi_watchdog();
 	}

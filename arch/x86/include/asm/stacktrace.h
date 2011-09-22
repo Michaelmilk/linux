@@ -40,6 +40,7 @@ struct stacktrace_ops {
 	void (*address)(void *data, unsigned long address, int reliable);
 	/* On negative return stop dumping */
 	int (*stack)(void *data, char *name);
+	/* 遍历栈的函数指针 */
 	walk_stack_t	walk_stack;
 };
 

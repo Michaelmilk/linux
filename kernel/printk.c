@@ -144,6 +144,9 @@ static int console_may_schedule;
 
 #ifdef CONFIG_PRINTK
 
+/*
+日志缓冲区
+*/
 static char __log_buf[__LOG_BUF_LEN];
 static char *log_buf = __log_buf;
 static int log_buf_len = __LOG_BUF_LEN;
@@ -481,6 +484,9 @@ out:
 	return error;
 }
 
+/*
+syslog系统调用
+*/
 SYSCALL_DEFINE3(syslog, int, type, char __user *, buf, int, len)
 {
 	return do_syslog(type, buf, len, SYSLOG_FROM_CALL);
@@ -515,6 +521,7 @@ static void __call_console_drivers(unsigned start, unsigned end)
 		if ((con->flags & CON_ENABLED) && con->write &&
 				(cpu_online(smp_processor_id()) ||
 				(con->flags & CON_ANYTIME)))
+			/* 调用控制台的写函数，输出log缓冲区中的信息 */
 			con->write(con, &LOG_BUF(start), end - start);
 	}
 }
@@ -529,6 +536,9 @@ static int __init ignore_loglevel_setup(char *str)
 	return 0;
 }
 
+/*
+在启动命令行使用参数ignore_loglevel忽略对日志信息的级别控制
+*/
 early_param("ignore_loglevel", ignore_loglevel_setup);
 
 /*
@@ -537,6 +547,10 @@ early_param("ignore_loglevel", ignore_loglevel_setup);
 static void _call_console_drivers(unsigned start,
 				unsigned end, int msg_log_level)
 {
+	/* 1.检查日志级别，只有小于console_loglevel级别的日志
+	     或者设置了ignore_loglevel时才可能会被输出到控制台
+	   2.控制台驱动可用
+	   3.有日志信息可以输出 */
 	if ((msg_log_level < console_loglevel || ignore_loglevel) &&
 			console_drivers && start != end) {
 		if ((start & LOG_BUF_MASK) > (end & LOG_BUF_MASK)) {
@@ -659,6 +673,9 @@ static void call_console_drivers(unsigned start, unsigned end)
 	_call_console_drivers(start_print, end, msg_level);
 }
 
+/*
+将字符@c写入缓冲区
+*/
 static void emit_log_char(char c)
 {
 	LOG_BUF(log_end) = c;
@@ -1388,6 +1405,10 @@ early_param("keep_bootcon", keep_bootcon_setup);
  *  - Once a "real" console is registered, any attempt to register a
  *    bootconsoles will be rejected
  */
+/*
+控制台驱动里在内核初始化的时候调用该函数
+注册控制台以供printk()输出信息
+*/
 void register_console(struct console *newcon)
 {
 	int i;
@@ -1398,6 +1419,7 @@ void register_console(struct console *newcon)
 	 * before we register a new CON_BOOT console, make sure we don't
 	 * already have a valid console
 	 */
+	/* 已经有一个非引导控制台了，则不会再注册引导控制台了 */
 	if (console_drivers && newcon->flags & CON_BOOT) {
 		/* find the last or real console */
 		for_each_console(bcon) {
@@ -1415,6 +1437,8 @@ void register_console(struct console *newcon)
 	if (preferred_console < 0 || bcon || !console_drivers)
 		preferred_console = selected_console;
 
+	/* 如果该控制台有early_setup()函数的话，则调用
+	   例如调用serial8250_console的serial8250_console_early_setup()函数 */
 	if (newcon->early_setup)
 		newcon->early_setup();
 

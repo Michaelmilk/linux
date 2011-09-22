@@ -132,6 +132,11 @@ extern void warn_slowpath_null(const char *file, const int line);
 
 #endif
 
+/*
+用一个静态变量来控制只会调用WARN_ON一次
+
+最后将条件的bool值作为括号表达式的值返回
+*/
 #define WARN_ON_ONCE(condition)	({				\
 	static bool __warned;					\
 	int __ret_warn_once = !!(condition);			\

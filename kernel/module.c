@@ -3393,6 +3393,9 @@ struct module *__module_text_address(unsigned long addr)
 EXPORT_SYMBOL_GPL(__module_text_address);
 
 /* Don't grab lock, we're oopsing. */
+/*
+打印外部加载的模块名称
+*/
 void print_modules(void)
 {
 	struct module *mod;

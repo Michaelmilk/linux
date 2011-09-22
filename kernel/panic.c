@@ -59,6 +59,7 @@ EXPORT_SYMBOL(panic_blink);
  */
 NORET_TYPE void panic(const char * fmt, ...)
 {
+	/* 静态的缓冲区 */
 	static char buf[1024];
 	va_list args;
 	long i, i_next = 0;
@@ -156,6 +157,11 @@ NORET_TYPE void panic(const char * fmt, ...)
 EXPORT_SYMBOL(panic);
 
 
+/*
+taint: 变质
+
+对应的字符描述
+*/
 struct tnt {
 	u8	bit;
 	char	true;
@@ -197,6 +203,8 @@ static const struct tnt tnts[] = {
  */
 const char *print_tainted(void)
 {
+	/* 静态的缓冲区，包含Tainted...的最大长度，+1以'\0'结束
+	   再次调用的时候静态缓冲区就会覆盖前次的值了 */
 	static char buf[ARRAY_SIZE(tnts) + sizeof("Tainted: ") + 1];
 
 	if (tainted_mask) {
@@ -204,6 +212,7 @@ const char *print_tainted(void)
 		int i;
 
 		s = buf + sprintf(buf, "Tainted: ");
+		/* 根据掩码打印tnts数组中对应的字符 */
 		for (i = 0; i < ARRAY_SIZE(tnts); i++) {
 			const struct tnt *t = &tnts[i];
 			*s++ = test_bit(t->bit, &tainted_mask) ?

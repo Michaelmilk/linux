@@ -976,12 +976,16 @@ int format_decode(const char *fmt, struct printf_spec *spec)
 	/* By default */
 	spec->type = FORMAT_TYPE_NONE;
 
+	/* 遍历格式串，找到第一个'%' */
 	for (; *fmt ; ++fmt) {
 		if (*fmt == '%')
 			break;
 	}
 
 	/* Return the current non-format string */
+	/* '%'不是第1个字符
+	   或者格式串已经遍历结束
+	   返回字符串中'%'前面非格式串的字符个数 */
 	if (fmt != start || !*fmt)
 		return fmt - start;
 
@@ -991,6 +995,7 @@ int format_decode(const char *fmt, struct printf_spec *spec)
 	while (1) { /* this also skips first '%' */
 		bool found = true;
 
+		/* 跳过'%' */
 		++fmt;
 
 		switch (*fmt) {
@@ -1173,6 +1178,8 @@ int vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
 
 	/* Reject out-of-range values early.  Large positive sizes are
 	   used for unknown buffer sizes. */
+	/* @size是无符号的，强制转换为有符号数
+	   这样也可以避免超大值 */
 	if (WARN_ON_ONCE((int) size < 0))
 		return 0;
 
@@ -1185,6 +1192,7 @@ int vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
 		size = end - buf;
 	}
 
+	/* 遍历格式串 */
 	while (*fmt) {
 		const char *old_fmt = fmt;
 		int read = format_decode(fmt, &spec);

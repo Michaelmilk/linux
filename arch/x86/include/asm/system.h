@@ -229,6 +229,12 @@ static inline void native_write_cr0(unsigned long val)
 	asm volatile("mov %0,%%cr0": : "r" (val), "m" (__force_order));
 }
 
+/*
+cr2用于发生页异常时报告出错信息
+当发生页异常时，处理器把引起页异常的线性地址保存在cr2中
+操作系统中的页异常处理程序可以检查cr2的内容
+从而查出线性地址空间中的哪一页引起本次异常
+*/
 static inline unsigned long native_read_cr2(void)
 {
 	unsigned long val;
@@ -241,6 +247,9 @@ static inline void native_write_cr2(unsigned long val)
 	asm volatile("mov %0,%%cr2": : "r" (val), "m" (__force_order));
 }
 
+/*
+cr3保存页目录表页面的物理地址
+*/
 static inline unsigned long native_read_cr3(void)
 {
 	unsigned long val;

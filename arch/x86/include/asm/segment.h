@@ -157,6 +157,9 @@ flags共12bit
 #define PNP_TS2    (GDT_ENTRY_PNPBIOS_TS2 * 8)	/* another data segment */
 
 /* Bottom two bits of selector give the ring privilege level */
+/*
+段选择子的低2bit为特权级
+*/
 #define SEGMENT_RPL_MASK	0x3
 /* Bit 2 is table indicator (LDT/GDT) */
 #define SEGMENT_TI_MASK		0x4

@@ -69,6 +69,9 @@ print_ftrace_graph_addr(unsigned long addr, void *data,
  * severe exception (double fault, nmi, stack fault, debug, mce) hardware stack
  */
 
+/*
+检查指针@p是否在@tinfo指示的内核栈范围内
+*/
 static inline int valid_stack_ptr(struct thread_info *tinfo,
 			void *p, unsigned int size, void *end)
 {
@@ -82,6 +85,9 @@ static inline int valid_stack_ptr(struct thread_info *tinfo,
 	return p > t && p < t + THREAD_SIZE - size;
 }
 
+/*
+打印栈中地址指针对应的符号信息
+*/
 unsigned long
 print_context_stack(struct thread_info *tinfo,
 		unsigned long *stack, unsigned long bp,
@@ -90,12 +96,16 @@ print_context_stack(struct thread_info *tinfo,
 {
 	struct stack_frame *frame = (struct stack_frame *)bp;
 
+	/* 遍历内核栈中的指针 */
 	while (valid_stack_ptr(tinfo, stack, sizeof(*stack), end)) {
 		unsigned long addr;
 
+		/* 取栈中的地址 */
 		addr = *stack;
+		/* 该地址指向内核某个代码地址 */
 		if (__kernel_text_address(addr)) {
 			if ((unsigned long) stack == bp + sizeof(long)) {
+				/* print_trace_ops => print_trace_address() */
 				ops->address(data, addr, 1);
 				frame = frame->next_frame;
 				bp = (unsigned long) frame;
@@ -263,6 +273,7 @@ int __kprobes __die(const char *str, struct pt_regs *regs, long err)
 	printk("DEBUG_PAGEALLOC");
 #endif
 	printk("\n");
+	/* 调用die_chain通知链上注册的函数 */
 	if (notify_die(DIE_OOPS, str, regs, err,
 			current->thread.trap_no, SIGSEGV) == NOTIFY_STOP)
 		return 1;

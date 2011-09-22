@@ -1574,6 +1574,9 @@ get_unmapped_area(struct file *file, unsigned long addr, unsigned long len,
 EXPORT_SYMBOL(get_unmapped_area);
 
 /* Look up the first VMA which satisfies  addr < vm_end,  NULL if none. */
+/*
+从@mm中查找包含@addr的vm_area_struct结构实例指针
+*/
 struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 {
 	struct vm_area_struct *vma = NULL;
@@ -1582,12 +1585,15 @@ struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 		/* Check the cache first. */
 		/* (Cache hit rate is typically around 35%.) */
 		vma = mm->mmap_cache;
+		/* @addr在mmap_cache的vma起始地址之间，则返回vma
+		   不在的话，则在红黑树中查找 */
 		if (!(vma && vma->vm_end > addr && vma->vm_start <= addr)) {
 			struct rb_node * rb_node;
 
 			rb_node = mm->mm_rb.rb_node;
 			vma = NULL;
 
+			/* 遍历红黑树 */
 			while (rb_node) {
 				struct vm_area_struct * vma_tmp;
 
@@ -1596,16 +1602,21 @@ struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 
 				if (vma_tmp->vm_end > addr) {
 					vma = vma_tmp;
+					/* 找到则结束遍历 */
 					if (vma_tmp->vm_start <= addr)
 						break;
+					/* 遍历左树 */
 					rb_node = rb_node->rb_left;
 				} else
+					/* 遍历右树 */
 					rb_node = rb_node->rb_right;
 			}
+			/* 找到则更新mmap_cache */
 			if (vma)
 				mm->mmap_cache = vma;
 		}
 	}
+	/* 返回找到的vma */
 	return vma;
 }
 

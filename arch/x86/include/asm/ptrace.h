@@ -40,6 +40,9 @@ struct pt_regs {
 
 #else /* __KERNEL__ */
 
+/*
+该结构存放着进入内核空间前各寄存器的内容
+*/
 struct pt_regs {
 	unsigned long bx;
 	unsigned long cx;
@@ -47,15 +50,18 @@ struct pt_regs {
 	unsigned long si;
 	unsigned long di;
 	unsigned long bp;
+	/* 对于fork系统调用，新进程为0；父进程为新进程的pid */
 	unsigned long ax;
 	unsigned long ds;
 	unsigned long es;
 	unsigned long fs;
 	unsigned long gs;
 	unsigned long orig_ax;
+	/* 返回用户态后要执行的第一条指令地址 */
 	unsigned long ip;
 	unsigned long cs;
 	unsigned long flags;
+	/* 用户态堆栈指针 */
 	unsigned long sp;
 	unsigned long ss;
 };
@@ -159,6 +165,9 @@ static inline unsigned long regs_return_value(struct pt_regs *regs)
  * one comparison.  Many places in the kernel can bypass this full check
  * if they have already ruled out V8086 mode, so user_mode(regs) can be used.
  */
+/*
+判断cpu的寄存器集合@regs是否为用户态
+*/
 static inline int user_mode(struct pt_regs *regs)
 {
 #ifdef CONFIG_X86_32
@@ -168,6 +177,9 @@ static inline int user_mode(struct pt_regs *regs)
 #endif
 }
 
+/*
+判断@regs是否为用户态
+*/
 static inline int user_mode_vm(struct pt_regs *regs)
 {
 #ifdef CONFIG_X86_32

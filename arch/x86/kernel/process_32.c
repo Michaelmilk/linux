@@ -119,6 +119,9 @@ void cpu_idle(void)
 	}
 }
 
+/*
+显示各个寄存器中的信息
+*/
 void __show_regs(struct pt_regs *regs, int all)
 {
 	unsigned long cr0 = 0L, cr2 = 0L, cr3 = 0L, cr4 = 0L;
@@ -126,11 +129,13 @@ void __show_regs(struct pt_regs *regs, int all)
 	unsigned long sp;
 	unsigned short ss, gs;
 
+	/* 用户态 */
 	if (user_mode_vm(regs)) {
 		sp = regs->sp;
 		ss = regs->ss & 0xffff;
 		gs = get_user_gs(regs);
 	} else {
+		/* 内核栈指针 */
 		sp = kernel_stack_pointer(regs);
 		savesegment(ss, ss);
 		savesegment(gs, gs);

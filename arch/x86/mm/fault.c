@@ -186,6 +186,7 @@ LIST_HEAD(pgd_list);
 #ifdef CONFIG_X86_32
 static inline pmd_t *vmalloc_sync_one(pgd_t *pgd, unsigned long address)
 {
+	/* 取页目录索引 */
 	unsigned index = pgd_index(address);
 	pgd_t *pgd_k;
 	pud_t *pud, *pud_k;
@@ -194,6 +195,7 @@ static inline pmd_t *vmalloc_sync_one(pgd_t *pgd, unsigned long address)
 	pgd += index;
 	pgd_k = init_mm.pgd + index;
 
+	/* 判断该页目录项是否在内存中 */
 	if (!pgd_present(*pgd_k))
 		return NULL;
 
@@ -263,6 +265,7 @@ static noinline __kprobes int vmalloc_fault(unsigned long address)
 	pte_t *pte_k;
 
 	/* Make sure we are in vmalloc area: */
+	/* 若@address不在vmalloc区域则返回-1 */
 	if (!(address >= VMALLOC_START && address < VMALLOC_END))
 		return -1;
 
@@ -275,6 +278,7 @@ static noinline __kprobes int vmalloc_fault(unsigned long address)
 	 * Do _not_ use "current" here. We might be inside
 	 * an interrupt in the middle of a task switch..
 	 */
+	/* 读取页目录表的物理地址 */
 	pgd_paddr = read_cr3();
 	pmd_k = vmalloc_sync_one(__va(pgd_paddr), address);
 	if (!pmd_k)
@@ -655,7 +659,11 @@ no_context(struct pt_regs *regs, unsigned long error_code,
 
 	show_fault_oops(regs, error_code, address);
 
+	/* 取当前进程内核栈最大的指针可能值 */
 	stackend = end_of_stack(tsk);
+	/* 当前进程不是init进程
+	   并且栈最大位置处的值不是STACK_END_MAGIC
+	   说明进程的内核栈溢出了 */
 	if (tsk != &init_task && *stackend != STACK_END_MAGIC)
 		printk(KERN_ALERT "Thread overran stack, or stack corrupted\n");
 
@@ -704,6 +712,7 @@ __bad_area_nosemaphore(struct pt_regs *regs, unsigned long error_code,
 	struct task_struct *tsk = current;
 
 	/* User mode accesses just cause a SIGSEGV */
+	/* 用户态进程访址出错，则产生一个段错误 */
 	if (error_code & PF_USER) {
 		/*
 		 * It's possible to have interrupts off here:
@@ -728,6 +737,7 @@ __bad_area_nosemaphore(struct pt_regs *regs, unsigned long error_code,
 		tsk->thread.error_code	= error_code | (address >= TASK_SIZE);
 		tsk->thread.trap_no	= 14;
 
+		/* 向进程发送段错误的信号 */
 		force_sig_info_fault(SIGSEGV, si_code, address, tsk, 0);
 
 		return;
@@ -883,6 +893,10 @@ static int spurious_fault_check(unsigned long error_code, pte_t *pte)
  * There are no security implications to leaving a stale TLB when
  * increasing the permissions on a page.
  */
+/*
+spurious: 伪造的
+stale: 过时的
+*/
 static noinline __kprobes int
 spurious_fault(unsigned long error_code, unsigned long address)
 {
@@ -963,6 +977,7 @@ access_error(unsigned long error_code, struct vm_area_struct *vma)
 
 static int fault_in_kernel_space(unsigned long address)
 {
+	/* @address大于等于3G，则返回真，表示地址属于内核空间 */
 	return address >= TASK_SIZE_MAX;
 }
 
@@ -971,6 +986,10 @@ static int fault_in_kernel_space(unsigned long address)
  * and the problem, and then passes it off to one of the appropriate
  * routines.
  */
+/*
+页异常处理程序
+根据出错地址和原因进行不同的处理
+*/
 dotraplinkage void __kprobes
 do_page_fault(struct pt_regs *regs, unsigned long error_code)
 {
@@ -983,10 +1002,13 @@ do_page_fault(struct pt_regs *regs, unsigned long error_code)
 	unsigned int flags = FAULT_FLAG_ALLOW_RETRY | FAULT_FLAG_KILLABLE |
 					(write ? FAULT_FLAG_WRITE : 0);
 
+	/* 当前进程描述符 */
 	tsk = current;
+	/* 进程的内存描述符 */
 	mm = tsk->mm;
 
 	/* Get the faulting address: */
+	/* 从cr2中读取出错的线性地址 */
 	address = read_cr2();
 
 	/*
@@ -1013,6 +1035,7 @@ do_page_fault(struct pt_regs *regs, unsigned long error_code)
 	 * (error_code & 4) == 0, and that the fault was not a
 	 * protection error (error_code & 9) == 0.
 	 */
+	/* 出错的地址@address为内核空间地址 */
 	if (unlikely(fault_in_kernel_space(address))) {
 		if (!(error_code & (PF_RSVD | PF_USER | PF_PROT))) {
 			if (vmalloc_fault(address) >= 0)
@@ -1103,11 +1126,14 @@ retry:
 		might_sleep();
 	}
 
+	/* 取@address对应的vm_area_struct */
 	vma = find_vma(mm, address);
+	/* @address不在进程当前可用的虚拟地址空间内 */
 	if (unlikely(!vma)) {
 		bad_area(regs, error_code, address);
 		return;
 	}
+	/* @address在合法的vma内 */
 	if (likely(vma->vm_start <= address))
 		goto good_area;
 	if (unlikely(!(vma->vm_flags & VM_GROWSDOWN))) {
@@ -1136,6 +1162,7 @@ retry:
 	 * we can handle it..
 	 */
 good_area:
+	/* 检查权限 */
 	if (unlikely(access_error(error_code, vma))) {
 		bad_area_access_error(regs, error_code, address);
 		return;
