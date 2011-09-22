@@ -109,6 +109,10 @@ int nr_processes(void)
 }
 
 #ifndef __HAVE_ARCH_TASK_STRUCT_ALLOCATOR
+/*
+从缓存task_struct_cachep中分配一个新的task_struct
+在系统启动的时候调用fork_init()初始化task_struct_cachep
+*/
 # define alloc_task_struct_node(node)		\
 		kmem_cache_alloc_node(task_struct_cachep, GFP_KERNEL, node)
 # define free_task_struct(tsk)			\
@@ -249,6 +253,10 @@ int __attribute__((weak)) arch_dup_task_struct(struct task_struct *dst,
 	return 0;
 }
 
+/*
+分配task_struct结构和thread_info结构，
+为子进程创建一个新的内核栈
+*/
 static struct task_struct *dup_task_struct(struct task_struct *orig)
 {
 	struct task_struct *tsk;
@@ -259,10 +267,13 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 
 	prepare_to_copy(orig);
 
+	/* 分配一个新的task_struct结构 */
 	tsk = alloc_task_struct_node(node);
 	if (!tsk)
 		return NULL;
 
+	/* 申请2页的栈空间
+	   低端存放thread_info结构，高端作为系统空间堆栈 */
 	ti = alloc_thread_info_node(tsk, node);
 	if (!ti) {
 		free_task_struct(tsk);
@@ -273,6 +284,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 	if (err)
 		goto out;
 
+	/* 内核栈 */
 	tsk->stack = ti;
 
 	err = prop_local_init_single(&tsk->dirties);
@@ -1058,6 +1070,9 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	struct task_struct *p;
 	int cgroup_callbacks_done = 0;
 
+	/* 对传入的clone_flag进行检查 */
+
+	/* 不能同时设置CLONE_NEWNS | CLONE_FS */
 	if ((clone_flags & (CLONE_NEWNS|CLONE_FS)) == (CLONE_NEWNS|CLONE_FS))
 		return ERR_PTR(-EINVAL);
 
@@ -1091,6 +1106,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 		goto fork_out;
 
 	retval = -ENOMEM;
+	/* 分配新的进程结构和内核栈结构 */
 	p = dup_task_struct(current);
 	if (!p)
 		goto fork_out;
@@ -1247,6 +1263,10 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 
 	p->pid = pid_nr(pid);
 	p->tgid = p->pid;
+	/* 如果设置了同在一个线程组则继承TGID。
+	   对于普通进程来说TGID和PID相等，
+	   对于线程来说，同一线程组内的所有线程的TGID都相等，
+	   这使得这些多线程可以通过调用getpid()获得相同的PID。 */
 	if (clone_flags & CLONE_THREAD)
 		p->tgid = current->tgid;
 

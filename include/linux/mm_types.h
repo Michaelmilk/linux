@@ -154,16 +154,24 @@ struct vm_region {
  * space that has a special rule for the page-fault handlers (ie a shared
  * library, the executable area etc).
  */
+/*
+虚拟内存空间描述符
+*/
 struct vm_area_struct {
 	struct mm_struct * vm_mm;	/* The address space we belong to. */
+	/* 记录该结构描述的虚拟地址空间起始地址 */
 	unsigned long vm_start;		/* Our start address within vm_mm. */
 	unsigned long vm_end;		/* The first byte after our end address
 					   within vm_mm. */
 
 	/* linked list of VM areas per task, sorted by address */
+	/* 组成链表，描述每个task_struct的虚拟空间，按地址排序 */
 	struct vm_area_struct *vm_next, *vm_prev;
 
 	pgprot_t vm_page_prot;		/* Access permissions of this VMA. */
+	/* 描述该区域的一段标志，驱动程序最感兴趣的是VM-IO和VM-RESERVED。
+       前者将VMA设置为一个内存映射的I／O区域。
+       后者告诉内存管理系统不要将VMA交换出去，大多数设备映射都设置该标志 */
 	unsigned long vm_flags;		/* Flags, see mm.h. */
 
 	struct rb_node vm_rb;
@@ -201,6 +209,7 @@ struct vm_area_struct {
 	unsigned long vm_pgoff;		/* Offset (within vm_file) in PAGE_SIZE
 					   units, *not* PAGE_CACHE_SIZE */
 	struct file * vm_file;		/* File we map to (can be NULL). */
+	/* 驱动程序用来保存自身信息的成员 */
 	void * vm_private_data;		/* was vm_pte (shared mem) */
 
 #ifndef CONFIG_MMU
@@ -242,20 +251,31 @@ struct mm_rss_stat {
 	atomic_long_t count[NR_MM_COUNTERS];
 };
 
+/*
+task_struct的内存描述符
+*/
 struct mm_struct {
+	/* 指向线性区对象的链表头
+	   VMA : Virtual Memory Area 虚存区 */
 	struct vm_area_struct * mmap;		/* list of VMAs */
+	/* 指向线性区对象的红黑树的根 */
 	struct rb_root mm_rb;
+	/* 指向最后一个引用的线性区对象 */
 	struct vm_area_struct * mmap_cache;	/* last find_vma result */
 #ifdef CONFIG_MMU
+	/* 在进程地址空间中搜索有效线性地址区间的方法 */
 	unsigned long (*get_unmapped_area) (struct file *filp,
 				unsigned long addr, unsigned long len,
 				unsigned long pgoff, unsigned long flags);
+	/* 释放线性地址区间时调用的方法 */
 	void (*unmap_area) (struct mm_struct *mm, unsigned long addr);
 #endif
+	/* 标识第一个分配的匿名线性区或文件内存映射的线性地址 */
 	unsigned long mmap_base;		/* base of mmap area */
 	unsigned long task_size;		/* size of task vm space */
 	unsigned long cached_hole_size; 	/* if non-zero, the largest hole below free_area_cache */
 	unsigned long free_area_cache;		/* first hole of size cached_hole_size or larger */
+	/* 指向页全局目录 */
 	pgd_t * pgd;
 	atomic_t mm_users;			/* How many users with user space? */
 	atomic_t mm_count;			/* How many references to "struct mm_struct" (users count as 1) */

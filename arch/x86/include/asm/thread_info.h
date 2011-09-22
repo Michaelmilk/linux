@@ -169,6 +169,9 @@ struct thread_info {
 
 #define __HAVE_ARCH_THREAD_INFO_ALLOCATOR
 
+/*
+分配2个页面作为进程的内核栈
+*/
 #define alloc_thread_info_node(tsk, node)				\
 ({									\
 	struct page *page = alloc_pages_node(node, THREAD_FLAGS,	\

@@ -341,7 +341,7 @@ static struct page_address_slot *page_slot(struct page *page)
  * Returns the page's virtual address.
  */
 /*
-·µ»ØĞéÄâµØÖ·
+·µ»Ø@pageËùÃèÊöµÄÒ³¿òµÄĞéÄâµØÖ·
 */
 void *page_address(struct page *page)
 {

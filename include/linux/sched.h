@@ -4,26 +4,44 @@
 /*
  * cloning flags:
  */
+/* 进程退出时需要传递的信号掩码 */
 #define CSIGNAL		0x000000ff	/* signal mask to be sent at exit */
+/* 父子进程共享地址空间 */
 #define CLONE_VM	0x00000100	/* set if VM shared between processes */
+/* 父子进程共享文件系统信息 */
 #define CLONE_FS	0x00000200	/* set if fs info shared between processes */
+/* 父子进程共享已打开的文件 */
 #define CLONE_FILES	0x00000400	/* set if open files shared between processes */
+/* 父子进程共享信号处理 */
 #define CLONE_SIGHAND	0x00000800	/* set if signal handlers and blocked signals shared */
+/* 继续调试子进程 */
 #define CLONE_PTRACE	0x00002000	/* set if we want to let tracing continue on the child too */
+/* 调用vfork()，父进程休眠 */
 #define CLONE_VFORK	0x00004000	/* set if the parent wants the child to wake it up on mm_release */
+/* 设置一个共有的父进程 */
 #define CLONE_PARENT	0x00008000	/* set if we want to have the same parent as the cloner */
+/* 父子进程在同一个线程组 */
 #define CLONE_THREAD	0x00010000	/* Same thread group? */
+/* 为子进程创建一个新的命名空间 */
 #define CLONE_NEWNS	0x00020000	/* New namespace group? */
+/* 父子进程共享system V SEM_UNDO */
 #define CLONE_SYSVSEM	0x00040000	/* share system V SEM_UNDO semantics */
+/* 为子进程创建新的TLS */
 #define CLONE_SETTLS	0x00080000	/* create a new TLS for the child */
+/* 设置父进程TID */
 #define CLONE_PARENT_SETTID	0x00100000	/* set the TID in the parent */
+/* 清除子进程TID */
 #define CLONE_CHILD_CLEARTID	0x00200000	/* clear the TID in the child */
 #define CLONE_DETACHED		0x00400000	/* Unused, ignored */
+/* 不允许调试子进程 */
 #define CLONE_UNTRACED		0x00800000	/* set if the tracing process can't force CLONE_PTRACE on this clone */
+/* 设置子进程TID */
 #define CLONE_CHILD_SETTID	0x01000000	/* set the TID in the child */
 /* 0x02000000 was previously the unused CLONE_STOPPED (Start in stopped state)
    and is now available for re-use. */
+/* 创建新的utsname组 */
 #define CLONE_NEWUTS		0x04000000	/* New utsname group? */
+/* 创建新的IPC */
 #define CLONE_NEWIPC		0x08000000	/* New ipcs */
 #define CLONE_NEWUSER		0x10000000	/* New user namespace */
 #define CLONE_NEWPID		0x20000000	/* New pid namespace */
@@ -179,6 +197,20 @@ print_cfs_rq(struct seq_file *m, int cpu, struct cfs_rq *cfs_rq)
  * modifying one set can't modify the other one by
  * mistake.
  */
+/*
+TASK_RUNNING : 正在运行或在就绪队列run-queue中准备运行的进程，实际参与进程调度
+TASK_INTERRUPTIBLE : 处于等待队列中的进程，待资源有效时唤醒，
+                     也可由其它进程通过信号(signal)或定时中断唤醒后进入就绪队列run-queue
+TASK_UNINTERRUPTIBLE : 处于等待队列中的进程，待资源有效时唤醒，
+                       不可由其它进程通过信号(signal)或定时中断唤醒
+TASK_ZOMBIE : 表示进程结束但尚未消亡的一种状态(僵死状态)。
+              此时，进程已经结束运行且释放大部分资源，但尚未释放进程控制块
+TASK_STOPPED : 进程被暂停，通过其它进程的信号才能唤醒。
+               导致这种状态的原因有二，
+               或者是对收到SIGSTOP、SIGSTP、SIGTTIN或SIGTTOU信号的反应，
+               或者是受其它进程的ptrace系统调用的控制而暂时将CPU交给控制进程
+TASK_SWAPPING : 进程页面被交换出内存的进程
+*/
 #define TASK_RUNNING		0
 #define TASK_INTERRUPTIBLE	1
 #define TASK_UNINTERRUPTIBLE	2
@@ -188,6 +220,7 @@ print_cfs_rq(struct seq_file *m, int cpu, struct cfs_rq *cfs_rq)
 #define EXIT_ZOMBIE		16
 #define EXIT_DEAD		32
 /* in tsk->state again */
+/* TASK_DEAD指的是已经退出且不需要父进程来回收的进程 */
 #define TASK_DEAD		64
 #define TASK_WAKEKILL		128
 #define TASK_WAKING		256
@@ -1211,8 +1244,14 @@ enum perf_event_task_context {
 	perf_nr_task_contexts,
 };
 
+/*
+PCB: 进程控制块
+*/
 struct task_struct {
+	/* 进程当前状态 */
 	volatile long state;	/* -1 unrunnable, 0 runnable, >0 stopped */
+	/* 在函数dup_task_struct()中指向结构struct thread_info
+	   即指向了该进程的2页内核栈空间 */
 	void *stack;
 	atomic_t usage;
 	unsigned int flags;	/* per process flags, defined below */
@@ -1224,7 +1263,9 @@ struct task_struct {
 #endif
 	int on_rq;
 
+	/* 进程(包括实时和普通)的静态优先级 */
 	int prio, static_prio, normal_prio;
+	/* 实时进程特有的，用于实时进程间的选择 */
 	unsigned int rt_priority;
 	const struct sched_class *sched_class;
 	struct sched_entity se;
@@ -1248,6 +1289,7 @@ struct task_struct {
 	unsigned int btrace_seq;
 #endif
 
+	/* 进程的调度策略，用来区分实时进程和普通进程，实时进程优先于普通进程运行 */
 	unsigned int policy;
 	cpumask_t cpus_allowed;
 
@@ -1281,11 +1323,19 @@ struct task_struct {
 #endif
 /* task state */
 	int exit_state;
+	/* 引起进程退出的返回代码exit_code，引起错误的信号名exit_signal */
 	int exit_code, exit_signal;
 	int pdeath_signal;  /*  The signal sent when the parent dies  */
 	unsigned int group_stop;	/* GROUP_STOP_*, siglock protected */
 	/* ??? */
+	/* Linux 可以运行由80386平台其它UNIX操作系统生成的符合iBCS2标准的程序。 
+	   Personality进一步描述进程执行的程序属于何种UNIX平台的“个性”信息。
+	   通常有PER_Linux、PER_Linux_32BIT、 PER_Linux_EM86、PER_SVR3、PER_SCOSVR3、
+	   PER_WYSEV386、PER_ISCR4、PER_BSD、 PER_XENIX和PER_MASK等，
+	   参见include/linux/personality.h */
 	unsigned int personality;
+	/* 按POSIX要求设计的布尔量，
+	   区分进程是正在执行老程序代码，还是在执行execve装入的新代码 */
 	unsigned did_exec:1;
 	unsigned in_execve:1;	/* Tell the LSMs that the process is doing an
 				 * execve */
@@ -1296,7 +1346,10 @@ struct task_struct {
 	unsigned sched_reset_on_fork:1;
 	unsigned sched_contributes_to_load:1;
 
+	/* 一个线程组中的所有线程使用和该线程组的领头线程(thread group leader)
+	   相同的pid */
 	pid_t pid;
+	/* getpid()系统调用返回当前进程的线程组id */
 	pid_t tgid;
 
 #ifdef CONFIG_CC_STACKPROTECTOR
@@ -1374,6 +1427,8 @@ struct task_struct {
 /* filesystem information */
 	struct fs_struct *fs;
 /* open file information */
+	/* 指向本进程的files_struct结构，
+	   与打开文件有关的信息都保存在这个结构中 */
 	struct files_struct *files;
 /* namespaces */
 	struct nsproxy *nsproxy;
@@ -2068,6 +2123,9 @@ union thread_union {
 };
 
 #ifndef __HAVE_ARCH_KSTACK_END
+/*
+判断@addr是否到达栈底了
+*/
 static inline int kstack_end(void *addr)
 {
 	/* Reliable end of stack detection:
@@ -2389,10 +2447,28 @@ static inline void threadgroup_fork_write_unlock(struct task_struct *tsk) {}
 
 static inline void setup_thread_stack(struct task_struct *p, struct task_struct *org)
 {
+	/* 复制内核栈 */
 	*task_thread_info(p) = *task_thread_info(org);
+	/* @p内核栈的task指针回指 */
 	task_thread_info(p)->task = p;
 }
 
+/*
+返回最小的可用内核栈底
+
++---------------+ <- 8KB
+|				|
+|				|
+|				|
+|				|
++---------------+
+|				|
+|				|
+|---------------| <- end_of_stack
+| thread_info	|
++---------------+ <- 0
+
+*/
 static inline unsigned long *end_of_stack(struct task_struct *p)
 {
 	return (unsigned long *)(task_thread_info(p) + 1);

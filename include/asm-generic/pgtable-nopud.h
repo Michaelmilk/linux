@@ -36,6 +36,11 @@ typedef struct { pgd_t pgd; } pud_t;
  */
 static inline int pgd_none(pgd_t pgd)		{ return 0; }
 static inline int pgd_bad(pgd_t pgd)		{ return 0; }
+/*
+对于2级页表
+页目录在1个物理页框内，即页目录的每1项总是在内存中了
+所以这里总是返回1
+*/
 static inline int pgd_present(pgd_t pgd)	{ return 1; }
 static inline void pgd_clear(pgd_t *pgd)	{ }
 #define pud_ERROR(pud)				(pgd_ERROR((pud).pgd))

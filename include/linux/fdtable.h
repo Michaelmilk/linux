@@ -41,6 +41,10 @@ struct fdtable {
 /*
  * Open file table structure
  */
+/*
+该结构体由进程描述符中的files域指向。
+所有与每个进程相关的信息，如打开的文件及文件描述符都包含在其中
+*/
 struct files_struct {
   /*
    * read mostly part

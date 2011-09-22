@@ -267,11 +267,20 @@ sys_clone(unsigned long clone_flags, unsigned long newsp,
  * function to call, and %di containing
  * the "args".
  */
+/*
+该函数入口点在arch/x86/kernel/entry_32.S内
+
+调用%si寄存器指向的函数
+%di指向函数的参数
+*/
 extern void kernel_thread_helper(void);
 
 /*
  * Create a kernel thread
  */
+/*
+kernel_thread()才是真正创建内核线程的所在
+*/
 int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 {
 	struct pt_regs regs;
@@ -292,10 +301,13 @@ int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 
 	regs.orig_ax = -1;
 	regs.ip = (unsigned long) kernel_thread_helper;
+	/* 代码段选择子
+	   请求特权级 */
 	regs.cs = __KERNEL_CS | get_kernel_rpl();
 	regs.flags = X86_EFLAGS_IF | 0x2;
 
 	/* Ok, create the new process.. */
+    /* 创建新的内核线程 */
 	return do_fork(flags | CLONE_VM | CLONE_UNTRACED, 0, &regs, 0, NULL, NULL);
 }
 EXPORT_SYMBOL(kernel_thread);
