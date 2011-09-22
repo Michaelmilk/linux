@@ -32,6 +32,8 @@ struct subsys_private {
 	struct klist klist_devices;
 	struct klist klist_drivers;
 	struct blocking_notifier_head bus_notifier;
+	/* 驱动自动探测
+	   当置为1时，在驱动或设备加入时，会自动遍历设备或驱动链表为二者进行匹配 */
 	unsigned int drivers_autoprobe:1;
 	struct bus_type *bus;
 

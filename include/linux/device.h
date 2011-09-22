@@ -79,13 +79,39 @@ extern void bus_remove_file(struct bus_type *, struct bus_attribute *);
  * default attributes, the bus' methods, PM operations, and the driver core's
  * private data.
  */
+/*
+bus_type 代表一个总线，对应于/sys/bus/下的一个目录。
+
+一个实际的总线在设备驱动模型中是用两个结构表示的： bus_type和 device。
+bus_type 代表总线类型，出现在/sys/bus/目录下；
+device 代表总线设备，出现在/sys/devices/目录下，
+这表明实际的总线本质上是一种设备。
+
+驱动核心可以注册多种类型的总线。
+每种总线下面可以挂载许多设备。(通过kset devices)
+每种总线下可以用很多设备驱动。(通过包含一个kset drivers)}
+每个驱动可以处理一组设备。
+*/
 struct bus_type {
+	/* 总线名称，显示在/sys/bus/目录下，如/sys/bus/pci */
 	const char		*name;
 	struct bus_attribute	*bus_attrs;
 	struct device_attribute	*dev_attrs;
 	struct driver_attribute	*drv_attrs;
 
+    /* 对设备和驱动的操作方法
+       这几个方法在 device_driver 中也定义了。
+       内核在调用这些方法时，会优先调用 bus_type 中定义的方法。
+       如果相应的方法在bus_type 中未定义，才会去调用 device_driver中定义的方法。
+
+       设备驱动匹配函数
+       将设备驱动程序粘接到设备上，
+       函数match通过把总线驱动程序支持的设备ID与特定设备ID进行比较，
+       来决定总线是否支持这个设备。 */
 	int (*match)(struct device *dev, struct device_driver *drv);
+	/* 热拔插事件
+       uevent 是“user event”的简称，是一种内核向用户空间发送信息的方式。
+       Linux 内核的热拔插机制（hotplug）就是通过 uevent 实现的。 */
 	int (*uevent)(struct device *dev, struct kobj_uevent_env *env);
 	int (*probe)(struct device *dev);
 	int (*remove)(struct device *dev);
@@ -182,8 +208,13 @@ extern struct klist *bus_get_device_klist(struct bus_type *bus);
  * can export information and configuration variables that are independent
  * of any specific device.
  */
+/*
+device_driver 代表一个设备驱动程序，对应于/sys/bus/XXX/drivers/下的一个目录
+*/
 struct device_driver {
+	/* 驱动程序的名字 */
 	const char		*name;
+	/* 驱动程序所在的总线类型，如:pci_bus_type */
 	struct bus_type		*bus;
 
 	struct module		*owner;
@@ -193,8 +224,17 @@ struct device_driver {
 
 	const struct of_device_id	*of_match_table;
 
+	/* 用来查询特定设备是否存在的函数(以及这个驱动程序是否能操作它)
+       函数probe被调用来验证某一类型硬件的存在。
+       在总线已经验证设备的ID和驱动程序支持的设备ID中的一个匹配后，
+       函数probe在驱动程序邦定过程中被调用。
+       它可分配一个特定驱动程序的结构，但它不应该做硬件本身的任何初始化。
+       在绑定期间，函数init在函数probe成功返回后
+       并且设备被注册到它的设备类时调用，它负责初始化硬件。 */
 	int (*probe) (struct device *dev);
+	/* 当设备从系统删除的时候要调用remove函数 */
 	int (*remove) (struct device *dev);
+	/* 在关机的时候调用shutdown函数关闭设备 */
 	void (*shutdown) (struct device *dev);
 	int (*suspend) (struct device *dev, pm_message_t state);
 	int (*resume) (struct device *dev);
@@ -277,6 +317,12 @@ struct device *driver_find_device(struct device_driver *drv,
  * to work with devices based on what they do, rather than how they are
  * connected or how they work.
  */
+/*
+class 是对设备按照功能进行的 “分类” ， 
+这样做是为了给用户空间提供一个比较友好的界面。  
+class 是个 kset，对应于/sys/class/下的一个目录。
+当然/sys/class/目录本身也是一个 kset，这从class 的初始化代码可以看出来
+*/
 struct class {
 	const char		*name;
 	struct module		*owner;
@@ -377,10 +423,17 @@ struct class_attribute_string {
 extern ssize_t show_class_attr_string(struct class *class, struct class_attribute *attr,
                         char *buf);
 
+/*
+和 device_driver 很类似，用于对 class 中的设备进行操作
+*/
 struct class_interface {
+	/* 链表节点，用于链入所属的 class */
 	struct list_head	node;
+	/* 所属的 class */
 	struct class		*class;
 
+	/*  操作 class中 device 的方法。
+	    类似 device_driver中定义的 probe()和 remove() */
 	int (*add_dev)		(struct device *, struct class_interface *);
 	void (*remove_dev)	(struct device *, struct class_interface *);
 };
@@ -549,11 +602,25 @@ struct device_dma_parameters {
  * instead, that structure, like kobject structures, is usually embedded within
  * a higher-level representation of the device.
  */
+/*
+在注册device结构前，至少要设置parent、 bus_id、 bus和release成员
+device结构中包含了设备模型核心用来模拟系统的信息。
+然而，大多数子系统记录了他们所拥有设备的其他信息，
+因此，单纯用device结构表示的设备是很少见的，
+而是通常把类似kobject这样的结构内嵌在设备的高层表示中。
+底层驱动程序并不知道device结构，但是也有例外。
+
+device 代表一个设备，对应于/sys/devices/下的一个目录。
+*/
 struct device {
+	/* 父设备，一般一个bus也对应一个设备
+       比如USB设备都有父设备 */
 	struct device		*parent;
 
 	struct device_private	*p;
 
+	/* 表示该设备并把它连接到结构体系中的kobject.
+       请注意，作为一个通用规则，device.kobj->parent 与 device->parent.kobj是相同的 */
 	struct kobject kobj;
 	const char		*init_name; /* initial name of the device */
 	const struct device_type *type;
@@ -562,11 +629,16 @@ struct device {
 					 * its driver.
 					 */
 
+	/* 指向所连接总线的指针
+       标识了这个设备连接在何种类型的总线上 */
 	struct bus_type	*bus;		/* type of bus device is on */
+	/* 指向被分配到该设备的设备驱动
+       管理该设备的驱动程序，一个设备只能有一个驱动程序 */
 	struct device_driver *driver;	/* which driver has allocated this
 					   device */
 	void		*platform_data;	/* Platform specific data, device
 					   core doesn't touch it */
+	/* 电源管理信息 */
 	struct dev_pm_info	power;
 	struct dev_power_domain	*pwr_domain;
 
@@ -574,6 +646,7 @@ struct device {
 	int		numa_node;	/* NUMA node this device is close to */
 #endif
 	u64		*dma_mask;	/* dma mask (if dma'able device) */
+	/* 设备一致性DMA的屏蔽字 */
 	u64		coherent_dma_mask;/* Like dma_mask, but for
 					     alloc_coherent mappings as
 					     not all hardware supports
@@ -582,8 +655,10 @@ struct device {
 
 	struct device_dma_parameters *dma_parms;
 
+	/* 聚集的DMA缓冲池 */
 	struct list_head	dma_pools;	/* dma pools (if dma'ble) */
 
+	/* 指向设备所使用的一致性DMA存储器描述符的指针 */
 	struct dma_coherent_mem	*dma_mem; /* internal for coherent mem
 					     override */
 	/* arch specific additions */
@@ -593,6 +668,7 @@ struct device {
 
 	dev_t			devt;	/* dev_t, creates the sysfs "dev" */
 
+	/* 定义一个设备自旋锁，用于互斥访问设备 */
 	spinlock_t		devres_lock;
 	struct list_head	devres_head;
 
@@ -600,6 +676,10 @@ struct device {
 	struct class		*class;
 	const struct attribute_group **groups;	/* optional groups */
 
+	/* 释放设备描述符的回调函数
+       当指向设备的最后一个引用被删除时，内核调用该方法； 
+       它将从内嵌的kobject的release方法中调用。 
+       所有向内核注册的device结构都必须有一个release方法，否则内核将打印错误信息。 */
 	void	(*release)(struct device *dev);
 };
 

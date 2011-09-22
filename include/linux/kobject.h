@@ -57,13 +57,42 @@ enum kobject_action {
 	KOBJ_MAX
 };
 
+/*
+kobject通常是嵌入到其他结构中的，其单独意义其实并不大。
+相反，那些更为重要的结构体才真正需要用到kobject结构。比如struct cdev。
+
+当kobject被嵌入到其他结构体中时，该结构体便拥有了kobject提供的标准功能。
+更重要的一点是，嵌入kobject结构体可以成为对象层次架构中的一部分。
+比如cdev结构体就可以通过其父进程指针cdev->kobj->parent
+和链表cdev->kobj->entry来插入到对象层次结构中。
+
+kobject代表设备驱动模型中一个基本对象，类似于 MFC 中最顶层的基类 CObject。
+每个kobject都对应于sysfs中的一个目录。
+上层结构例如 device,device_driver,bus_type都嵌入了一个 kobject，
+这相当于面向对象程序设计语言中的继承机制
+*/
 struct kobject {
+	/* kobject名称 */
 	const char		*name;
+	/* 用于链入所属kset的list链表 */
 	struct list_head	entry;
+	/* parent指针指向kobject的父对象。
+       因此，kobject就会在内核中构造一个对象层次结构，
+       并且可以将对各对象间的关系表现出来，就如你看到的，
+       这便是sysfs的真正面目：一个用户空间的文件系统，
+       用来表示内核中kobject对象的层次结构。
+
+       某对象的kobj->parent指针与其kobj->kset->kobj应该是一致的
+       kobject_add_internal()函数内赋值 */
 	struct kobject		*parent;
+	/* 所属kset，用于实现层次 */
 	struct kset		*kset;
+	/* 所属ktype，指向对象的类型 */
 	struct kobj_type	*ktype;
+	/* sysfs中的目录项，会在sysfs_create_dir()内赋值 */
 	struct sysfs_dirent	*sd;
+	/* 引用计数
+	   所有内嵌了kobject结构的容器结构的引用计数也由此字段来记录 */
 	struct kref		kref;
 	unsigned int state_initialized:1;
 	unsigned int state_in_sysfs:1;
@@ -107,6 +136,24 @@ extern void kobject_put(struct kobject *kobj);
 
 extern char *kobject_get_path(struct kobject *kobj, gfp_t flag);
 
+/*
+kobj_type是为了描述一族kobject所具有的普遍特性。
+因此，不再需要每个kobject都分别定义自己的特性，
+而是将这些普遍的特性在kobj_type结构体中一次定义，
+然后所有“同类”的kobject都能共享一样的特性。
+
+release指针指向在kobject引用计数减至0时要被调用的析构函数。
+该函数负责释放所有kobject使用的内存和其它相关清理工作。
+
+sysfs_ops变量指向sysfs_ops结构体。该结构体描述了sysfs文件读写时的特性。
+
+default_attrs指向一个attribute结构体数组。
+这些结构体定义了该kobject相关的默认属性。
+属性给定了对象的特征，如果该kobject被导出到sysfs中，
+那么这些属性都将相应的作为文件而导出。
+
+kobj_type是kobject所属的类型，定义了某种类型的kobejct的公共的属性和操作
+*/
 struct kobj_type {
 	void (*release)(struct kobject *kobj);
 	const struct sysfs_ops *sysfs_ops;
@@ -158,10 +205,35 @@ struct sock;
  * can add new environment variables, or filter out the uevents if so
  * desired.
  */
+/*
+kset是kobject对象的集合体。
+把它看成一个容器，可将所有相关的kobject对象，
+比如“全部的块设备”置于同一位置。
+kset把kobject集中到一个集合中
+kobject的kset指针指向相应的kset集合。
+
+kset 是一个kobject 集合（或容器） ，包含了一系列的 kobject。
+需要注意的是，kset内部也嵌入了 kobject，这表明 kset 本身也是一个 kobject。
+
+Kset 在概念上是一个集合或者叫容器。
+实现了对象的层次。
+所有属于一个ksets的对象(kobject)的parent都指向该ksets的kobj
+同时这个对象都连接到kset 的list表上。
+同时位于ksets层次之上的是subsys，在最新的内核中已经取消subsys，
+因为它本质上也就是一个ksets。
+Kset有一套类似kobject的操作，实现上只是进一步调用其自身kobj的相应操作，
+毕竟ksets本质上也是一个kobject。
+
+kobject通过kset组织成层次化的结构，kset是具有相同类型的kobject的集合
+*/
 struct kset {
+	/* 连接该集合(kset)中所有的kobject对象
+	   由kobject.entry链入该list为链头的链表 */
 	struct list_head list;
 	spinlock_t list_lock;
+	/* kobj指向的kobject对象代表了该集合的基类 */
 	struct kobject kobj;
+	/* 热插拔操作 */
 	const struct kset_uevent_ops *uevent_ops;
 };
 
@@ -177,6 +249,9 @@ static inline struct kset *to_kset(struct kobject *kobj)
 	return kobj ? container_of(kobj, struct kset, kobj) : NULL;
 }
 
+/*
+实际上是增加kset->kobj->kref的引用计数
+*/
 static inline struct kset *kset_get(struct kset *k)
 {
 	return k ? to_kset(kobject_get(&k->kobj)) : NULL;

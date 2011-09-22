@@ -16,10 +16,15 @@
  * nesting etc..
  */
 struct resource {
+	/* 开始地址 */
 	resource_size_t start;
+	/* 结束地址 */
 	resource_size_t end;
+	/* 资源所有者名称 */
 	const char *name;
+	/* 资源标识 */
 	unsigned long flags;
+	/* 指向父节点 兄弟节点 子节点 */
 	struct resource *parent, *sibling, *child;
 };
 
@@ -137,6 +142,7 @@ int adjust_resource(struct resource *res, resource_size_t start,
 resource_size_t resource_alignment(struct resource *res);
 static inline resource_size_t resource_size(const struct resource *res)
 {
+	/* 结束地址 - 开始地址 + 1 求出资源的大小 */
 	return res->end - res->start + 1;
 }
 static inline unsigned long resource_type(const struct resource *res)
