@@ -250,13 +250,26 @@ static int ip_local_deliver_finish(struct sk_buff *skb)
 /*
  * 	Deliver IP Packets to the higher protocol layers.
  */
+/*
+将IP报文送交给更高层的协议
+首先对分片的数据包重组，然后转入netfilter的NF_INET_LOCAL_IN的hook点，
+调用所有在该点注册的hook函数。
+之后调用ip_local_deliver_finish()，进入第四层。
+*/
 int ip_local_deliver(struct sk_buff *skb)
 {
 	/*
 	 *	Reassemble IP fragments.
 	 */
 
+	/* 是IP分片报文
+	   IP_MF	: 分片报文标记
+	   IP_OFFSET: offset中的值记录该分片报文在这个大包中IP payload的位置
+	   同一个分片报文的id字段值一致 */
 	if (ip_hdr(skb)->frag_off & htons(IP_MF | IP_OFFSET)) {
+		/* 组片完成后返回0，进入下面的NF_HOOK()流程
+		   ipq分配失败或者分片未接收完成
+		   会返回一个负数，不继续向上层协议栈递交 */
 		if (ip_defrag(skb, IP_DEFRAG_LOCAL_DELIVER))
 			return 0;
 	}

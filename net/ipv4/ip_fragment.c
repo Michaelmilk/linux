@@ -64,8 +64,12 @@ struct ipfrag_skb_cb
 
 /* Describe an entry in the "incomplete datagrams" queue. */
 struct ipq {
+	/* 内嵌分片管理队列
+	   ipq的引用计数也由内嵌的inet_frag_queue记录 */
 	struct inet_frag_queue q;
 
+	/* 同属该ipq下skb的5个关键字
+	   该5个字段全部相等说明属于同一个大报文的各个分片 */
 	u32		user;
 	__be32		saddr;
 	__be32		daddr;
@@ -126,6 +130,9 @@ int ip_frag_mem(struct net *net)
 static int ip_frag_reasm(struct ipq *qp, struct sk_buff *prev,
 			 struct net_device *dev);
 
+/*
+记录分片的关键字
+*/
 struct ip4_create_arg {
 	struct iphdr *iph;
 	u32 user;
@@ -151,7 +158,9 @@ static int ip4_frag_match(struct inet_frag_queue *q, void *a)
 	struct ipq *qp;
 	struct ip4_create_arg *arg = a;
 
+	/* 取@q的容器结构ipq */
 	qp = container_of(q, struct ipq, q);
+	/* 判断新报文的各项参数是否与存在的ipq参数一致 */
 	return	qp->id == arg->iph->id &&
 			qp->saddr == arg->iph->saddr &&
 			qp->daddr == arg->iph->daddr &&
@@ -166,6 +175,9 @@ static void frag_kfree_skb(struct netns_frags *nf, struct sk_buff *skb)
 	kfree_skb(skb);
 }
 
+/*
+在@q中记录新报文的各项参数
+*/
 static void ip4_frag_init(struct inet_frag_queue *q, void *a)
 {
 	struct ipq *qp = container_of(q, struct ipq, q);
@@ -201,6 +213,10 @@ static __inline__ void ipq_put(struct ipq *ipq)
 /* Kill ipq entry. It is not destroyed immediately,
  * because caller (and someone more) holds reference count.
  */
+/*
+将@ipq从各个管理链表中移出
+@ipq节点并未释放
+*/
 static void ipq_kill(struct ipq *ipq)
 {
 	inet_frag_kill(&ipq->q, &ip4_frags);
@@ -289,12 +305,16 @@ static inline struct ipq *ip_find(struct net *net, struct iphdr *iph, u32 user)
 	arg.user = user;
 
 	read_lock(&ip4_frags.lock);
+	/* 计算ip4_frags结构inet_frags的成员变量hash[]数组桶的下标 */
 	hash = ipqhashfn(iph->id, iph->saddr, iph->daddr, iph->protocol);
 
 	q = inet_frag_find(&net->ipv4.frags, &ip4_frags, &arg, hash);
 	if (q == NULL)
 		goto out_nomem;
 
+	/* 在函数inet_frag_alloc()中分配空间时
+	   实际上分配的是struct ipq的大小
+	   所以可以根据q的指针取其容器结构ipq */
 	return container_of(q, struct ipq, q);
 
 out_nomem:
@@ -358,6 +378,9 @@ static int ip_frag_reinit(struct ipq *qp)
 }
 
 /* Add new segment to existing queue. */
+/*
+将分片的IP报文加入相同的ipq队列中
+*/
 static int ip_frag_queue(struct ipq *qp, struct sk_buff *skb)
 {
 	struct sk_buff *prev, *next;
@@ -378,17 +401,25 @@ static int ip_frag_queue(struct ipq *qp, struct sk_buff *skb)
 	}
 
 	ecn = ip4_frag_ecn(ip_hdr(skb)->tos);
+	/* 取出frag_off字段2个字节的值 */
 	offset = ntohs(ip_hdr(skb)->frag_off);
+	/* 分片标记字段 */
 	flags = offset & ~IP_OFFSET;
+	/* 该分片数据在整个IP payload中的偏移值 */
 	offset &= IP_OFFSET;
+	/* 报文中携带的偏移数值是以8字节为单位的
+	   这里左移3位，乘以8，转换为字节数 */
 	offset <<= 3;		/* offset is in 8-byte chunks */
+	/* 计算IP头部长度 */
 	ihl = ip_hdrlen(skb);
 
 	/* Determine the position of this fragment. */
+	/* 计算该分片数据的结束位置 */
 	end = offset + skb->len - ihl;
 	err = -EINVAL;
 
 	/* Is this the final fragment? */
+	/* 没有IP_MF标记时，说明是最后一个分片报文 */
 	if ((flags & IP_MF) == 0) {
 		/* If we already have some bits beyond end
 		 * or have different end, the segment is corrrupted.
@@ -396,43 +427,62 @@ static int ip_frag_queue(struct ipq *qp, struct sk_buff *skb)
 		if (end < qp->q.len ||
 		    ((qp->q.last_in & INET_FRAG_LAST_IN) && end != qp->q.len))
 			goto err;
+		/* 最后一个分片的标记 */
 		qp->q.last_in |= INET_FRAG_LAST_IN;
+		/* 这是最后一个分片，记录分片数据的结束值，即报文最大长度 */
 		qp->q.len = end;
 	} else {
+		/* 数据长度总是8字节对齐的 */
 		if (end&7) {
 			end &= ~7;
 			if (skb->ip_summed != CHECKSUM_UNNECESSARY)
 				skb->ip_summed = CHECKSUM_NONE;
 		}
+		/* 更新结束位置 */
 		if (end > qp->q.len) {
 			/* Some bits beyond end -> corruption. */
+			/* 如果最后一片报文已经出现，而现在又有数据出现在已经记录的结束位置
+			   说明数据出错了 */
 			if (qp->q.last_in & INET_FRAG_LAST_IN)
 				goto err;
 			qp->q.len = end;
 		}
 	}
+	/* IP负载中没有IP分片数据 */
 	if (end == offset)
 		goto err;
 
 	err = -ENOMEM;
+	/* 该skb无法pull掉头部长度的数据 */
 	if (pskb_pull(skb, ihl) == NULL)
 		goto err;
 
+	/* 将skb中数据长度截断为有效数据长度 */
 	err = pskb_trim_rcsum(skb, end - offset);
 	if (err)
 		goto err;
+
+	/* 经过pull和trim后
+	   skb中data标记的数据为IP报文的有效负载
+	   从skb->data指针开始，长度为skb->len */
 
 	/* Find out which fragments are in front and at the back of us
 	 * in the chain of fragments so far.  We must know where to put
 	 * this fragment, right?
 	 */
+	/* 分片链表中的最后一个节点偏移小于新的分片偏移值
+	   说明找到链入新分片的位置了 */
 	prev = qp->q.fragments_tail;
 	if (!prev || FRAG_CB(prev)->offset < offset) {
 		next = NULL;
 		goto found;
 	}
+	/* 遍历已经接收到的分片链表 */
 	prev = NULL;
 	for (next = qp->q.fragments; next != NULL; next = next->next) {
+		/* 下一片报文偏移大于新分片的偏移
+		   已经找到位置，停止循环
+		   此时prev指向的是前一节点 */
 		if (FRAG_CB(next)->offset >= offset)
 			break;	/* bingo! */
 		prev = next;
@@ -444,6 +494,7 @@ found:
 	 * any overlaps are eliminated.
 	 */
 	if (prev) {
+		/* 检查是否有数据区重叠 */
 		int i = (FRAG_CB(prev)->offset + prev->len) - offset;
 
 		if (i > 0) {
@@ -461,6 +512,7 @@ found:
 
 	err = -ENOMEM;
 
+	/* 检查是否有数据区重叠 */
 	while (next && FRAG_CB(next)->offset < end) {
 		int i = end - FRAG_CB(next)->offset; /* overlap is 'i' bytes */
 
@@ -493,14 +545,19 @@ found:
 		}
 	}
 
+	/* 在cb[]中记录该分片报文的偏移量 */
 	FRAG_CB(skb)->offset = offset;
 
 	/* Insert this fragment in the chain of fragments. */
+	/* 将新分片skb加入链表 */
 	skb->next = next;
+	/* fragments_tail记录最后一个skb */
 	if (!next)
 		qp->q.fragments_tail = skb;
+	/* 加在前一节点后面 */
 	if (prev)
 		prev->next = skb;
+	/* fragments记录第一个skb */
 	else
 		qp->q.fragments = skb;
 
@@ -510,19 +567,27 @@ found:
 		skb->dev = NULL;
 	}
 	qp->q.stamp = skb->tstamp;
+	/* 记录已经收取到的分片数据总长度 */
 	qp->q.meat += skb->len;
 	qp->ecn |= ecn;
 	atomic_add(skb->truesize, &qp->q.net->mem);
+	/* 0偏移，是第1片报文 */
 	if (offset == 0)
 		qp->q.last_in |= INET_FRAG_FIRST_IN;
 
+	/* 第1片和最后1片都已经收到
+	   并且已经收到的数据长度等于总长度
+	   说明分片报文接收完毕，进行重组 */
 	if (qp->q.last_in == (INET_FRAG_FIRST_IN | INET_FRAG_LAST_IN) &&
 	    qp->q.meat == qp->q.len)
 		return ip_frag_reasm(qp, prev, dev);
 
 	write_lock(&ip4_frags.lock);
+	/* 该ipq有修改了
+	   将其移至最近最少使用链表的结尾 */
 	list_move_tail(&qp->q.lru_list, &qp->q.net->lru_list);
 	write_unlock(&ip4_frags.lock);
+	/* 分片正在处理中 */
 	return -EINPROGRESS;
 
 err:
@@ -533,6 +598,11 @@ err:
 
 /* Build a new IP datagram from all its fragments. */
 
+/*
+重组各个分片，使用最新的这个skb记录IP数据
+
+成功则返回0
+*/
 static int ip_frag_reasm(struct ipq *qp, struct sk_buff *prev,
 			 struct net_device *dev)
 {
@@ -552,24 +622,35 @@ static int ip_frag_reasm(struct ipq *qp, struct sk_buff *prev,
 		goto out_fail;
 	}
 	/* Make the one we just received the head. */
+	/* 调整链表，就好像刚收到的是第1个分片节点
+	   ip_local_deliver()及其后的NF_HOOK()传递的都是skb的一级指针
+	   因此调整skb中的各个指针字段让其指向大包的第1个分片节点数据
+	   最新收到的这个skb实例本身的位置不变 */
 	if (prev) {
+		/* 最新收到的skb */
 		head = prev->next;
 		fp = skb_clone(head, GFP_ATOMIC);
 		if (!fp)
 			goto out_nomem;
 
+		/* 串入链表 */
 		fp->next = head->next;
 		if (!fp->next)
 			qp->q.fragments_tail = fp;
 		prev->next = fp;
 
+		/* 更换skb信息 */
 		skb_morph(head, qp->q.fragments);
+		/* 成为链头 */
 		head->next = qp->q.fragments->next;
 
+		/* 释放原来的头节点 */
 		kfree_skb(qp->q.fragments);
+		/* 记录新的头节点 */
 		qp->q.fragments = head;
 	}
 
+	/* 现在的head是大包的第1个分片 */
 	WARN_ON(head == NULL);
 	WARN_ON(FRAG_CB(head)->offset != 0);
 
@@ -578,10 +659,12 @@ static int ip_frag_reasm(struct ipq *qp, struct sk_buff *prev,
 	len = ihlen + qp->q.len;
 
 	err = -E2BIG;
+	/* IP报文最大长度 */
 	if (len > 65535)
 		goto out_oversize;
 
 	/* Head of list must not be cloned. */
+	/* 如果head是clone的，则为其创建一个唯一的线性区 */
 	if (skb_cloned(head) && pskb_expand_head(head, 0, 0, GFP_ATOMIC))
 		goto out_nomem;
 
@@ -608,9 +691,12 @@ static int ip_frag_reasm(struct ipq *qp, struct sk_buff *prev,
 		atomic_add(clone->truesize, &qp->q.net->mem);
 	}
 
+	/* 将分片链表中其余的节点加入head的frag_list链表 */
 	skb_shinfo(head)->frag_list = head->next;
+	/* 调整data指针 */
 	skb_push(head, head->data - skb_network_header(head));
 
+	/* 调整skb数据总长度，计算校验码 */
 	for (fp=head->next; fp; fp = fp->next) {
 		head->data_len += fp->len;
 		head->len += fp->len;
@@ -620,12 +706,14 @@ static int ip_frag_reasm(struct ipq *qp, struct sk_buff *prev,
 			head->csum = csum_add(head->csum, fp->csum);
 		head->truesize += fp->truesize;
 	}
+	/* 从分片记录的内存信息中减去完成组片的大包空间 */
 	atomic_sub(head->truesize, &qp->q.net->mem);
 
 	head->next = NULL;
 	head->dev = dev;
 	head->tstamp = qp->q.stamp;
 
+	/* 调整该大包IP报文头中的信息 */
 	iph = ip_hdr(head);
 	iph->frag_off = 0;
 	iph->tot_len = htons(len);
@@ -650,11 +738,15 @@ out_fail:
 }
 
 /* Process an incoming IP datagram fragment. */
+/*
+处理一个IP分片报文
+*/
 int ip_defrag(struct sk_buff *skb, u32 user)
 {
 	struct ipq *qp;
 	struct net *net;
 
+	/* 获取命名空间 */
 	net = skb->dev ? dev_net(skb->dev) : dev_net(skb_dst(skb)->dev);
 	IP_INC_STATS_BH(net, IPSTATS_MIB_REASMREQDS);
 
@@ -663,6 +755,7 @@ int ip_defrag(struct sk_buff *skb, u32 user)
 		ip_evictor(net);
 
 	/* Lookup (or create) queue header */
+	/* 查找或者创建一个与该分片报文skb对应的ipq节点 */
 	if ((qp = ip_find(net, ip_hdr(skb), user)) != NULL) {
 		int ret;
 
@@ -827,6 +920,7 @@ void __init ipfrag_init(void)
 	ip4_frags.constructor = ip4_frag_init;
 	ip4_frags.destructor = ip4_frag_free;
 	ip4_frags.skb_free = NULL;
+	/* 申请的大小实际上是struct ipq */
 	ip4_frags.qsize = sizeof(struct ipq);
 	ip4_frags.match = ip4_frag_match;
 	ip4_frags.frag_expire = ip_expire;

@@ -618,6 +618,12 @@ static struct sk_buff *__skb_clone(struct sk_buff *n, struct sk_buff *skb)
  *
  *	The target skb is returned upon exit.
  */
+/*
+morph: 变形
+
+和skb_clone()的工作是一样的
+只是源skb由调用者提供
+*/
 struct sk_buff *skb_morph(struct sk_buff *dst, struct sk_buff *src)
 {
 	skb_release_all(dst);
