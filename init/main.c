@@ -629,6 +629,7 @@ asmlinkage void __init start_kernel(void)
 	hrtimers_init();
 	/* 初始化TASKLET_SOFTIRQ和HI_SOFTIRQ */
 	softirq_init();
+	/* 系统计时初始化 */
 	timekeeping_init();
 	/* 系统时钟相关初始化 */
 	time_init();

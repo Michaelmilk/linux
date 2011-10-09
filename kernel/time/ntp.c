@@ -333,6 +333,10 @@ static void ntp_update_offset(long offset)
  *
  * Must be called while holding a write on the xtime_lock
  */
+/*
+清除NTP的一些状态变量的值
+调用此函数时需要持有xtime_lock的写锁
+*/
 void ntp_clear(void)
 {
 	time_adjust	= 0;		/* stop active adjtime() */

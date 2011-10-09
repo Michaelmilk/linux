@@ -37,6 +37,12 @@
  * requested HZ value. It is also not recommended
  * for "tick-less" systems.
  */
+/*
+denominator: 共同特性
+coarse: 粗糙的
+
+1个jiffy对应的纳秒数
+*/
 #define NSEC_PER_JIFFY	((u32)((((u64)NSEC_PER_SEC)<<8)/ACTHZ))
 
 /* Since jiffies uses a simple NSEC_PER_JIFFY multiplier
@@ -58,6 +64,10 @@ static cycle_t jiffies_read(struct clocksource *cs)
 	return (cycle_t) jiffies;
 }
 
+/*
+启动最初使用的jiffies时钟源
+rating为1，表示这是系统中最差的时钟源
+*/
 struct clocksource clocksource_jiffies = {
 	.name		= "jiffies",
 	.rating		= 1, /* lowest valid rating*/
@@ -91,6 +101,9 @@ static int __init init_jiffies_clocksource(void)
 
 core_initcall(init_jiffies_clocksource);
 
+/*
+最初默认的jiffies时钟源
+*/
 struct clocksource * __init __weak clocksource_default_clock(void)
 {
 	return &clocksource_jiffies;

@@ -84,7 +84,8 @@ enum clock_event_nofitiers {
 包括当硬件时钟中断发生时要执行那些操作（实际上保存了相应函数的指针）
 */
 struct clock_event_device {
-	/* 时钟中断处理函数 */
+	/* 时钟中断处理函数
+	   例如tick_set_periodic_handler()中设置的tick_handle_periodic() */
 	void			(*event_handler)(struct clock_event_device *);
 	/* set_next_event函数的作用是设置定时器下一次发出时钟中断的时机 */
 	int			(*set_next_event)(unsigned long evt,

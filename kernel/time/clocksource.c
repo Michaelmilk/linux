@@ -171,8 +171,17 @@ clocks_calc_mult_shift(u32 *mult, u32 *shift, u32 from, u32 to, u32 maxsec)
  * override_name:
  *	Name of the user-specified clocksource.
  */
+/*
+指向当前选择的时钟源
+*/
 static struct clocksource *curr_clocksource;
+/*
+所有时钟源的链表头节点
+*/
 static LIST_HEAD(clocksource_list);
+/*
+访问链表的信号量
+*/
 static DEFINE_MUTEX(clocksource_mutex);
 static char override_name[32];
 static int finished_booting;
@@ -549,11 +558,15 @@ static void clocksource_select(void)
 	if (!finished_booting || list_empty(&clocksource_list))
 		return;
 	/* First clocksource on the list has the best rating. */
+	/* 根据clocksource_enqueue()中的入队规则
+	   rating大的排在前面 */
 	best = list_first_entry(&clocksource_list, struct clocksource, list);
 	/* Check for the override clocksource. */
 	list_for_each_entry(cs, &clocksource_list, list) {
+		/* 跳过非指定的时钟源 */
 		if (strcmp(cs->name, override_name) != 0)
 			continue;
+		/* 判断用户指定的时钟源 */
 		/*
 		 * Check to make sure we don't switch to a non-highres
 		 * capable clocksource if the tick code is in oneshot
@@ -571,6 +584,8 @@ static void clocksource_select(void)
 			best = cs;
 		break;
 	}
+	/* 如果当前使用的时钟源不是新选出的最佳时钟源
+	   则改用best */
 	if (curr_clocksource != best) {
 		printk(KERN_INFO "Switching to clocksource %s\n", best->name);
 		curr_clocksource = best;
@@ -614,8 +629,13 @@ fs_initcall(clocksource_done_booting);
 /*
  * Enqueue the clocksource sorted by rating
  */
+/*
+将时钟源@cs加入clocksource_list链表
+按照rating降序排列，数值大的靠近链头
+*/
 static void clocksource_enqueue(struct clocksource *cs)
 {
+	/* 先指向链头，随着链表的遍历而调整插入点 */
 	struct list_head *entry = &clocksource_list;
 	struct clocksource *tmp;
 
@@ -676,6 +696,16 @@ EXPORT_SYMBOL_GPL(__clocksource_updatefreq_scale);
  * This *SHOULD NOT* be called directly! Please use the
  * clocksource_register_hz() or clocksource_register_khz helper functions.
  */
+/*
+scale: 比例
+
+@cs		: 时钟源描述符指针
+@scale	: @freq的刻度比例
+@freq	: 频率
+
+注册失败的话返回-EBUSY
+注册成功返回0
+*/
 int __clocksource_register_scale(struct clocksource *cs, u32 scale, u32 freq)
 {
 

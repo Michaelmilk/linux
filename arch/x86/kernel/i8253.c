@@ -41,7 +41,13 @@ static void init_pit_timer(enum clock_event_mode mode,
 	switch (mode) {
 	case CLOCK_EVT_MODE_PERIODIC:
 		/* binary, mode 2, LSB/MSB, ch 0 */
+		/* 0x34 = 00110100
+		   00表示通道0
+		   11表示先读写计数器低字节，再读写高字节
+		   010分频器
+		   0表示2进制 */
 		outb_pit(0x34, PIT_MODE);
+		/* 写入一个滴答的周期数，每当计数器减为0时，产生一个时钟中断 */
 		outb_pit(LATCH & 0xff , PIT_CH0);	/* LSB */
 		outb_pit(LATCH >> 8 , PIT_CH0);		/* MSB */
 		break;
@@ -50,6 +56,7 @@ static void init_pit_timer(enum clock_event_mode mode,
 	case CLOCK_EVT_MODE_UNUSED:
 		if (evt->mode == CLOCK_EVT_MODE_PERIODIC ||
 		    evt->mode == CLOCK_EVT_MODE_ONESHOT) {
+			/* 0x30 = 00110000 */
 			outb_pit(0x30, PIT_MODE);
 			outb_pit(0, PIT_CH0);
 			outb_pit(0, PIT_CH0);
@@ -58,6 +65,7 @@ static void init_pit_timer(enum clock_event_mode mode,
 
 	case CLOCK_EVT_MODE_ONESHOT:
 		/* One shot setup */
+		/* 0x38 = 00111000 */
 		outb_pit(0x38, PIT_MODE);
 		break;
 

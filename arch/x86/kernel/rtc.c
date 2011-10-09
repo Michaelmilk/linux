@@ -191,6 +191,7 @@ void read_persistent_clock(struct timespec *ts)
 	retval = x86_platform.get_wallclock();
 	spin_unlock_irqrestore(&rtc_lock, flags);
 
+	/* 从CMOS中读出的自1970-01-01 00:00:00以来的秒数*/
 	ts->tv_sec = retval;
 	ts->tv_nsec = 0;
 }

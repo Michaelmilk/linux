@@ -516,6 +516,7 @@ static bool dmi_matches(const struct dmi_system_id *dmi)
 {
 	int i;
 
+	/* 先完成dmi_ident[]的初始化后，才能进行匹配检查 */
 	WARN(!dmi_initialized, KERN_ERR "dmi check: not initialized yet.\n");
 
 	/* 遍历matches[]数组 */
@@ -556,6 +557,10 @@ static bool dmi_is_end_of_table(const struct dmi_system_id *dmi)
  *	returns non zero or we hit the end. Callback function is called for
  *	each successful match. Returns the number of matches.
  */
+/*
+检查参数@list中的dmi_system_id是否有与系统已经检测到的dmi信息一致的项
+找到匹配项则调用@list中匹配项的callback函数
+*/
 int dmi_check_system(const struct dmi_system_id *list)
 {
 	int count = 0;

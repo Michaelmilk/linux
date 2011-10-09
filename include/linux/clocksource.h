@@ -166,6 +166,7 @@ struct clocksource {
 	 * Hotpath data, fits in a single cache line when the
 	 * clocksource itself is cacheline aligned.
 	 */
+	/* 读取时钟周期的方法，例如读取时间戳计数器的read_tsc()函数 */
 	cycle_t (*read)(struct clocksource *cs);
 	cycle_t cycle_last;
 	cycle_t mask;
@@ -179,8 +180,10 @@ struct clocksource {
 #else
 #define CLKSRC_FSYS_MMIO_SET(mmio, addr)      do { } while (0)
 #endif
+	/* 时钟源名称 */
 	const char *name;
 	struct list_head list;
+	/* 表示时钟源的质量，数值越大，时钟源越精确 */
 	int rating;
 	cycle_t (*vread)(void);
 	int (*enable)(struct clocksource *cs);
@@ -267,6 +270,9 @@ static inline u32 clocksource_hz2mult(u32 hz, u32 shift_constant)
  *
  * XXX - This could use some mult_lxl_ll() asm optimization
  */
+/*
+使用@mult和@shift将时钟周期转换为纳秒数
+*/
 static inline s64 clocksource_cyc2ns(cycle_t cycles, u32 mult, u32 shift)
 {
 	return ((u64) cycles * mult) >> shift;

@@ -118,6 +118,9 @@ extern unsigned long long native_read_tsc(void);
 extern int native_rdmsr_safe_regs(u32 regs[8]);
 extern int native_wrmsr_safe_regs(u32 regs[8]);
 
+/*
+读时间戳计数器
+*/
 static __always_inline unsigned long long __native_read_tsc(void)
 {
 	DECLARE_ARGS(val, low, high);
@@ -127,6 +130,9 @@ static __always_inline unsigned long long __native_read_tsc(void)
 	return EAX_EDX_VAL(val, low, high);
 }
 
+/*
+读性能监测器
+*/
 static inline unsigned long long native_read_pmc(int counter)
 {
 	DECLARE_ARGS(val, low, high);

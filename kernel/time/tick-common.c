@@ -214,11 +214,15 @@ static int tick_check_new_device(struct clock_event_device *newdev)
 
 	raw_spin_lock_irqsave(&tick_device_lock, flags);
 
+	/* 当前运行在哪个cpu上 */
 	cpu = smp_processor_id();
+	/* 如果与设备所属cpu不一致，则跳转到out_bc */
 	if (!cpumask_test_cpu(cpu, newdev->cpumask))
 		goto out_bc;
 
+	/* 取当前cpu的tick_cpu_device变量 */
 	td = &per_cpu(tick_cpu_device, cpu);
+	/* 取对应的clock_event_device */
 	curdev = td->evtdev;
 
 	/* cpu local device ? */

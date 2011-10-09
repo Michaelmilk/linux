@@ -257,6 +257,7 @@ int ip_options_compile(struct net *net,
 
 	if (skb != NULL) {
 		rt = skb_rtable(skb);
+		/* ip_hdr(skb)[1]以结构iphdr为单位，下标1即到了iphdr后option的起始位置 */
 		optptr = (unsigned char *)&(ip_hdr(skb)[1]);
 	} else
 		optptr = opt->__data;

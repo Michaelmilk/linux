@@ -782,6 +782,9 @@ extern struct netdev_queue *dev_ingress_queue_create(struct net_device *dev);
 extern void rtnetlink_init(void);
 extern void __rtnl_unlock(void);
 
+/*
+断言调用处持有rtnl_mutex互斥信号量
+*/
 #define ASSERT_RTNL() do { \
 	if (unlikely(!rtnl_is_locked())) { \
 		printk(KERN_ERR "RTNL: assertion failed at %s (%d)\n", \

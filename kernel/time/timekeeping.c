@@ -67,6 +67,7 @@ static void timekeeper_setup_internals(struct clocksource *clock)
 	u64 tmp, ntpinterval;
 
 	timekeeper.clock = clock;
+	/* 调用时钟源的读函数，返回当前周期数 */
 	clock->cycle_last = clock->read(clock);
 
 	/* Do the ns -> cycle conversion first, using original mult */
@@ -157,6 +158,9 @@ __cacheline_aligned_in_smp DEFINE_SEQLOCK(xtime_lock);
  * - wall_to_monotonic is no longer the boot time, getboottime must be
  * used instead.
  */
+/*
+monotonic: 单调的
+*/
 static struct timespec xtime __attribute__ ((aligned (16)));
 static struct timespec wall_to_monotonic __attribute__ ((aligned (16)));
 static struct timespec total_sleep_time;
@@ -559,6 +563,11 @@ void __attribute__((weak)) read_boot_clock(struct timespec *ts)
 /*
  * timekeeping_init - Initializes the clocksource and common timekeeping values
  */
+/*
+timekeeping: 计时
+
+初始化时钟源和通用计时值
+*/
 void __init timekeeping_init(void)
 {
 	struct clocksource *clock;
@@ -577,10 +586,12 @@ void __init timekeeping_init(void)
 		clock->enable(clock);
 	timekeeper_setup_internals(clock);
 
+	/* 存放自1970.1.1午夜以来经过的秒数 */
 	xtime.tv_sec = now.tv_sec;
 	xtime.tv_nsec = now.tv_nsec;
 	raw_time.tv_sec = 0;
 	raw_time.tv_nsec = 0;
+	/* 在read_boot_clock()中都设置为0了 */
 	if (boot.tv_sec == 0 && boot.tv_nsec == 0) {
 		boot.tv_sec = xtime.tv_sec;
 		boot.tv_nsec = xtime.tv_nsec;

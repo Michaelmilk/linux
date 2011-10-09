@@ -35,6 +35,9 @@
 /*
  * HPET address is set in acpi/boot.c, when an ACPI entry exists
  */
+/*
+由函数acpi_parse_hpet()解析赋值
+*/
 unsigned long				hpet_address;
 u8					hpet_blockid; /* OS timer block num */
 u8					hpet_msi_disable;
@@ -69,6 +72,7 @@ static inline void hpet_writel(unsigned int d, unsigned int a)
 
 static inline void hpet_set_mapping(void)
 {
+	/* 映射物理地址对应的虚拟地址 */
 	hpet_virt_address = ioremap_nocache(hpet_address, HPET_MMAP_SIZE);
 #ifdef CONFIG_X86_64
 	__set_fixmap(VSYSCALL_HPET, hpet_address, PAGE_KERNEL_VSYSCALL_NOCACHE);
@@ -111,7 +115,7 @@ __setup("nohpet", disable_hpet);
 
 /*
 命令行没有使用nohpet关闭hpet
-
+acpi检测到hpet芯片，并将其寄存器地址映射到了内存地址中
 */
 static inline int is_hpet_capable(void)
 {
@@ -770,7 +774,10 @@ static int hpet_clocksource_register(void)
 	hpet_restart_counter();
 
 	/* Verify whether hpet counter works */
+	/* 验证hpet计数器是否工作
+	   先读取一个值，利用时间戳计数器循环等待一段时间 */
 	t1 = hpet_readl(HPET_COUNTER);
+	/* 读取时间戳计数器 */
 	rdtscll(start);
 
 	/*
@@ -779,11 +786,15 @@ static int hpet_clocksource_register(void)
 	 * 4 GHz == 50us
 	 * 1 GHz == 200us
 	 */
+	/* 循环等待200000个cpu周期
+	   cpu频率为1GHz的话，即(200000 * 10^6 / 10^9) = 200us */
 	do {
 		rep_nop();
 		rdtscll(now);
 	} while ((now - start) < 200000UL);
 
+	/* 再次读取hpet计数器，验证hpet是否正常工作
+	   如果2次值相等，则不注册hpet时钟源 */
 	if (t1 == hpet_readl(HPET_COUNTER)) {
 		printk(KERN_WARNING
 		       "HPET counter not counting. HPET disabled\n");

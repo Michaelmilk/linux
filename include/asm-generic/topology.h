@@ -32,6 +32,10 @@
 /* Other architectures wishing to use this simple topology API should fill
    in the below functions as appropriate in their own <asm/topology.h> file. */
 #ifndef cpu_to_node
+/*
+一致性内存模型，只有1个节点
+使用逗号表达式返回0
+*/
 #define cpu_to_node(cpu)	((void)(cpu),0)
 #endif
 #ifndef set_numa_node

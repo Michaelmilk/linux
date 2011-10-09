@@ -102,6 +102,10 @@ struct tvec_base {
 
 struct tvec_base boot_tvec_bases;
 EXPORT_SYMBOL(boot_tvec_bases);
+/*
+每cpu的tvec_base指针
+结构tvec_base实例空间在init_timers_cpu()函数内分配
+*/
 static DEFINE_PER_CPU(struct tvec_base *, tvec_bases) = &boot_tvec_bases;
 
 /* Functions below help us manage 'deferrable' flag */
@@ -1341,6 +1345,7 @@ void update_process_times(int user_tick)
 */
 static void run_timer_softirq(struct softirq_action *h)
 {
+	/* 取当前cpu的tvec_base */
 	struct tvec_base *base = __this_cpu_read(tvec_bases);
 
 	hrtimer_run_pending();
@@ -1628,19 +1633,26 @@ SYSCALL_DEFINE1(sysinfo, struct sysinfo __user *, info)
 	return 0;
 }
 
+/*
+初始化指定@cpu上与定时器控制相关的结构
+*/
 static int __cpuinit init_timers_cpu(int cpu)
 {
 	int j;
 	struct tvec_base *base;
+	/* 标记该cpu上的tvec_base是否已经完成初始化 */
 	static char __cpuinitdata tvec_base_done[NR_CPUS];
 
 	if (!tvec_base_done[cpu]) {
+		/* 标记是否为引导cpu */
 		static char boot_done;
 
+		/* 非引导cpu分支 */
 		if (boot_done) {
 			/*
 			 * The APs use this path later in boot
 			 */
+			/* 动态分配应用cpu的tvec_base结构实例 */
 			base = kmalloc_node(sizeof(*base),
 						GFP_KERNEL | __GFP_ZERO,
 						cpu_to_node(cpu));
@@ -1648,13 +1660,17 @@ static int __cpuinit init_timers_cpu(int cpu)
 				return -ENOMEM;
 
 			/* Make sure that tvec_base is 2 byte aligned */
+			/* 检查返回的地址是偶数 */
 			if (tbase_get_deferrable(base)) {
 				WARN_ON(1);
 				kfree(base);
 				return -ENOMEM;
 			}
+			/* 用每cpu的tvec_base指针变量中，
+			   当前cpu的tvec_base指针记录动态分配的实例空间 */
 			per_cpu(tvec_bases, cpu) = base;
 		} else {
+		/* 引导cpu最先调用init_timers_cpu()函数，boot_done为0，先进此分支 */
 			/*
 			 * This is for the boot CPU - we use compile-time
 			 * static initialisation because per-cpu memory isn't
@@ -1664,13 +1680,16 @@ static int __cpuinit init_timers_cpu(int cpu)
 			boot_done = 1;
 			base = &boot_tvec_bases;
 		}
+		/* 标记@cpu上的tvec_base已经完成初始化 */
 		tvec_base_done[cpu] = 1;
 	} else {
+	/* 已经完成初始化，则直接从每cpu变量指针中取实例 */
 		base = per_cpu(tvec_bases, cpu);
 	}
 
 	spin_lock_init(&base->lock);
 
+	/* 初始化时间轮各级链表头节点 */
 	for (j = 0; j < TVN_SIZE; j++) {
 		INIT_LIST_HEAD(base->tv5.vec + j);
 		INIT_LIST_HEAD(base->tv4.vec + j);
@@ -1701,6 +1720,10 @@ static void migrate_timer_list(struct tvec_base *new_base, struct list_head *hea
 	}
 }
 
+/*
+迁移定时器
+将@cpu中还未处理的定时器节点迁移到当前活动的cpu定时器结构中
+*/
 static void __cpuinit migrate_timers(int cpu)
 {
 	struct tvec_base *old_base;
@@ -1708,7 +1731,9 @@ static void __cpuinit migrate_timers(int cpu)
 	int i;
 
 	BUG_ON(cpu_online(cpu));
+	/* 取@cpu上的定时器结构 */
 	old_base = per_cpu(tvec_bases, cpu);
+	/* 取当前活动cpu的定时器结构 */
 	new_base = get_cpu_var(tvec_bases);
 	/*
 	 * The caller is globally serialized and nobody else
@@ -1764,15 +1789,23 @@ static struct notifier_block __cpuinitdata timers_nb = {
 };
 
 
+/*
+初始化定时器相关的数据结构
+*/
 void __init init_timers(void)
 {
+	/* 先使用通知链的回调函数timer_cpu_notify()中的CPU_UP_PREPARE事件
+	   执行init_timers_cpu()函数，初始化启动cpu上的定时器相关结构 */
 	int err = timer_cpu_notify(&timers_nb, (unsigned long)CPU_UP_PREPARE,
 				(void *)(long)smp_processor_id());
 
 	init_timer_stats();
 
 	BUG_ON(err != NOTIFY_OK);
+	/* 将定时器的timers_nb注册到cpu的通知链上
+	   当cpu增加或吊死时，处理定时器相关节点 */
 	register_cpu_notifier(&timers_nb);
+	/* 注册定时器的软中断函数 */
 	open_softirq(TIMER_SOFTIRQ, run_timer_softirq);
 }
 

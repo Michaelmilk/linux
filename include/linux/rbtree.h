@@ -114,6 +114,9 @@ struct rb_root
 
 
 #define rb_parent(r)   ((struct rb_node *)((r)->rb_parent_color & ~3))
+/*
+最低的1个bit保存父节点的颜色
+*/
 #define rb_color(r)   ((r)->rb_parent_color & 1)
 #define rb_is_red(r)   (!rb_color(r))
 #define rb_is_black(r) rb_color(r)

@@ -40,6 +40,9 @@
 #endif
 
 /* LATCH is used in the interval timer and ftape setup. */
+/*
+写入PIT计数器的值
+*/
 #define LATCH  ((CLOCK_TICK_RATE + HZ/2) / HZ)	/* For divider */
 
 /* Suppose we want to divide two numbers NOM and DEN: NOM/DEN, then we can

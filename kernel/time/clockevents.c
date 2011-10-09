@@ -191,10 +191,14 @@ static void clockevents_notify_released(void)
  * clockevents_register_device - register a clock event device
  * @dev:	device to register
  */
+/*
+注册时钟事件设备
+*/
 void clockevents_register_device(struct clock_event_device *dev)
 {
 	unsigned long flags;
 
+	/* 未使用的才可以进行注册 */
 	BUG_ON(dev->mode != CLOCK_EVT_MODE_UNUSED);
 	if (!dev->cpumask) {
 		WARN_ON(num_possible_cpus() > 1);
@@ -203,7 +207,11 @@ void clockevents_register_device(struct clock_event_device *dev)
 
 	raw_spin_lock_irqsave(&clockevents_lock, flags);
 
+	/* 链入clockevent_devices链表 */
 	list_add(&dev->list, &clockevent_devices);
+	/* 调用通知链函数
+	   比如调用tick_init()中注册的tick_notifier => tick_notify()
+	   => CLOCK_EVT_NOTIFY_ADD => tick_check_new_device()函数 */
 	clockevents_do_notify(CLOCK_EVT_NOTIFY_ADD, dev);
 	clockevents_notify_released();
 
@@ -302,6 +310,8 @@ void clockevents_exchange_device(struct clock_event_device *old,
 	if (old) {
 		clockevents_set_mode(old, CLOCK_EVT_MODE_UNUSED);
 		list_del(&old->list);
+		/* 将@old加入clockevents_released链表
+		   以便随后在clockevents_notify_released()中处理 */
 		list_add(&old->list, &clockevents_released);
 	}
 

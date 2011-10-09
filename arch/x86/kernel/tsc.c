@@ -281,10 +281,16 @@ static unsigned long pit_calibrate_tsc(u32 latch, unsigned long ms, int loopmin)
  * use the TSC value at the transitions to calculate a pretty
  * good value for the TSC frequencty.
  */
+/*
+MSB: Most Significant Bit 最高有效位
+LSB: Least Significant Bit 最低有效位
+*/
 static inline int pit_verify_msb(unsigned char val)
 {
 	/* Ignore LSB */
+	/* 先读的是16位寄存器的低字节 */
 	inb(0x42);
+	/* 判断高字节值是否与@val相等 */
 	return inb(0x42) == val;
 }
 
@@ -315,8 +321,16 @@ static inline int pit_expect_msb(unsigned char val, u64 *tscp, unsigned long *de
  * more than 25ms on it.
  */
 #define MAX_QUICK_PIT_MS 25
+/*
+频率除以1000转换为1ms频率
+256表示低字节的256次
+乘以25表示25ms内读取MSB值的次数
+*/
 #define MAX_QUICK_PIT_ITERATIONS (MAX_QUICK_PIT_MS * PIT_TICK_RATE / 1000 / 256)
 
+/*
+pit: programmable interval timer 可编程的定时/计数器
+*/
 static unsigned long quick_pit_calibrate(void)
 {
 	int i;
@@ -335,9 +349,15 @@ static unsigned long quick_pit_calibrate(void)
 	 * so mode 0 is much better when looking at the
 	 * individual counts.
 	 */
+	/* 0xb0 = 10110000 由高到低各bit表示:
+	   10表示通道2
+	   11表示先读写计数器低字节，再读写高字节
+	   000计数到0产生中断请求
+	   0表示2进制计数方式 */
 	outb(0xb0, 0x43);
 
 	/* Start at 0xffff */
+	/* 向通道2计数器写入0xffff */
 	outb(0xff, 0x42);
 	outb(0xff, 0x42);
 
@@ -402,6 +422,10 @@ success:
 /**
  * native_calibrate_tsc - calibrate the tsc on boot
  */
+/*
+calibrate: 校准
+
+*/
 unsigned long native_calibrate_tsc(void)
 {
 	u64 tsc1, tsc2, delta, ref1, ref2;
@@ -783,6 +807,7 @@ static struct clocksource clocksource_tsc = {
 
 void mark_tsc_unstable(char *reason)
 {
+	/* 只标记1次 */
 	if (!tsc_unstable) {
 		tsc_unstable = 1;
 		sched_clock_stable = 0;
@@ -970,12 +995,17 @@ void __init tsc_init(void)
 	u64 lpj;
 	int cpu;
 
+	/* 调用x86_init_noop() */
 	x86_init.timers.tsc_pre_init();
 
+	/* 检查是否支持tsc */
 	if (!cpu_has_tsc)
 		return;
 
+	/* 调用native_calibrate_tsc() */
 	tsc_khz = x86_platform.calibrate_tsc();
+	/* tsc在每个时钟信号到来时加1
+	   所以tsc频率即cpu频率 */
 	cpu_khz = tsc_khz;
 
 	if (!tsc_khz) {
@@ -1005,12 +1035,15 @@ void __init tsc_init(void)
 	if (!no_sched_irq_time)
 		enable_sched_clock_irqtime();
 
+	/* 乘以1000转化为频率 */
 	lpj = ((u64)tsc_khz * 1000);
+	/* 除以HZ，得出每个jiffy的loop数 */
 	do_div(lpj, HZ);
 	lpj_fine = lpj;
 
 	use_tsc_delay();
 	/* Check and install the TSC clocksource */
+	/* 修正已知设备问题 */
 	dmi_check_system(bad_tsc_dmi_table);
 
 	if (unsynchronized_tsc())

@@ -79,6 +79,9 @@ typedef __kernel_ptrdiff_t	ptrdiff_t;
 
 #ifndef _TIME_T
 #define _TIME_T
+/*
+time_t是有符号的32位数
+*/
 typedef __kernel_time_t		time_t;
 #endif
 

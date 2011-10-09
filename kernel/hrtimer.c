@@ -58,6 +58,9 @@
  * to reach a base using a clockid, hrtimer_clockid_to_base()
  * is used to convert from clockid to the proper hrtimer_base_type.
  */
+/*
+定义每cpu的hrtimer_cpu_base结构
+*/
 DEFINE_PER_CPU(struct hrtimer_cpu_base, hrtimer_bases) =
 {
 
@@ -1142,6 +1145,7 @@ static void __hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
 
 	memset(timer, 0, sizeof(struct hrtimer));
 
+	/* 取当前cpu的hrtimer_bases变量 */
 	cpu_base = &__raw_get_cpu_var(hrtimer_bases);
 
 	if (clock_id == CLOCK_REALTIME && mode != HRTIMER_MODE_ABS)
@@ -1614,9 +1618,11 @@ SYSCALL_DEFINE2(nanosleep, struct timespec __user *, rqtp,
  */
 static void __cpuinit init_hrtimers_cpu(int cpu)
 {
+	/* 取@cpu对应的hrtimer_cpu_base结构 */
 	struct hrtimer_cpu_base *cpu_base = &per_cpu(hrtimer_bases, cpu);
 	int i;
 
+	/* 初始化自旋锁 */
 	raw_spin_lock_init(&cpu_base->lock);
 
 	for (i = 0; i < HRTIMER_MAX_CLOCK_BASES; i++) {
@@ -1734,8 +1740,10 @@ static struct notifier_block __cpuinitdata hrtimers_nb = {
 
 void __init hrtimers_init(void)
 {
+	/* 先通过CPU_UP_PREPARE事件调用init_hrtimers_cpu()函数 */
 	hrtimer_cpu_notify(&hrtimers_nb, (unsigned long)CPU_UP_PREPARE,
 			  (void *)(long)smp_processor_id());
+	/* 将hrtimers_nb注册到cpu的通知链上 */
 	register_cpu_notifier(&hrtimers_nb);
 #ifdef CONFIG_HIGH_RES_TIMERS
 	open_softirq(HRTIMER_SOFTIRQ, run_hrtimer_softirq);

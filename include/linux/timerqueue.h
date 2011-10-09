@@ -44,6 +44,7 @@ static inline void timerqueue_init(struct timerqueue_node *node)
 
 static inline void timerqueue_init_head(struct timerqueue_head *head)
 {
+	/* 初始化红黑树的根节点为NULL */
 	head->head = RB_ROOT;
 	head->next = NULL;
 }
