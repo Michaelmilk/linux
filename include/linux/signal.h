@@ -151,6 +151,7 @@ static inline void name(sigset_t *set)					\
 
 #define _sig_not(x)	(~(x))
 _SIG_SET_OP(signotset, _sig_not)
+;
 
 #undef _SIG_SET_OP
 #undef _sig_not

@@ -422,6 +422,10 @@ extern struct kmem_cache *task_xstate_cachep;
 
 struct perf_event;
 
+/*
+保存寄存器集合的值及其他信息
+内核在进程之间切换时需要保存和恢复的内容
+*/
 struct thread_struct {
 	/* Cached TLS descriptors: */
 	struct desc_struct	tls_array[GDT_ENTRY_TLS_ENTRIES];

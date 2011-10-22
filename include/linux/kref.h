@@ -17,6 +17,10 @@
 
 #include <linux/types.h>
 
+/*
+封装了一个原子类型
+用来跟踪实例的引用计数
+*/
 struct kref {
 	atomic_t refcount;
 };

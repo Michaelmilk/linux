@@ -39,21 +39,31 @@
 #define CLONE_CHILD_SETTID	0x01000000	/* set the TID in the child */
 /* 0x02000000 was previously the unused CLONE_STOPPED (Start in stopped state)
    and is now available for re-use. */
-/* 创建新的utsname组 */
+/* 创建新的utsname命名空间 */
 #define CLONE_NEWUTS		0x04000000	/* New utsname group? */
-/* 创建新的IPC */
+/* 创建新的IPC命名空间 */
 #define CLONE_NEWIPC		0x08000000	/* New ipcs */
+/* 创建新的用户命名空间 */
 #define CLONE_NEWUSER		0x10000000	/* New user namespace */
+/* 创建新的PID命名空间 */
 #define CLONE_NEWPID		0x20000000	/* New pid namespace */
+/* 创建新的网络命名空间 */
 #define CLONE_NEWNET		0x40000000	/* New network namespace */
 #define CLONE_IO		0x80000000	/* Clone io context */
 
 /*
  * Scheduling policies
  */
+/*
+调度策略
+*/
+/* 普通进程 */
 #define SCHED_NORMAL		0
+/* 先进先出 */
 #define SCHED_FIFO		1
+/* round robin 循环 */
 #define SCHED_RR		2
+/* 批处理 */
 #define SCHED_BATCH		3
 /* SCHED_ISO: reserved but not implemented yet */
 #define SCHED_IDLE		5
@@ -717,8 +727,14 @@ static inline int signal_group_exit(const struct signal_struct *sig)
 /*
  * Some day this will be a full-fledged user tracking system..
  */
+/*
+full-fledged: 完全的
+
+记录用户的资源消耗
+*/
 struct user_struct {
 	atomic_t __count;	/* reference count */
+	/* 特定用户当前持有的进程数目 */
 	atomic_t processes;	/* How many processes does this user have? */
 	atomic_t files;		/* How many open files does this user have? */
 	atomic_t sigpending;	/* How many pending signals does this user have? */
@@ -1325,6 +1341,7 @@ struct task_struct {
 	int exit_state;
 	/* 引起进程退出的返回代码exit_code，引起错误的信号名exit_signal */
 	int exit_code, exit_signal;
+	/* 在父进程终止时发送的信号 */
 	int pdeath_signal;  /*  The signal sent when the parent dies  */
 	unsigned int group_stop;	/* GROUP_STOP_*, siglock protected */
 	/* ??? */
@@ -1367,8 +1384,11 @@ struct task_struct {
 	/*
 	 * children/sibling forms the list of my natural children
 	 */
+	/* 子进程链表头节点 */
 	struct list_head children;	/* list of my children */
+	/* 链入父进程的子进程链表，处于该链表中的即兄弟进程 */
 	struct list_head sibling;	/* linkage in my parent's children list */
+	/* 指向线程组中的主进程 */
 	struct task_struct *group_leader;	/* threadgroup leader */
 
 	/*
@@ -1402,6 +1422,7 @@ struct task_struct {
 	struct list_head cpu_timers[3];
 
 /* process credentials */
+/* credentials: 资格证明 */
 	const struct cred __rcu *real_cred; /* objective and real subjective task
 					 * credentials (COW) */
 	const struct cred __rcu *cred;	/* effective (overridable) subjective task
@@ -1413,9 +1434,11 @@ struct task_struct {
 				       it with task_lock())
 				     - initialized normally by setup_new_exec */
 /* file system info */
+/* 文件系统信息 */
 	int link_count, total_link_count;
 #ifdef CONFIG_SYSVIPC
 /* ipc stuff */
+/* ipc相关 */
 	struct sysv_sem sysvsem;
 #endif
 #ifdef CONFIG_DETECT_HUNG_TASK
@@ -1423,8 +1446,10 @@ struct task_struct {
 	unsigned long last_switch_count;
 #endif
 /* CPU-specific state of this task */
+/* CPU特有的一些进程状态信息 */
 	struct thread_struct thread;
 /* filesystem information */
+/* 文件系统信息 */
 	struct fs_struct *fs;
 /* open file information */
 	/* 指向本进程的files_struct结构，
@@ -1433,6 +1458,7 @@ struct task_struct {
 /* namespaces */
 	struct nsproxy *nsproxy;
 /* signal handlers */
+/* 信号处理程序 */
 	struct signal_struct *signal;
 	struct sighand_struct *sighand;
 
@@ -1503,6 +1529,7 @@ struct task_struct {
 #endif
 
 /* journalling filesystem info */
+/* 日志文件系统信息 */
 	void *journal_info;
 
 /* stacked block device info */
@@ -1634,12 +1661,25 @@ struct task_struct {
  * MAX_RT_PRIO must not be smaller than MAX_USER_RT_PRIO.
  */
 
+/*
+进程的优先级从0..139
+实时进程的优先级从0..99
+SCHED_NORMAL/SCHED_BATCH普通进程和批处理进程优先级从100..139
+优先级的数值是反过来的: 进程优先级的p->prio数值越小，意味着其优先级越高
+
+数值MAX_USER_RT_PRIO把实时进程的最大优先级和用户空间进程分离开来
+这样内核线程可以设置其优先级高于用户进程
+注意:MAX_RT_PRIO不能小于MAX_USER_RT_PRIO
+*/
 #define MAX_USER_RT_PRIO	100
 #define MAX_RT_PRIO		MAX_USER_RT_PRIO
 
 #define MAX_PRIO		(MAX_RT_PRIO + 40)
 #define DEFAULT_PRIO		(MAX_RT_PRIO + 20)
 
+/*
+优先级为实时进程的优先级
+*/
 static inline int rt_prio(int prio)
 {
 	if (unlikely(prio < MAX_RT_PRIO))
@@ -1647,6 +1687,9 @@ static inline int rt_prio(int prio)
 	return 0;
 }
 
+/*
+根据进程@p的优先级判断其是否为实时进程
+*/
 static inline int rt_task(struct task_struct *p)
 {
 	return rt_prio(p->prio);

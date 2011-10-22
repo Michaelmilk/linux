@@ -232,6 +232,8 @@ void __init fork_init(unsigned long mempages)
 	 * value: the thread structures can take up at most half
 	 * of memory.
 	 */
+	/* 根据系统页面数和内核栈所占用的页面数，计算出最多能有多少个内核栈
+	   取其1/8 */
 	max_threads = mempages / (8 * THREAD_SIZE / PAGE_SIZE);
 
 	/*
@@ -1080,6 +1082,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 * Thread groups must share signals as well, and detached threads
 	 * can only be started up within the thread group.
 	 */
+	/* 使用CLONE_THREAD标志创建线程时，必须要使用CLONE_SIGHAND激活信号共享 */
 	if ((clone_flags & CLONE_THREAD) && !(clone_flags & CLONE_SIGHAND))
 		return ERR_PTR(-EINVAL);
 
@@ -1088,6 +1091,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 * thread groups also imply shared VM. Blocking this case allows
 	 * for various simplifications in other code.
 	 */
+	/* 信号共享时，则必须要求共享虚拟地址空间 */
 	if ((clone_flags & CLONE_SIGHAND) && !(clone_flags & CLONE_VM))
 		return ERR_PTR(-EINVAL);
 
@@ -1120,6 +1124,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	DEBUG_LOCKS_WARN_ON(!p->softirqs_enabled);
 #endif
 	retval = -EAGAIN;
+	/* 检查是否超出关联用户允许的最大进程数目 */
 	if (atomic_read(&p->real_cred->user->processes) >=
 			task_rlimit(p, RLIMIT_NPROC)) {
 		if (!capable(CAP_SYS_ADMIN) && !capable(CAP_SYS_RESOURCE) &&
@@ -1474,6 +1479,14 @@ struct task_struct * __cpuinit fork_idle(int cpu)
  * It copies the process, and if successful kick-starts
  * it and waits for it to finish using the VM if required.
  */
+/*
+@clone_flags	: clone标志，控制进程复制过程中的一些属性
+@stack_start	: 用户态下栈的起始地址
+@regs			: 寄存器集合
+@stack_size		: 用户态下栈的大小
+@parent_tidptr	: 用户空间指针，指向父进程tid
+@child_tidptr	: 用户空间指针，指向子进程tid
+*/
 long do_fork(unsigned long clone_flags,
 	      unsigned long stack_start,
 	      struct pt_regs *regs,

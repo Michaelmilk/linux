@@ -22,6 +22,9 @@ struct fs_struct;
  * As soon as a single namespace is cloned or unshared, the
  * nsproxy is copied.
  */
+/*
+每个进程的命名空间代理
+*/
 struct nsproxy {
 	atomic_t count;
 	struct uts_namespace *uts_ns;

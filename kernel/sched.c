@@ -88,6 +88,10 @@
  * to static priority [ MAX_RT_PRIO..MAX_PRIO-1 ],
  * and back.
  */
+/*
+将nice值 [ -20 ... 0 ... 19 ]
+与静态优先级 [ MAX_RT_PRIO..MAX_PRIO-1 ] 进行转换
+*/
 #define NICE_TO_PRIO(nice)	(MAX_RT_PRIO + (nice) + 20)
 #define PRIO_TO_NICE(prio)	((prio) - MAX_RT_PRIO - 20)
 #define TASK_NICE(p)		PRIO_TO_NICE((p)->static_prio)
@@ -2811,6 +2815,7 @@ void sched_fork(struct task_struct *p)
 	/*
 	 * Revert to default priority/policy on fork if requested.
 	 */
+	/* 按照fork的是否请求，恢复为默认的优先级/策略 */
 	if (unlikely(p->sched_reset_on_fork)) {
 		if (p->policy == SCHED_FIFO || p->policy == SCHED_RR) {
 			p->policy = SCHED_NORMAL;
@@ -2835,6 +2840,7 @@ void sched_fork(struct task_struct *p)
 	 */
 	p->prio = current->normal_prio;
 
+	/* 如果不是实时进程，则使用公平调度算法 */
 	if (!rt_prio(p->prio))
 		p->sched_class = &fair_sched_class;
 
@@ -2861,6 +2867,7 @@ void sched_fork(struct task_struct *p)
 #endif
 #ifdef CONFIG_PREEMPT
 	/* Want to start with kernel preemption disabled. */
+	/* 标记为不可抢占 */
 	task_thread_info(p)->preempt_count = 1;
 #endif
 #ifdef CONFIG_SMP

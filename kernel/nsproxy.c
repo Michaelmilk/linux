@@ -28,6 +28,9 @@
 
 static struct kmem_cache *nsproxy_cachep;
 
+/*
+初始的全局命名空间
+*/
 struct nsproxy init_nsproxy = {
 	.count	= ATOMIC_INIT(1),
 	.uts_ns	= &init_uts_ns,
@@ -41,11 +44,16 @@ struct nsproxy init_nsproxy = {
 #endif
 };
 
+/*
+分配一个struct nsproxy实例
+返回其指针
+*/
 static inline struct nsproxy *create_nsproxy(void)
 {
 	struct nsproxy *nsproxy;
 
 	nsproxy = kmem_cache_alloc(nsproxy_cachep, GFP_KERNEL);
+	/* 分配成功，置其引用计数为1 */
 	if (nsproxy)
 		atomic_set(&nsproxy->count, 1);
 	return nsproxy;
@@ -128,8 +136,11 @@ int copy_namespaces(unsigned long flags, struct task_struct *tsk)
 	if (!old_ns)
 		return 0;
 
+	/* 增加原命名空间代理的引用计数 */
 	get_nsproxy(old_ns);
 
+	/* 没有创建新的命名空间的标志，则返回
+	   原命名空间代理的引用计数已经增1，即新进程@tsk使用其父进程的命名空间代理 */
 	if (!(flags & (CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC |
 				CLONE_NEWPID | CLONE_NEWNET)))
 		return 0;
@@ -146,6 +157,9 @@ int copy_namespaces(unsigned long flags, struct task_struct *tsk)
 	 * means share undolist with parent, so we must forbid using
 	 * it along with CLONE_NEWIPC.
 	 */
+	/* parlance: 用法
+	   CLONE_NEWIPC和CLONE_SYSVSEM对信号量的共享有互斥含义
+	   不能同时置这2个标志 */
 	if ((flags & CLONE_NEWIPC) && (flags & CLONE_SYSVSEM)) {
 		err = -EINVAL;
 		goto out;
@@ -157,9 +171,12 @@ int copy_namespaces(unsigned long flags, struct task_struct *tsk)
 		goto out;
 	}
 
+	/* 记录新进程的命名空间代理 */
 	tsk->nsproxy = new_ns;
 
 out:
+	/* 出错或者分配了新的命名空间代理
+	   则减小old_ns的引用计数 */
 	put_nsproxy(old_ns);
 	return err;
 }

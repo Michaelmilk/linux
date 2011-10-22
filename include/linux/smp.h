@@ -167,7 +167,15 @@ smp_call_function_any(const struct cpumask *mask, smp_call_func_t func,
 # define smp_processor_id() raw_smp_processor_id()
 #endif
 
+/*
+标记当前进程不可抢占
+返回当前cpu号
+*/
 #define get_cpu()		({ preempt_disable(); smp_processor_id(); })
+/*
+标记当前进程可抢占
+并检查是否需要重新调度
+*/
 #define put_cpu()		preempt_enable()
 
 /*

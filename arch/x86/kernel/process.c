@@ -283,10 +283,13 @@ kernel_thread()才是真正创建内核线程的所在
 */
 int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 {
+	/* 构造寄存器值的集合
+	   传递给函数do_fork()，作为新进程的上下文环境 */
 	struct pt_regs regs;
 
 	memset(&regs, 0, sizeof(regs));
 
+	/* 记录新进程待执行的函数及其参数 */
 	regs.si = (unsigned long) fn;
 	regs.di = (unsigned long) arg;
 
@@ -300,6 +303,7 @@ int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 #endif
 
 	regs.orig_ax = -1;
+	/* 下一条待执行指令指针 */
 	regs.ip = (unsigned long) kernel_thread_helper;
 	/* 代码段选择子
 	   请求特权级 */

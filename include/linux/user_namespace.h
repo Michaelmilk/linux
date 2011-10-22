@@ -7,6 +7,9 @@
 #include <linux/err.h>
 
 #define UIDHASH_BITS	(CONFIG_BASE_SMALL ? 3 : 7)
+/*
+哈希表的大小，即桶头节点的个数
+*/
 #define UIDHASH_SZ	(1 << UIDHASH_BITS)
 
 struct user_namespace {

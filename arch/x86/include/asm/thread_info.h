@@ -39,6 +39,7 @@ struct thread_info {
 	   例如:SOFTIRQ_SHIFT */
 	int			preempt_count;	/* 0 => preemptable,
 						   <0 => BUG */
+	/* 进程可以使用的虚拟地址上限 */
 	mm_segment_t		addr_limit;
 	struct restart_block    restart_block;
 	void __user		*sysenter_return;
@@ -83,7 +84,9 @@ struct thread_info {
  */
 #define TIF_SYSCALL_TRACE	0	/* syscall trace active */
 #define TIF_NOTIFY_RESUME	1	/* callback before returning to user */
+/* 进程有待决信号 */
 #define TIF_SIGPENDING		2	/* signal pending */
+/* 当前进程希望调度器选择另一个进程替换本进程执行 */
 #define TIF_NEED_RESCHED	3	/* rescheduling necessary */
 #define TIF_SINGLESTEP		4	/* reenable singlestep on user return*/
 #define TIF_IRET		5	/* force IRET */
