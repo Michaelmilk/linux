@@ -97,8 +97,19 @@ static inline struct page * rb_insert_page_cache(struct inode * inode,
 #include <linux/kernel.h>
 #include <linux/stddef.h>
 
+/*
+1.节点是红色或黑色
+2.根节点是黑色
+3.每个叶节点是黑色
+4.每个红色节点的两个子节点都是黑色(从每个叶子到根的所有路径上不能有两个连续的红色节点)
+5.从任一节点到其每个叶子的所有路径都包含相同数目的黑色节点
+*/
+
 struct rb_node
 {
+	/* 1.保存指向其父节点的指针
+	   2.保存当前节点的颜色
+	   因为struct rb_node结构是4字节对齐的，低2bit始终为0，故可用来保存颜色 */
 	unsigned long  rb_parent_color;
 #define	RB_RED		0
 #define	RB_BLACK	1
@@ -106,44 +117,79 @@ struct rb_node
 	struct rb_node *rb_left;
 } __attribute__((aligned(sizeof(long))));
     /* The alignment might seem pointless, but allegedly CRIS needs it */
+/* allegedly: 据传说 */
 
+/* 根节点必须是黑色 */
 struct rb_root
 {
 	struct rb_node *rb_node;
 };
 
 
+/*
+取节点@r的父节点的指针
+因结构struct rb_node是4字节对齐的，掩去低2bit的颜色信息
+*/
 #define rb_parent(r)   ((struct rb_node *)((r)->rb_parent_color & ~3))
 /*
-最低的1个bit保存父节点的颜色
+最低的1个bit保存节点@r的颜色信息
 */
 #define rb_color(r)   ((r)->rb_parent_color & 1)
+/* 最低1bit没有置位表示为红色 */
 #define rb_is_red(r)   (!rb_color(r))
+/* 置位了表示为黑色 */
 #define rb_is_black(r) rb_color(r)
+/* 将最低的1个bit置位为0，即红色 */
 #define rb_set_red(r)  do { (r)->rb_parent_color &= ~1; } while (0)
+/* 将最低的1个bit置位为1，即黑色 */
 #define rb_set_black(r)  do { (r)->rb_parent_color |= 1; } while (0)
 
+/*
+设置节点@rb的父节点指针为@p
+@p的指针值保存在rb_parent_color字段内
+*/
 static inline void rb_set_parent(struct rb_node *rb, struct rb_node *p)
 {
 	rb->rb_parent_color = (rb->rb_parent_color & 3) | (unsigned long)p;
 }
+/*
+设置节点@rb的颜色
+@color保存在字段rb_parent_color的最低1个bit
+*/
 static inline void rb_set_color(struct rb_node *rb, int color)
 {
 	rb->rb_parent_color = (rb->rb_parent_color & ~1) | color;
 }
 
 #define RB_ROOT	(struct rb_root) { NULL, }
+/*
+获取内嵌了struct rb_node结构的容器结构的指针
+
+@ptr	: 指向一个struct rb_node节点的指针
+@type	: 内嵌了struct rb_node的结构体类型
+@member	: 内嵌的struct rb_node在@type结构中的字段名称
+*/
 #define	rb_entry(ptr, type, member) container_of(ptr, type, member)
 
+/* 判断根节点@root是否为空 */
 #define RB_EMPTY_ROOT(root)	((root)->rb_node == NULL)
+/* 判断节点@node的父节点是否指向自身 */
 #define RB_EMPTY_NODE(node)	(rb_parent(node) == node)
+/* 设置节点@node的父节点为自身 */
 #define RB_CLEAR_NODE(node)	(rb_set_parent(node, node))
 
+/*
+初始化节点@rb
+*/
 static inline void rb_init_node(struct rb_node *rb)
 {
+	/* 初始颜色为红色 */
 	rb->rb_parent_color = 0;
+	/* 右子节点为空 */
 	rb->rb_right = NULL;
+	/* 左子节点为空 */
 	rb->rb_left = NULL;
+	/* 父节点指向自身 */
 	RB_CLEAR_NODE(rb);
 }
 
@@ -168,12 +214,22 @@ extern struct rb_node *rb_last(const struct rb_root *);
 extern void rb_replace_node(struct rb_node *victim, struct rb_node *new, 
 			    struct rb_root *root);
 
+/*
+将节点@node加入节点@parent的子节点
+
+@node	: 待加入的节点
+@parent	: 即将成为@node父节点的节点
+@rb_link: @parent节点的左或右节点指针字段的2级指针
+*/
 static inline void rb_link_node(struct rb_node * node, struct rb_node * parent,
 				struct rb_node ** rb_link)
 {
+	/* 设置@node的父节点 */
 	node->rb_parent_color = (unsigned long )parent;
+	/* @node的子节点为空 */
 	node->rb_left = node->rb_right = NULL;
 
+	/* @node链为@parent的子节点 */
 	*rb_link = node;
 }
 

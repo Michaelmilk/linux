@@ -23,11 +23,31 @@
 #include <linux/rbtree.h>
 #include <linux/module.h>
 
+/*
+左旋
+
+@node	: 待旋转的节点
+@root	: 根节点
+
+        p                                 p
+        |                                 |
+        |                                 |
+       (A)             ==>               (B)
+       / \                               / \
+      /   \                             /   \
+     a    (B)                         (A)    c
+          / \                         / \
+         /   \                       /   \
+        b     c                     a     b
+
+
+*/
 static void __rb_rotate_left(struct rb_node *node, struct rb_root *root)
 {
 	struct rb_node *right = node->rb_right;
 	struct rb_node *parent = rb_parent(node);
 
+	/* 变换@node的右子节点 */
 	if ((node->rb_right = right->rb_left))
 		rb_set_parent(right->rb_left, node);
 	right->rb_left = node;
@@ -43,14 +63,32 @@ static void __rb_rotate_left(struct rb_node *node, struct rb_root *root)
 	}
 	else
 		root->rb_node = right;
+	/* 变换@node的父节点 */
 	rb_set_parent(node, right);
 }
 
+/*
+右旋
+
+        p                                 p
+        |                                 |
+        |                                 |
+       (A)             ==>               (B)
+       / \                               / \
+      /   \                             /   \
+    (B)    c                           a    (A)
+    / \                                     / \
+   /   \                                   /   \
+  a     b                                 b     c
+
+
+*/
 static void __rb_rotate_right(struct rb_node *node, struct rb_root *root)
 {
 	struct rb_node *left = node->rb_left;
 	struct rb_node *parent = rb_parent(node);
 
+	/* 变换@node的左子节点 */
 	if ((node->rb_left = left->rb_right))
 		rb_set_parent(left->rb_right, node);
 	left->rb_right = node;
@@ -66,17 +104,24 @@ static void __rb_rotate_right(struct rb_node *node, struct rb_root *root)
 	}
 	else
 		root->rb_node = left;
+	/* 变换@node的父节点 */
 	rb_set_parent(node, left);
 }
 
+/*
+在调用完rb_link_node()将@node链入@root的某个叶子节点后
+调整红黑树
+*/
 void rb_insert_color(struct rb_node *node, struct rb_root *root)
 {
 	struct rb_node *parent, *gparent;
 
 	while ((parent = rb_parent(node)) && rb_is_red(parent))
 	{
+		/* grandparent 父节点的父节点 */
 		gparent = rb_parent(parent);
 
+		/* 父节点为左子节点 */
 		if (parent == gparent->rb_left)
 		{
 			{
@@ -131,6 +176,7 @@ void rb_insert_color(struct rb_node *node, struct rb_root *root)
 		}
 	}
 
+	/* 根节点设置为黑色 */
 	rb_set_black(root->rb_node);
 }
 EXPORT_SYMBOL(rb_insert_color);
@@ -215,6 +261,9 @@ static void __rb_erase_color(struct rb_node *node, struct rb_node *parent,
 		rb_set_black(node);
 }
 
+/*
+将节点@node从以@root为根的树中移除
+*/
 void rb_erase(struct rb_node *node, struct rb_root *root)
 {
 	struct rb_node *child, *parent;
@@ -357,6 +406,10 @@ EXPORT_SYMBOL(rb_augment_erase_end);
 /*
  * This function returns the first node (in sort order) of the tree.
  */
+/*
+返回根@root中的第一个节点
+最左分支的节点
+*/
 struct rb_node *rb_first(const struct rb_root *root)
 {
 	struct rb_node	*n;
@@ -364,25 +417,35 @@ struct rb_node *rb_first(const struct rb_root *root)
 	n = root->rb_node;
 	if (!n)
 		return NULL;
+	/* 遍历左分支，最左面的即第一个节点 */
 	while (n->rb_left)
 		n = n->rb_left;
 	return n;
 }
 EXPORT_SYMBOL(rb_first);
 
+/*
+返回根@root中最后一个节点
+最右分支的节点
+*/
 struct rb_node *rb_last(const struct rb_root *root)
 {
 	struct rb_node	*n;
 
 	n = root->rb_node;
+	/* 空树，返回空 */
 	if (!n)
 		return NULL;
+	/* 遍历右分支，最右面的即最后一个节点 */
 	while (n->rb_right)
 		n = n->rb_right;
 	return n;
 }
 EXPORT_SYMBOL(rb_last);
 
+/*
+返回@node的后一个节点
+*/
 struct rb_node *rb_next(const struct rb_node *node)
 {
 	struct rb_node *parent;
@@ -392,6 +455,7 @@ struct rb_node *rb_next(const struct rb_node *node)
 
 	/* If we have a right-hand child, go down and then left as far
 	   as we can. */
+	/* 右子节点的最左分支 */
 	if (node->rb_right) {
 		node = node->rb_right; 
 		while (node->rb_left)
@@ -405,6 +469,7 @@ struct rb_node *rb_next(const struct rb_node *node)
 	   ancestor is a right-hand child of its parent, keep going
 	   up. First time it's a left-hand child of its parent, said
 	   parent is our 'next' node. */
+	/* 向上查找 */
 	while ((parent = rb_parent(node)) && node == parent->rb_right)
 		node = parent;
 
@@ -412,6 +477,9 @@ struct rb_node *rb_next(const struct rb_node *node)
 }
 EXPORT_SYMBOL(rb_next);
 
+/*
+返回@node的前一个节点
+*/
 struct rb_node *rb_prev(const struct rb_node *node)
 {
 	struct rb_node *parent;
@@ -437,12 +505,16 @@ struct rb_node *rb_prev(const struct rb_node *node)
 }
 EXPORT_SYMBOL(rb_prev);
 
+/*
+使用节点@new替换@victim在红黑树中的位置
+*/
 void rb_replace_node(struct rb_node *victim, struct rb_node *new,
 		     struct rb_root *root)
 {
 	struct rb_node *parent = rb_parent(victim);
 
 	/* Set the surrounding nodes to point to the replacement */
+	/* 把周围与节点@victim相关的指针指向新节点@new */
 	if (parent) {
 		if (victim == parent->rb_left)
 			parent->rb_left = new;
@@ -457,6 +529,7 @@ void rb_replace_node(struct rb_node *victim, struct rb_node *new,
 		rb_set_parent(victim->rb_right, new);
 
 	/* Copy the pointers/colour from the victim to the replacement */
+	/* 新节点@new的各字段值与@victim一致 */
 	*new = *victim;
 }
 EXPORT_SYMBOL(rb_replace_node);
