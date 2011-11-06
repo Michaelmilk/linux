@@ -1144,7 +1144,7 @@ static void mtdchar_notify_remove(struct mtd_info *mtd)
 
 	if (mtd_ino) {
 		/* Destroy the inode if it exists */
-		mtd_ino->i_nlink = 0;
+		clear_nlink(mtd_ino);
 		iput(mtd_ino);
 	}
 }
@@ -1192,7 +1192,7 @@ err_unregister_chdev:
 static void __exit cleanup_mtdchar(void)
 {
 	unregister_mtd_user(&mtdchar_notifier);
-	mntput(mtd_inode_mnt);
+	kern_unmount(mtd_inode_mnt);
 	unregister_filesystem(&mtd_inodefs_type);
 	__unregister_chrdev(MTD_CHAR_MAJOR, 0, 1 << MINORBITS, "mtd");
 }

@@ -47,20 +47,22 @@ enum clock_event_nofitiers {
 #define CLOCK_EVT_FEAT_PERIODIC		0x000001
 /* 表示单次中断 */
 #define CLOCK_EVT_FEAT_ONESHOT		0x000002
+#define CLOCK_EVT_FEAT_KTIME		0x000004
 /*
  * x86(64) specific misfeatures:
  *
  * - Clockevent source stops in C3 State and needs broadcast support.
  * - Local APIC timer is used as a dummy device.
  */
-#define CLOCK_EVT_FEAT_C3STOP		0x000004
-#define CLOCK_EVT_FEAT_DUMMY		0x000008
+#define CLOCK_EVT_FEAT_C3STOP		0x000008
+#define CLOCK_EVT_FEAT_DUMMY		0x000010
 
 /**
  * struct clock_event_device - clock event device descriptor
  * @event_handler:	Assigned by the framework to be called by the low
  *			level handler of the event source
- * @set_next_event:	set next event function
+ * @set_next_event:	set next event function using a clocksource delta
+ * @set_next_ktime:	set next event function using a direct ktime value
  * @next_event:		local storage for the next event in oneshot mode
  * @max_delta_ns:	maximum delta value in ns
  * @min_delta_ns:	minimum delta value in ns
@@ -91,6 +93,8 @@ struct clock_event_device {
 	int			(*set_next_event)(unsigned long evt,
 						  struct clock_event_device *);
 	/* 下一次该设备发出中断的时间，单位:纳秒 */
+	int			(*set_next_ktime)(ktime_t expires,
+						  struct clock_event_device *);
 	ktime_t			next_event;
 	u64			max_delta_ns;
 	u64			min_delta_ns;
@@ -157,7 +161,7 @@ extern void clockevents_set_mode(struct clock_event_device *dev,
 				 enum clock_event_mode mode);
 extern int clockevents_register_notifier(struct notifier_block *nb);
 extern int clockevents_program_event(struct clock_event_device *dev,
-				     ktime_t expires, ktime_t now);
+				     ktime_t expires, bool force);
 
 extern void clockevents_handle_noop(struct clock_event_device *dev);
 

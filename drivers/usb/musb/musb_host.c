@@ -1575,7 +1575,7 @@ void musb_host_rx(struct musb *musb, u8 epnum)
 			/* even if there was an error, we did the dma
 			 * for iso_frame_desc->length
 			 */
-			if (d->status != EILSEQ && d->status != -EOVERFLOW)
+			if (d->status != -EILSEQ && d->status != -EOVERFLOW)
 				d->status = 0;
 
 			if (++qh->iso_idx >= urb->number_of_packets)
@@ -1932,7 +1932,7 @@ static int musb_urb_enqueue(
 	INIT_LIST_HEAD(&qh->ring);
 	qh->is_ready = 1;
 
-	qh->maxpacket = le16_to_cpu(epd->wMaxPacketSize);
+	qh->maxpacket = usb_endpoint_maxp(epd);
 	qh->type = usb_endpoint_type(epd);
 
 	/* Bits 11 & 12 of wMaxPacketSize encode high bandwidth multiplier.

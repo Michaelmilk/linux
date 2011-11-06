@@ -110,9 +110,10 @@ struct leaf {
 
 struct leaf_info {
 	struct hlist_node hlist;
-	struct rcu_head rcu;
 	int plen;
+	u32 mask_plen; /* ntohl(inet_make_mask(plen)) */
 	struct list_head falh;
+	struct rcu_head rcu;
 };
 
 struct tnode {
@@ -203,7 +204,7 @@ static inline struct tnode *node_parent_rcu(const struct rt_trie_node *node)
 	return (struct tnode *)(parent & ~NODE_TYPE_MASK);
 }
 
-/* Same as rcu_assign_pointer
+/* Same as RCU_INIT_POINTER
  * but that macro() assumes that value is a pointer.
  */
 static inline void node_set_parent(struct rt_trie_node *node, struct tnode *ptr)
@@ -451,6 +452,7 @@ static struct leaf_info *leaf_info_new(int plen)
 	struct leaf_info *li = kmalloc(sizeof(struct leaf_info),  GFP_KERNEL);
 	if (li) {
 		li->plen = plen;
+		li->mask_plen = ntohl(inet_make_mask(plen));
 		INIT_LIST_HEAD(&li->falh);
 	}
 	return li;
@@ -526,7 +528,7 @@ static void tnode_put_child_reorg(struct tnode *tn, int i, struct rt_trie_node *
 	if (n)
 		node_set_parent(n, tn);
 
-	rcu_assign_pointer(tn->child[i], n);
+	RCU_INIT_POINTER(tn->child[i], n);
 }
 
 #define MAX_WORK 10
@@ -1012,7 +1014,7 @@ static void trie_rebalance(struct trie *t, struct tnode *tn)
 
 		tp = node_parent((struct rt_trie_node *) tn);
 		if (!tp)
-			rcu_assign_pointer(t->trie, (struct rt_trie_node *)tn);
+			RCU_INIT_POINTER(t->trie, (struct rt_trie_node *)tn);
 
 		tnode_free_flush();
 		if (!tp)
@@ -1024,7 +1026,7 @@ static void trie_rebalance(struct trie *t, struct tnode *tn)
 	if (IS_TNODE(tn))
 		tn = (struct tnode *)resize(t, (struct tnode *)tn);
 
-	rcu_assign_pointer(t->trie, (struct rt_trie_node *)tn);
+	RCU_INIT_POINTER(t->trie, (struct rt_trie_node *)tn);
 	tnode_free_flush();
 }
 
@@ -1161,7 +1163,7 @@ static struct list_head *fib_insert_node(struct trie *t, u32 key, int plen)
 			put_child(t, (struct tnode *)tp, cindex,
 				  (struct rt_trie_node *)tn);
 		} else {
-			rcu_assign_pointer(t->trie, (struct rt_trie_node *)tn);
+			RCU_INIT_POINTER(t->trie, (struct rt_trie_node *)tn);
 			tp = tn;
 		}
 	}
@@ -1359,10 +1361,8 @@ static int check_leaf(struct fib_table *tb, struct trie *t, struct leaf *l,
 
 	hlist_for_each_entry_rcu(li, node, hhead, hlist) {
 		struct fib_alias *fa;
-		int plen = li->plen;
-		__be32 mask = inet_make_mask(plen);
 
-		if (l->key != (key & ntohl(mask)))
+		if (l->key != (key & li->mask_plen))
 			continue;
 
 		list_for_each_entry_rcu(fa, &li->falh, fa_list) {
@@ -1394,7 +1394,7 @@ static int check_leaf(struct fib_table *tb, struct trie *t, struct leaf *l,
 #ifdef CONFIG_IP_FIB_TRIE_STATS
 				t->stats.semantic_match_passed++;
 #endif
-				res->prefixlen = plen;
+				res->prefixlen = li->plen;
 				res->nh_sel = nhsel;
 				res->type = fa->fa_type;
 				res->scope = fa->fa_info->fib_scope;
@@ -1402,7 +1402,7 @@ static int check_leaf(struct fib_table *tb, struct trie *t, struct leaf *l,
 				res->table = tb;
 				res->fa_head = &li->falh;
 				if (!(fib_flags & FIB_LOOKUP_NOREF))
-					atomic_inc(&res->fi->fib_clntref);
+					atomic_inc(&fi->fib_clntref);
 				return 0;
 			}
 		}
@@ -1621,7 +1621,7 @@ static void trie_leaf_remove(struct trie *t, struct leaf *l)
 		put_child(t, (struct tnode *)tp, cindex, NULL);
 		trie_rebalance(t, tp);
 	} else
-		rcu_assign_pointer(t->trie, NULL);
+		RCU_INIT_POINTER(t->trie, NULL);
 
 	free_leaf(l);
 }

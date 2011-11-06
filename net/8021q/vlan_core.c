@@ -8,7 +8,7 @@
 由vlan接口接收此skb
 参数为2级指针，因为共享性检查中和插入vlanid时可能会分配新的skb
 */
-bool vlan_do_receive(struct sk_buff **skbp)
+bool vlan_do_receive(struct sk_buff **skbp, bool last_handler)
 {
 	struct sk_buff *skb = *skbp;
 	u16 vlan_id = skb->vlan_tci & VLAN_VID_MASK;
@@ -18,7 +18,10 @@ bool vlan_do_receive(struct sk_buff **skbp)
 	/* 查找虚拟vlan接口 */
 	vlan_dev = vlan_find_dev(skb->dev, vlan_id);
 	if (!vlan_dev) {
-		if (vlan_id)
+		/* Only the last call to vlan_do_receive() should change
+		 * pkt_type to PACKET_OTHERHOST
+		 */
+		if (vlan_id && last_handler)
 			skb->pkt_type = PACKET_OTHERHOST;
 		/* 没有对应vlan_id的虚拟接口，而该帧又是vlan帧
 		   则标记为PACKET_OTHERHOST，返回false，表示本机vlan未做处理 */
@@ -78,6 +81,27 @@ bool vlan_do_receive(struct sk_buff **skbp)
 	return true;
 }
 
+/* Must be invoked with rcu_read_lock or with RTNL. */
+struct net_device *__vlan_find_dev_deep(struct net_device *real_dev,
+					u16 vlan_id)
+{
+	struct vlan_group *grp = rcu_dereference_rtnl(real_dev->vlgrp);
+
+	if (grp) {
+		return vlan_group_get_device(grp, vlan_id);
+	} else {
+		/*
+		 * Bonding slaves do not have grp assigned to themselves.
+		 * Grp is assigned to bonding master instead.
+		 */
+		if (netif_is_bond_slave(real_dev))
+			return __vlan_find_dev_deep(real_dev->master, vlan_id);
+	}
+
+	return NULL;
+}
+EXPORT_SYMBOL(__vlan_find_dev_deep);
+
 struct net_device *vlan_dev_real_dev(const struct net_device *dev)
 {
 	return vlan_dev_info(dev)->real_dev;
@@ -89,37 +113,6 @@ u16 vlan_dev_vlan_id(const struct net_device *dev)
 	return vlan_dev_info(dev)->vlan_id;
 }
 EXPORT_SYMBOL(vlan_dev_vlan_id);
-
-/* VLAN rx hw acceleration helper.  This acts like netif_{rx,receive_skb}(). */
-/*
-网卡硬件支持加减vlan的时候
-在接收时已经将vlanid从帧中剥除，由驱动将vlan信息添加到skb->vlan_tci字段
-
-@polling	: 根据接收模式调用不同的接收函数，NAPI或non-NAPI
-*/
-int __vlan_hwaccel_rx(struct sk_buff *skb, struct vlan_group *grp,
-		      u16 vlan_tci, int polling)
-{
-	__vlan_hwaccel_put_tag(skb, vlan_tci);
-	return polling ? netif_receive_skb(skb) : netif_rx(skb);
-}
-EXPORT_SYMBOL(__vlan_hwaccel_rx);
-
-gro_result_t vlan_gro_receive(struct napi_struct *napi, struct vlan_group *grp,
-			      unsigned int vlan_tci, struct sk_buff *skb)
-{
-	__vlan_hwaccel_put_tag(skb, vlan_tci);
-	return napi_gro_receive(napi, skb);
-}
-EXPORT_SYMBOL(vlan_gro_receive);
-
-gro_result_t vlan_gro_frags(struct napi_struct *napi, struct vlan_group *grp,
-			    unsigned int vlan_tci)
-{
-	__vlan_hwaccel_put_tag(napi->skb, vlan_tci);
-	return napi_gro_frags(napi);
-}
-EXPORT_SYMBOL(vlan_gro_frags);
 
 /*
 将以太网头的源和目的mac的12个字节后移4字节，去掉vlan头
@@ -203,6 +196,8 @@ struct sk_buff *vlan_untag(struct sk_buff *skb)
 	if (unlikely(!skb))
 		goto err_free;
 
+	skb_reset_network_header(skb);
+	skb_reset_transport_header(skb);
 	return skb;
 
 err_free:

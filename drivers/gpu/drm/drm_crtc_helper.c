@@ -372,11 +372,13 @@ bool drm_crtc_helper_set_mode(struct drm_crtc *crtc,
 		encoder_funcs = encoder->helper_private;
 		if (!(ret = encoder_funcs->mode_fixup(encoder, mode,
 						      adjusted_mode))) {
+			DRM_DEBUG_KMS("Encoder fixup failed\n");
 			goto done;
 		}
 	}
 
 	if (!(ret = crtc_funcs->mode_fixup(crtc, mode, adjusted_mode))) {
+		DRM_DEBUG_KMS("CRTC fixup failed\n");
 		goto done;
 	}
 	DRM_DEBUG_KMS("[CRTC:%d]\n", crtc->base.id);
@@ -559,6 +561,11 @@ int drm_crtc_helper_set_config(struct drm_mode_set *set)
 			DRM_DEBUG_KMS("crtc has no fb, full mode set\n");
 			mode_changed = true;
 		} else if (set->fb == NULL) {
+			mode_changed = true;
+		} else if (set->fb->depth != set->crtc->fb->depth) {
+			mode_changed = true;
+		} else if (set->fb->bits_per_pixel !=
+			   set->crtc->fb->bits_per_pixel) {
 			mode_changed = true;
 		} else
 			fb_changed = true;

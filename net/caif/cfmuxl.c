@@ -108,7 +108,7 @@ struct cflayer *cfmuxl_remove_dnlayer(struct cflayer *layr, u8 phyid)
 	int idx = phyid % DN_CACHE_SIZE;
 
 	spin_lock_bh(&muxl->transmit_lock);
-	rcu_assign_pointer(muxl->dn_cache[idx], NULL);
+	RCU_INIT_POINTER(muxl->dn_cache[idx], NULL);
 	dn = get_from_id(&muxl->frml_list, phyid);
 	if (dn == NULL)
 		goto out;
@@ -164,7 +164,7 @@ struct cflayer *cfmuxl_remove_uplayer(struct cflayer *layr, u8 id)
 	if (up == NULL)
 		goto out;
 
-	rcu_assign_pointer(muxl->up_cache[idx], NULL);
+	RCU_INIT_POINTER(muxl->up_cache[idx], NULL);
 	list_del_rcu(&up->node);
 out:
 	spin_unlock_bh(&muxl->receive_lock);
@@ -255,13 +255,13 @@ static void cfmuxl_ctrlcmd(struct cflayer *layr, enum caif_ctrlcmd ctrl,
 
 		if (cfsrvl_phyid_match(layer, phyid) && layer->ctrlcmd) {
 
-			if ((ctrl == _CAIF_CTRLCMD_PHYIF_FLOW_OFF_IND ||
+			if ((ctrl == _CAIF_CTRLCMD_PHYIF_DOWN_IND ||
 				ctrl == CAIF_CTRLCMD_REMOTE_SHUTDOWN_IND) &&
 					layer->id != 0) {
 
 				idx = layer->id % UP_CACHE_SIZE;
 				spin_lock_bh(&muxl->receive_lock);
-				rcu_assign_pointer(muxl->up_cache[idx], NULL);
+				RCU_INIT_POINTER(muxl->up_cache[idx], NULL);
 				list_del_rcu(&layer->node);
 				spin_unlock_bh(&muxl->receive_lock);
 			}

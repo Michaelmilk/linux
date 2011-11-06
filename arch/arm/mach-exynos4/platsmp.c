@@ -28,8 +28,15 @@
 
 #include <mach/hardware.h>
 #include <mach/regs-clock.h>
+#include <mach/regs-pmu.h>
 
+#include <plat/cpu.h>
+
+extern unsigned int gic_bank_offset;
 extern void exynos4_secondary_startup(void);
+
+#define CPU1_BOOT_REG		(samsung_rev() == EXYNOS4210_REV_1_1 ? \
+				S5P_INFORM5 : S5P_VA_SYSRAM)
 
 /*
  * control for which core is the next to come out of the secondary
@@ -58,6 +65,31 @@ static void __iomem *scu_base_addr(void)
 
 static DEFINE_SPINLOCK(boot_lock);
 
+static void __cpuinit exynos4_gic_secondary_init(void)
+{
+	void __iomem *dist_base = S5P_VA_GIC_DIST +
+				(gic_bank_offset * smp_processor_id());
+	void __iomem *cpu_base = S5P_VA_GIC_CPU +
+				(gic_bank_offset * smp_processor_id());
+	int i;
+
+	/*
+	 * Deal with the banked PPI and SGI interrupts - disable all
+	 * PPI interrupts, ensure all SGI interrupts are enabled.
+	 */
+	__raw_writel(0xffff0000, dist_base + GIC_DIST_ENABLE_CLEAR);
+	__raw_writel(0x0000ffff, dist_base + GIC_DIST_ENABLE_SET);
+
+	/*
+	 * Set priority on PPI and SGI interrupts
+	 */
+	for (i = 0; i < 32; i += 4)
+		__raw_writel(0xa0a0a0a0, dist_base + GIC_DIST_PRI + i * 4 / 4);
+
+	__raw_writel(0xf0, cpu_base + GIC_CPU_PRIMASK);
+	__raw_writel(1, cpu_base + GIC_CPU_CTRL);
+}
+
 void __cpuinit platform_secondary_init(unsigned int cpu)
 {
 	/*
@@ -65,7 +97,7 @@ void __cpuinit platform_secondary_init(unsigned int cpu)
 	 * core (e.g. timer irq), then they will not have been enabled
 	 * for us: do so
 	 */
-	gic_secondary_init(0);
+	exynos4_gic_secondary_init();
 
 	/*
 	 * let the primary processor know we're out of the
@@ -78,6 +110,8 @@ void __cpuinit platform_secondary_init(unsigned int cpu)
 	 */
 	spin_lock(&boot_lock);
 	spin_unlock(&boot_lock);
+
+	set_cpu_online(cpu, true);
 }
 
 int __cpuinit boot_secondary(unsigned int cpu, struct task_struct *idle)
@@ -98,18 +132,43 @@ int __cpuinit boot_secondary(unsigned int cpu, struct task_struct *idle)
 	 * Note that "pen_release" is the hardware CPU ID, whereas
 	 * "cpu" is Linux's internal ID.
 	 */
-	write_pen_release(cpu);
+	write_pen_release(cpu_logical_map(cpu));
 
+	if (!(__raw_readl(S5P_ARM_CORE1_STATUS) & S5P_CORE_LOCAL_PWR_EN)) {
+		__raw_writel(S5P_CORE_LOCAL_PWR_EN,
+			     S5P_ARM_CORE1_CONFIGURATION);
+
+		timeout = 10;
+
+		/* wait max 10 ms until cpu1 is on */
+		while ((__raw_readl(S5P_ARM_CORE1_STATUS)
+			& S5P_CORE_LOCAL_PWR_EN) != S5P_CORE_LOCAL_PWR_EN) {
+			if (timeout-- == 0)
+				break;
+
+			mdelay(1);
+		}
+
+		if (timeout == 0) {
+			printk(KERN_ERR "cpu1 power enable failed");
+			spin_unlock(&boot_lock);
+			return -ETIMEDOUT;
+		}
+	}
 	/*
 	 * Send the secondary CPU a soft interrupt, thereby causing
 	 * the boot monitor to read the system wide flags register,
 	 * and branch to the address found there.
 	 */
-	gic_raise_softirq(cpumask_of(cpu), 1);
 
 	timeout = jiffies + (1 * HZ);
 	while (time_before(jiffies, timeout)) {
 		smp_rmb();
+
+		__raw_writel(BSYM(virt_to_phys(exynos4_secondary_startup)),
+			CPU1_BOOT_REG);
+		gic_raise_softirq(cpumask_of(cpu), 1);
+
 		if (pen_release == -1)
 			break;
 
@@ -138,12 +197,10 @@ void __init smp_init_cpus(void)
 	ncores = scu_base ? scu_get_core_count(scu_base) : 1;
 
 	/* sanity check */
-	if (ncores > NR_CPUS) {
-		printk(KERN_WARNING
-		       "EXYNOS4: no. of cores (%d) greater than configured "
-		       "maximum of %d - clipping\n",
-		       ncores, NR_CPUS);
-		ncores = NR_CPUS;
+	if (ncores > nr_cpu_ids) {
+		pr_warn("SMP: %u cores greater than maximum (%u), clipping\n",
+			ncores, nr_cpu_ids);
+		ncores = nr_cpu_ids;
 	}
 
 	for (i = 0; i < ncores; i++)
@@ -154,14 +211,6 @@ void __init smp_init_cpus(void)
 
 void __init platform_smp_prepare_cpus(unsigned int max_cpus)
 {
-	int i;
-
-	/*
-	 * Initialise the present map, which describes the set of CPUs
-	 * actually populated at the present time.
-	 */
-	for (i = 0; i < max_cpus; i++)
-		set_cpu_present(i, true);
 
 	scu_enable(scu_base_addr());
 
@@ -171,5 +220,6 @@ void __init platform_smp_prepare_cpus(unsigned int max_cpus)
 	 * until it receives a soft interrupt, and then the
 	 * secondary CPU branches to this address.
 	 */
-	__raw_writel(BSYM(virt_to_phys(exynos4_secondary_startup)), S5P_VA_SYSRAM);
+	__raw_writel(BSYM(virt_to_phys(exynos4_secondary_startup)),
+			CPU1_BOOT_REG);
 }

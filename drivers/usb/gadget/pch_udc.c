@@ -4,15 +4,6 @@
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; version 2 of the License.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307, USA.
  */
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/kernel.h>
@@ -947,7 +938,7 @@ static void pch_udc_ep_enable(struct pch_udc_ep *ep,
 	else
 		buff_size = UDC_EPOUT_BUFF_SIZE;
 	pch_udc_ep_set_bufsz(ep, buff_size, ep->in);
-	pch_udc_ep_set_maxpkt(ep, le16_to_cpu(desc->wMaxPacketSize));
+	pch_udc_ep_set_maxpkt(ep, usb_endpoint_maxp(desc));
 	pch_udc_ep_set_nak(ep);
 	pch_udc_ep_fifo_flush(ep, ep->in);
 	/* Configure the endpoint */
@@ -957,7 +948,7 @@ static void pch_udc_ep_enable(struct pch_udc_ep *ep,
 	      (cfg->cur_cfg << UDC_CSR_NE_CFG_SHIFT) |
 	      (cfg->cur_intf << UDC_CSR_NE_INTF_SHIFT) |
 	      (cfg->cur_alt << UDC_CSR_NE_ALT_SHIFT) |
-	      le16_to_cpu(desc->wMaxPacketSize) << UDC_CSR_NE_MAX_PKT_SHIFT;
+	      usb_endpoint_maxp(desc) << UDC_CSR_NE_MAX_PKT_SHIFT;
 
 	if (ep->in)
 		pch_udc_write_csr(ep->dev, val, UDC_EPIN_IDX(ep->num));
@@ -1176,6 +1167,9 @@ static int pch_udc_pcd_vbus_draw(struct usb_gadget *gadget, unsigned int mA)
 	return -EOPNOTSUPP;
 }
 
+static int pch_udc_start(struct usb_gadget_driver *driver,
+	int (*bind)(struct usb_gadget *));
+static int pch_udc_stop(struct usb_gadget_driver *driver);
 static const struct usb_gadget_ops pch_udc_ops = {
 	.get_frame = pch_udc_pcd_get_frame,
 	.wakeup = pch_udc_pcd_wakeup,
@@ -1183,6 +1177,8 @@ static const struct usb_gadget_ops pch_udc_ops = {
 	.pullup = pch_udc_pcd_pullup,
 	.vbus_session = pch_udc_pcd_vbus_session,
 	.vbus_draw = pch_udc_pcd_vbus_draw,
+	.start	= pch_udc_start,
+	.stop	= pch_udc_stop,
 };
 
 /**
@@ -1461,7 +1457,7 @@ static int pch_udc_pcd_ep_enable(struct usb_ep *usbep,
 	ep->desc = desc;
 	ep->halted = 0;
 	pch_udc_ep_enable(ep, &ep->dev->cfg_data, desc);
-	ep->ep.maxpacket = le16_to_cpu(desc->wMaxPacketSize);
+	ep->ep.maxpacket = usb_endpoint_maxp(desc);
 	pch_udc_enable_ep_interrupts(ep->dev, PCH_UDC_EPINT(ep->in, ep->num));
 	spin_unlock_irqrestore(&dev->lock, iflags);
 	return 0;
@@ -2690,7 +2686,7 @@ static int init_dma_pools(struct pch_udc_dev *dev)
 	return 0;
 }
 
-int usb_gadget_probe_driver(struct usb_gadget_driver *driver,
+static int pch_udc_start(struct usb_gadget_driver *driver,
 	int (*bind)(struct usb_gadget *))
 {
 	struct pch_udc_dev	*dev = pch_udc;
@@ -2733,9 +2729,8 @@ int usb_gadget_probe_driver(struct usb_gadget_driver *driver,
 	dev->connected = 1;
 	return 0;
 }
-EXPORT_SYMBOL(usb_gadget_probe_driver);
 
-int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
+static int pch_udc_stop(struct usb_gadget_driver *driver)
 {
 	struct pch_udc_dev	*dev = pch_udc;
 
@@ -2761,7 +2756,6 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 	pch_udc_set_disconnect(dev);
 	return 0;
 }
-EXPORT_SYMBOL(usb_gadget_unregister_driver);
 
 static void pch_udc_shutdown(struct pci_dev *pdev)
 {
@@ -2777,6 +2771,8 @@ static void pch_udc_shutdown(struct pci_dev *pdev)
 static void pch_udc_remove(struct pci_dev *pdev)
 {
 	struct pch_udc_dev	*dev = pci_get_drvdata(pdev);
+
+	usb_del_gadget_udc(&dev->gadget);
 
 	/* gadget driver must not be registered */
 	if (dev->driver)
@@ -2953,6 +2949,9 @@ static int pch_udc_probe(struct pci_dev *pdev,
 
 	/* Put the device in disconnected state till a driver is bound */
 	pch_udc_set_disconnect(dev);
+	retval = usb_add_gadget_udc(&pdev->dev, &dev->gadget);
+	if (retval)
+		goto finished;
 	return 0;
 
 finished:

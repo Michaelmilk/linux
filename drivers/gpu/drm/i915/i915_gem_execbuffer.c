@@ -187,10 +187,6 @@ i915_gem_object_set_to_gpu_domain(struct drm_i915_gem_object *obj,
 	if ((flush_domains | invalidate_domains) & I915_GEM_DOMAIN_CPU)
 		i915_gem_clflush_object(obj);
 
-	/* blow away mappings if mapped through GTT */
-	if ((flush_domains | invalidate_domains) & I915_GEM_DOMAIN_GTT)
-		i915_gem_release_mmap(obj);
-
 	if (obj->base.pending_write_domain)
 		cd->flips |= atomic_read(&obj->pending_flip);
 
@@ -788,7 +784,8 @@ i915_gem_execbuffer_sync_rings(struct drm_i915_gem_object *obj,
 	}
 
 	from->sync_seqno[idx] = seqno;
-	return intel_ring_sync(to, from, seqno - 1);
+
+	return to->sync_to(to, from, seqno - 1);
 }
 
 static int

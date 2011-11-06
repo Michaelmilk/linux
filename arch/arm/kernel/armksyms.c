@@ -49,9 +49,6 @@ extern void __aeabi_ulcmp(void);
 
 extern void fpundefinstr(void);
 
-
-EXPORT_SYMBOL(__backtrace);
-
 	/* platform dependent support */
 EXPORT_SYMBOL(__udelay);
 EXPORT_SYMBOL(__const_udelay);
@@ -111,9 +108,6 @@ EXPORT_SYMBOL(__put_user_2);
 EXPORT_SYMBOL(__put_user_4);
 EXPORT_SYMBOL(__put_user_8);
 #endif
-
-	/* crypto hash */
-EXPORT_SYMBOL(sha_transform);
 
 	/* gcc lib functions */
 EXPORT_SYMBOL(__ashldi3);

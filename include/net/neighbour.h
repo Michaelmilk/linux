@@ -16,7 +16,7 @@
  *		- Add neighbour cache statistics like rtstat
  */
 
-#include <asm/atomic.h>
+#include <linux/atomic.h>
 #include <linux/netdevice.h>
 #include <linux/skbuff.h>
 #include <linux/rcupdate.h>
@@ -164,29 +164,6 @@ struct neighbour {
 	seqlock_t		ha_lock;
 	/* 硬件地址 */
 	unsigned char		ha[ALIGN(MAX_ADDR_LEN, sizeof(unsigned long))];
-	/* 邻接缓存指针
-	   hh 指向 hh_cache，此结构用于 cache L2 地址，以加速 L3 到 L2 的映射过程
-
-	   为了缩短IP包到设备的传输路径, 
-	   在邻居结构上还引入了帧头缓冲结构(hh_cache).
-	   如果邻居建立了帧头缓冲, IP包将通过帧头缓冲的输出发送出去. 
-	   当邻居处于连接状态时, 帧头缓冲输出直接指向dev_queue_xmit(), 
-	   当处于过期状态时, 帧头缓冲输出切换为邻居的输出口, 
-	   对以太网设备来说,邻居的输出口指向neigh_resolve_output(),
-	   neigh_connect()和neigh_suspect()两个函数用来进行这种切换. */
-	struct hh_cache		*hh;
-	/* 邻接输出函数,会变
-	   找到合适的邻居节点之后，系统将调用这个函数指针，
-	   使用结构中的dev设备，将数据包发送出去，
-	   如果协议族是AF_INET，将调用dev_queue_xmit()函数发送数据
-
-	   对于 output 域，关键是看 neighbour 的状态，
-	   如果是有效状态，则设置为ops->connected_output()，这样可以加快速度，
-	   否则设置为 ops->output()，这样，需要进行neighbor discovery 的处理。
-	   对于 ARP 来说，无论是 output ，
-	   还是 connect_output都是指向 neigh_resolve_output()。
-	   neigh_resolve_output() 进行 neighbor discovery 的过程。 */
-	int			(*output)(struct sk_buff *skb);
 	/* 邻接操作函数数据结构
 	   根据底层 driver 的类型进行不同的设置，
 	   对于没有链路层地址的，指向arp_direct_ops
@@ -199,6 +176,8 @@ struct neighbour {
 	   			dev->hard_header        = eth_header;
 	      		dev->hard_header_cache  = eth_header_cache;
 	   因此，默认情况下，它的 ops 指向 arp_hh_ops() */
+	struct hh_cache		hh;
+	int			(*output)(struct neighbour *, struct sk_buff *);
 	const struct neigh_ops	*ops;
 	struct rcu_head		rcu;
 	/* 邻居所对应的网络设备接口指针 */
@@ -209,12 +188,10 @@ struct neighbour {
 
 struct neigh_ops {
 	int			family;
-	void			(*solicit)(struct neighbour *, struct sk_buff*);
-	void			(*error_report)(struct neighbour *, struct sk_buff*);
-	int			(*output)(struct sk_buff*);
-	int			(*connected_output)(struct sk_buff*);
-	int			(*hh_output)(struct sk_buff*);
-	int			(*queue_xmit)(struct sk_buff*);
+	void			(*solicit)(struct neighbour *, struct sk_buff *);
+	void			(*error_report)(struct neighbour *, struct sk_buff *);
+	int			(*output)(struct neighbour *, struct sk_buff *);
+	int			(*connected_output)(struct neighbour *, struct sk_buff *);
 };
 
 struct pneigh_entry {
@@ -238,12 +215,8 @@ struct neigh_hash_table {
 	/* 哈希数组，存入其中的邻居，
 	   在一个neigh_table里面，最多可以有32个neighbour结构的链表 */
 	struct neighbour __rcu	**hash_buckets;
-	/* 哈希数组大小的掩码
-	   +1为目前桶头节点指针数组的大小，数组大小总是2的幂次
-	   hash_mask初始为(8-1)，参考neigh_table_init_no_netlink()
-	   会动态增长 */
-	unsigned int		hash_mask;
 	/* hash随机种子，初始化时赋值 */
+	unsigned int		hash_shift;
 	__u32			hash_rnd;
 	struct rcu_head		rcu;
 };
@@ -324,9 +297,10 @@ extern int			neigh_update(struct neighbour *neigh, const u8 *lladdr, u8 new,
 					     u32 flags);
 extern void			neigh_changeaddr(struct neigh_table *tbl, struct net_device *dev);
 extern int			neigh_ifdown(struct neigh_table *tbl, struct net_device *dev);
-extern int			neigh_resolve_output(struct sk_buff *skb);
-extern int			neigh_connected_output(struct sk_buff *skb);
-extern int			neigh_compat_output(struct sk_buff *skb);
+extern int			neigh_resolve_output(struct neighbour *neigh, struct sk_buff *skb);
+extern int			neigh_connected_output(struct neighbour *neigh, struct sk_buff *skb);
+extern int			neigh_compat_output(struct neighbour *neigh, struct sk_buff *skb);
+extern int			neigh_direct_output(struct neighbour *neigh, struct sk_buff *skb);
 extern struct neighbour 	*neigh_event_ns(struct neigh_table *tbl,
 						u8 *lladdr, void *saddr,
 						struct net_device *dev);
@@ -461,7 +435,16 @@ static inline int neigh_hh_output(struct hh_cache *hh, struct sk_buff *skb)
 	} while (read_seqretry(&hh->hh_lock, seq));
 
 	skb_push(skb, hh_len);
-	return hh->hh_output(skb);
+	return dev_queue_xmit(skb);
+}
+
+static inline int neigh_output(struct neighbour *n, struct sk_buff *skb)
+{
+	struct hh_cache *hh = &n->hh;
+	if ((n->nud_state & NUD_CONNECTED) && hh->hh_len)
+		return neigh_hh_output(hh, skb);
+	else
+		return n->output(n, skb);
 }
 
 static inline struct neighbour *

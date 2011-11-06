@@ -446,7 +446,7 @@ static struct inode *V1_minix_iget(struct inode *inode)
 	inode->i_mode = raw_inode->i_mode;
 	inode->i_uid = (uid_t)raw_inode->i_uid;
 	inode->i_gid = (gid_t)raw_inode->i_gid;
-	inode->i_nlink = raw_inode->i_nlinks;
+	set_nlink(inode, raw_inode->i_nlinks);
 	inode->i_size = raw_inode->i_size;
 	inode->i_mtime.tv_sec = inode->i_atime.tv_sec = inode->i_ctime.tv_sec = raw_inode->i_time;
 	inode->i_mtime.tv_nsec = 0;
@@ -479,7 +479,7 @@ static struct inode *V2_minix_iget(struct inode *inode)
 	inode->i_mode = raw_inode->i_mode;
 	inode->i_uid = (uid_t)raw_inode->i_uid;
 	inode->i_gid = (gid_t)raw_inode->i_gid;
-	inode->i_nlink = raw_inode->i_nlinks;
+	set_nlink(inode, raw_inode->i_nlinks);
 	inode->i_size = raw_inode->i_size;
 	inode->i_mtime.tv_sec = raw_inode->i_mtime;
 	inode->i_atime.tv_sec = raw_inode->i_atime;
@@ -596,8 +596,7 @@ static int minix_write_inode(struct inode *inode, struct writeback_control *wbc)
 
 int minix_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat)
 {
-	struct inode *dir = dentry->d_parent->d_inode;
-	struct super_block *sb = dir->i_sb;
+	struct super_block *sb = dentry->d_sb;
 	generic_fillattr(dentry->d_inode, stat);
 	if (INODE_VERSION(dentry->d_inode) == MINIX_V1)
 		stat->blocks = (BLOCK_SIZE / 512) * V1_minix_blocks(stat->size, sb);

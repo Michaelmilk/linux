@@ -132,36 +132,6 @@ struct vlan_group {
 	struct rcu_head		rcu;
 };
 
-/*
-取@vlan_id对应的虚拟接口
-*/
-static inline struct net_device *vlan_group_get_device(struct vlan_group *vg,
-						       u16 vlan_id)
-{
-	struct net_device **array;
-	/* 先定位该@vlan_id所在的区域 */
-	array = vg->vlan_devices_arrays[vlan_id / VLAN_GROUP_ARRAY_PART_LEN];
-	/* 有描述该@vlan_id的虚拟vlan接口，则将其返回
-	   否则返回NULL，说明并未在该@vg组中注册此@vlan_id */
-	return array ? array[vlan_id % VLAN_GROUP_ARRAY_PART_LEN] : NULL;
-}
-
-/*
-将对应@vlan_id的虚拟vlan接口@dev加入到@vg组中
-当@dev为NULL时，表示从@vg中移除该@vlan_id
-*/
-static inline void vlan_group_set_device(struct vlan_group *vg,
-					 u16 vlan_id,
-					 struct net_device *dev)
-{
-	struct net_device **array;
-	if (!vg)
-		return;
-	/* 先定位该@vlan_id所在的区域 */
-	array = vg->vlan_devices_arrays[vlan_id / VLAN_GROUP_ARRAY_PART_LEN];
-	/* 记录该虚拟vlan接口@dev */
-	array[vlan_id % VLAN_GROUP_ARRAY_PART_LEN] = dev;
-}
 
 /*
 根据@dev的私有标记，判断此接口是否是一个虚拟vlan接口
@@ -182,38 +152,18 @@ static inline int is_vlan_dev(struct net_device *dev)
 #define vlan_tx_tag_get(__skb)		((__skb)->vlan_tci & ~VLAN_TAG_PRESENT)
 
 #if defined(CONFIG_VLAN_8021Q) || defined(CONFIG_VLAN_8021Q_MODULE)
-/* Must be invoked with rcu_read_lock or with RTNL. */
-/*
-根据@vlan_id到此真实设备@real_dev下的vlan组中查找对应的虚拟vlan接口
-*/
-static inline struct net_device *vlan_find_dev(struct net_device *real_dev,
-					       u16 vlan_id)
-{
-	struct vlan_group *grp = rcu_dereference_rtnl(real_dev->vlgrp);
 
-	if (grp)
-		return vlan_group_get_device(grp, vlan_id);
-
-	return NULL;
-}
-
+extern struct net_device *__vlan_find_dev_deep(struct net_device *real_dev,
+					       u16 vlan_id);
 extern struct net_device *vlan_dev_real_dev(const struct net_device *dev);
 extern u16 vlan_dev_vlan_id(const struct net_device *dev);
 
-extern int __vlan_hwaccel_rx(struct sk_buff *skb, struct vlan_group *grp,
-			     u16 vlan_tci, int polling);
-extern bool vlan_do_receive(struct sk_buff **skb);
+extern bool vlan_do_receive(struct sk_buff **skb, bool last_handler);
 extern struct sk_buff *vlan_untag(struct sk_buff *skb);
-extern gro_result_t
-vlan_gro_receive(struct napi_struct *napi, struct vlan_group *grp,
-		 unsigned int vlan_tci, struct sk_buff *skb);
-extern gro_result_t
-vlan_gro_frags(struct napi_struct *napi, struct vlan_group *grp,
-	       unsigned int vlan_tci);
 
 #else
-static inline struct net_device *vlan_find_dev(struct net_device *real_dev,
-					       u16 vlan_id)
+static inline struct net_device *
+__vlan_find_dev_deep(struct net_device *real_dev, u16 vlan_id)
 {
 	return NULL;
 }
@@ -230,17 +180,10 @@ static inline u16 vlan_dev_vlan_id(const struct net_device *dev)
 	return 0;
 }
 
-static inline int __vlan_hwaccel_rx(struct sk_buff *skb, struct vlan_group *grp,
-				    u16 vlan_tci, int polling)
-{
-	BUG();
-	return NET_XMIT_SUCCESS;
-}
-
-static inline bool vlan_do_receive(struct sk_buff **skb)
+static inline bool vlan_do_receive(struct sk_buff **skb, bool last_handler)
 {
 	/* 内核没有配置支持vlan时，带vlan的报文认为是其他主机的，不应做处理 */
-	if ((*skb)->vlan_tci & VLAN_VID_MASK)
+	if (((*skb)->vlan_tci & VLAN_VID_MASK) && last_handler)
 		(*skb)->pkt_type = PACKET_OTHERHOST;
 	return false;
 }
@@ -249,48 +192,7 @@ static inline struct sk_buff *vlan_untag(struct sk_buff *skb)
 {
 	return skb;
 }
-
-static inline gro_result_t
-vlan_gro_receive(struct napi_struct *napi, struct vlan_group *grp,
-		 unsigned int vlan_tci, struct sk_buff *skb)
-{
-	return GRO_DROP;
-}
-
-static inline gro_result_t
-vlan_gro_frags(struct napi_struct *napi, struct vlan_group *grp,
-	       unsigned int vlan_tci)
-{
-	return GRO_DROP;
-}
 #endif
-
-/**
- * vlan_hwaccel_rx - netif_rx wrapper for VLAN RX acceleration
- * @skb: buffer
- * @grp: vlan group
- * @vlan_tci: VLAN TCI as received from the card
- */
-static inline int vlan_hwaccel_rx(struct sk_buff *skb,
-				  struct vlan_group *grp,
-				  u16 vlan_tci)
-{
-	return __vlan_hwaccel_rx(skb, grp, vlan_tci, 0);
-}
-
-/**
- * vlan_hwaccel_receive_skb - netif_receive_skb wrapper for VLAN RX acceleration
- * @skb: buffer
- * @grp: vlan group
- * @vlan_tci: VLAN TCI as received from the card
- */
-static inline int vlan_hwaccel_receive_skb(struct sk_buff *skb,
-					   struct vlan_group *grp,
-					   u16 vlan_tci)
-{
-	/* 封装函数，1表示处于polling模式 */
-	return __vlan_hwaccel_rx(skb, grp, vlan_tci, 1);
-}
 
 /**
  * vlan_insert_tag - regular VLAN tag inserting

@@ -9,6 +9,7 @@
 #include <linux/init.h>
 #include <linux/timex.h>
 #include <linux/smp.h>
+#include <linux/percpu.h>
 
 /*
 保存由tsc_init()中计算得出的lpj
@@ -247,27 +248,35 @@ recalibrate:
 	return lpj;
 }
 
+static DEFINE_PER_CPU(unsigned long, cpu_loops_per_jiffy) = { 0 };
+
 /*
 计算loops_per_jiffy
 */
 void __cpuinit calibrate_delay(void)
 {
+	unsigned long lpj;
 	/* 控制只打印一次
 	   同时也控制只会使用lpj_fine一次，smp的其他cpu会重新计算 */
 	static bool printed;
+	int this_cpu = smp_processor_id();
 
-	/* 命令行中通过参数"lpj="设置了lpj值 */
-	if (preset_lpj) {
-		loops_per_jiffy = preset_lpj;
+	if (per_cpu(cpu_loops_per_jiffy, this_cpu)) {
+		lpj = per_cpu(cpu_loops_per_jiffy, this_cpu);
+		pr_info("Calibrating delay loop (skipped) "
+				"already calibrated this CPU");
+	} else if (preset_lpj) {
+		/* 命令行中通过参数"lpj="设置了lpj值 */
+		lpj = preset_lpj;
 		if (!printed)
 			pr_info("Calibrating delay loop (skipped) "
 				"preset value.. ");
 	} else if ((!printed) && lpj_fine) {
 	/* 还未计算过，并且在tsc_init()中得出了lpj_fine的值，则使用lpj_fine */
-		loops_per_jiffy = lpj_fine;
+		lpj = lpj_fine;
 		pr_info("Calibrating delay loop (skipped), "
 			"value calculated using timer frequency.. ");
-	} else if ((loops_per_jiffy = calibrate_delay_direct()) != 0) {
+	} else if ((lpj = calibrate_delay_direct()) != 0) {
 	/* 使用tsc计算lpj */
 		if (!printed)
 			pr_info("Calibrating delay using timer "
@@ -275,14 +284,16 @@ void __cpuinit calibrate_delay(void)
 	} else {
 		if (!printed)
 			pr_info("Calibrating delay loop... ");
-		loops_per_jiffy = calibrate_delay_converge();
+		lpj = calibrate_delay_converge();
 	}
+	per_cpu(cpu_loops_per_jiffy, this_cpu) = lpj;
 	/* 打印计算出的BogoMIPS和loops_per_jiffy
 	   BogoMIPS计算公式: ((loops_per_jiffy * HZ * 循环消耗指令数2) / 1000000) */
 	if (!printed)
 		pr_cont("%lu.%02lu BogoMIPS (lpj=%lu)\n",
-			loops_per_jiffy/(500000/HZ),
-			(loops_per_jiffy/(5000/HZ)) % 100, loops_per_jiffy);
+			lpj/(500000/HZ),
+			(lpj/(5000/HZ)) % 100, lpj);
 
+	loops_per_jiffy = lpj;
 	printed = true;
 }

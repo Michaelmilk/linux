@@ -165,7 +165,7 @@ int ip_call_ra_chain(struct sk_buff *skb)
 		    (!sk->sk_bound_dev_if ||
 		     sk->sk_bound_dev_if == dev->ifindex) &&
 		    net_eq(sock_net(sk), dev_net(dev))) {
-			if (ip_hdr(skb)->frag_off & htons(IP_MF | IP_OFFSET)) {
+			if (ip_is_fragment(ip_hdr(skb))) {
 				if (ip_defrag(skb, IP_DEFRAG_CALL_RA_CHAIN))
 					return 1;
 			}
@@ -266,7 +266,7 @@ int ip_local_deliver(struct sk_buff *skb)
 	   IP_MF	: 分片报文标记
 	   IP_OFFSET: offset中的值记录该分片报文在这个大包中IP payload的位置
 	   同一个分片报文的id字段值一致 */
-	if (ip_hdr(skb)->frag_off & htons(IP_MF | IP_OFFSET)) {
+	if (ip_is_fragment(ip_hdr(skb))) {
 		/* 组片完成后返回0，进入下面的NF_HOOK()流程
 		   ipq分配失败或者分片未接收完成
 		   会返回一个负数，不继续向上层协议栈递交 */

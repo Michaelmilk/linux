@@ -29,6 +29,11 @@
 
 #define BR_VERSION	"2.3"
 
+/* Control of forwarding link local multicast */
+#define BR_GROUPFWD_DEFAULT	0
+/* Don't allow forwarding control protocols like STP and LLDP */
+#define BR_GROUPFWD_RESTRICTED	0x4007u
+
 /* Path to usermode spanning tree program */
 #define BR_STP_PROG	"/sbin/bridge-stp"
 
@@ -142,6 +147,7 @@ struct net_bridge_port
 	bridge_id			designated_bridge;
 	u32				path_cost;
 	u32				designated_cost;
+	unsigned long			designated_age;
 
 	/* STP控制超时的一些定时器链表 */
 	struct timer_list		forward_delay_timer;
@@ -229,6 +235,8 @@ struct net_bridge
 #endif
 	unsigned long			flags;
 #define BR_SET_MAC_ADDR		0x00000001
+
+	u16				group_fwd_mask;
 
 	/* STP */
 	/* 与STP协议对应的一些数据 */
@@ -335,6 +343,7 @@ static inline int br_is_root_bridge(const struct net_bridge *br)
 
 /* br_device.c */
 extern void br_dev_setup(struct net_device *dev);
+extern void br_dev_delete(struct net_device *dev, struct list_head *list);
 extern netdev_tx_t br_dev_xmit(struct sk_buff *skb,
 			       struct net_device *dev);
 #ifdef CONFIG_NET_POLL_CONTROLLER

@@ -35,7 +35,7 @@
 #include <linux/mutex.h>
 #include <linux/errno.h>
 #include <linux/slab.h>
-#include <mach/gpio.h>
+#include <asm/gpio.h>
 #include <plat/keypad.h>
 #include <plat/menelaus.h>
 #include <asm/irq.h>
@@ -209,6 +209,7 @@ static void omap_kp_tasklet(unsigned long data)
 #endif
 		}
 	}
+	input_sync(omap_kp_data->input);
 	memcpy(keypad_state, new_state, sizeof(keypad_state));
 
 	if (key_down) {

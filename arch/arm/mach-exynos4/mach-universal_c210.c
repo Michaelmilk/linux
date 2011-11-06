@@ -13,11 +13,15 @@
 #include <linux/i2c.h>
 #include <linux/gpio_keys.h>
 #include <linux/gpio.h>
+#include <linux/fb.h>
 #include <linux/mfd/max8998.h>
 #include <linux/regulator/machine.h>
 #include <linux/regulator/fixed.h>
 #include <linux/regulator/max8952.h>
 #include <linux/mmc/host.h>
+#include <linux/i2c-gpio.h>
+#include <linux/i2c/mcs.h>
+#include <linux/i2c/atmel_mxt_ts.h>
 
 #include <asm/mach/arch.h>
 #include <asm/mach-types.h>
@@ -27,9 +31,21 @@
 #include <plat/cpu.h>
 #include <plat/devs.h>
 #include <plat/iic.h>
+#include <plat/gpio-cfg.h>
+#include <plat/fb.h>
+#include <plat/mfc.h>
 #include <plat/sdhci.h>
+#include <plat/pd.h>
+#include <plat/regs-fb-v4.h>
+#include <plat/fimc-core.h>
+#include <plat/camport.h>
+#include <plat/mipi_csis.h>
 
 #include <mach/map.h>
+
+#include <media/v4l2-mediabus.h>
+#include <media/s5p_fimc.h>
+#include <media/m5mols.h>
 
 /* Following are default values for UCON, ULCON and UFCON UART registers */
 #define UNIVERSAL_UCON_DEFAULT	(S3C2410_UCON_TXILEVEL |	\
@@ -73,7 +89,7 @@ static struct s3c2410_uartcfg universal_uartcfgs[] __initdata = {
 };
 
 static struct regulator_consumer_supply max8952_consumer =
-	REGULATOR_SUPPLY("vddarm", NULL);
+	REGULATOR_SUPPLY("vdd_arm", NULL);
 
 static struct max8952_platform_data universal_max8952_pdata __initdata = {
 	.gpio_vid0	= EXYNOS4_GPX0(3),
@@ -99,10 +115,13 @@ static struct max8952_platform_data universal_max8952_pdata __initdata = {
 };
 
 static struct regulator_consumer_supply lp3974_buck1_consumer =
-	REGULATOR_SUPPLY("vddint", NULL);
+	REGULATOR_SUPPLY("vdd_int", NULL);
 
 static struct regulator_consumer_supply lp3974_buck2_consumer =
 	REGULATOR_SUPPLY("vddg3d", NULL);
+
+static struct regulator_consumer_supply lp3974_buck3_consumer =
+	REGULATOR_SUPPLY("vdet", "s5p-sdo");
 
 static struct regulator_init_data lp3974_buck1_data = {
 	.constraints	= {
@@ -147,6 +166,8 @@ static struct regulator_init_data lp3974_buck3_data = {
 			.enabled	= 1,
 		},
 	},
+	.num_consumer_supplies = 1,
+	.consumer_supplies = &lp3974_buck3_consumer,
 };
 
 static struct regulator_init_data lp3974_buck4_data = {
@@ -175,6 +196,12 @@ static struct regulator_init_data lp3974_ldo2_data = {
 	},
 };
 
+static struct regulator_consumer_supply lp3974_ldo3_consumer[] = {
+	REGULATOR_SUPPLY("vdd", "exynos4-hdmi"),
+	REGULATOR_SUPPLY("vdd_pll", "exynos4-hdmi"),
+	REGULATOR_SUPPLY("vdd11", "s5p-mipi-csis.0"),
+};
+
 static struct regulator_init_data lp3974_ldo3_data = {
 	.constraints	= {
 		.name		= "VUSB+MIPI_1.1V",
@@ -186,6 +213,12 @@ static struct regulator_init_data lp3974_ldo3_data = {
 			.disabled	= 1,
 		},
 	},
+	.num_consumer_supplies = ARRAY_SIZE(lp3974_ldo3_consumer),
+	.consumer_supplies = lp3974_ldo3_consumer,
+};
+
+static struct regulator_consumer_supply lp3974_ldo4_consumer[] = {
+	REGULATOR_SUPPLY("vdd_osc", "exynos4-hdmi"),
 };
 
 static struct regulator_init_data lp3974_ldo4_data = {
@@ -199,6 +232,8 @@ static struct regulator_init_data lp3974_ldo4_data = {
 			.disabled	= 1,
 		},
 	},
+	.num_consumer_supplies = ARRAY_SIZE(lp3974_ldo4_consumer),
+	.consumer_supplies = lp3974_ldo4_consumer,
 };
 
 static struct regulator_init_data lp3974_ldo5_data = {
@@ -227,6 +262,10 @@ static struct regulator_init_data lp3974_ldo6_data = {
 	},
 };
 
+static struct regulator_consumer_supply lp3974_ldo7_consumer[] = {
+	REGULATOR_SUPPLY("vdd18", "s5p-mipi-csis.0"),
+};
+
 static struct regulator_init_data lp3974_ldo7_data = {
 	.constraints	= {
 		.name		= "VLCD+VMIPI_1.8V",
@@ -238,6 +277,12 @@ static struct regulator_init_data lp3974_ldo7_data = {
 			.disabled	= 1,
 		},
 	},
+	.num_consumer_supplies	= ARRAY_SIZE(lp3974_ldo7_consumer),
+	.consumer_supplies	= lp3974_ldo7_consumer,
+};
+
+static struct regulator_consumer_supply lp3974_ldo8_consumer[] = {
+	REGULATOR_SUPPLY("vdd33a_dac", "s5p-sdo"),
 };
 
 static struct regulator_init_data lp3974_ldo8_data = {
@@ -251,6 +296,8 @@ static struct regulator_init_data lp3974_ldo8_data = {
 			.disabled	= 1,
 		},
 	},
+	.num_consumer_supplies = ARRAY_SIZE(lp3974_ldo8_consumer),
+	.consumer_supplies = lp3974_ldo8_consumer,
 };
 
 static struct regulator_init_data lp3974_ldo9_data = {
@@ -280,6 +327,9 @@ static struct regulator_init_data lp3974_ldo10_data = {
 	},
 };
 
+static struct regulator_consumer_supply lp3974_ldo11_consumer =
+	REGULATOR_SUPPLY("dig_28", "0-001f");
+
 static struct regulator_init_data lp3974_ldo11_data = {
 	.constraints	= {
 		.name		= "CAM_AF_3.3V",
@@ -291,6 +341,8 @@ static struct regulator_init_data lp3974_ldo11_data = {
 			.disabled	= 1,
 		},
 	},
+	.num_consumer_supplies	= 1,
+	.consumer_supplies	= &lp3974_ldo11_consumer,
 };
 
 static struct regulator_init_data lp3974_ldo12_data = {
@@ -319,6 +371,9 @@ static struct regulator_init_data lp3974_ldo13_data = {
 	},
 };
 
+static struct regulator_consumer_supply lp3974_ldo14_consumer =
+	REGULATOR_SUPPLY("dig_18", "0-001f");
+
 static struct regulator_init_data lp3974_ldo14_data = {
 	.constraints	= {
 		.name		= "CAM_I_HOST_1.8V",
@@ -330,7 +385,13 @@ static struct regulator_init_data lp3974_ldo14_data = {
 			.disabled	= 1,
 		},
 	},
+	.num_consumer_supplies	= 1,
+	.consumer_supplies	= &lp3974_ldo14_consumer,
 };
+
+
+static struct regulator_consumer_supply lp3974_ldo15_consumer =
+	REGULATOR_SUPPLY("dig_12", "0-001f");
 
 static struct regulator_init_data lp3974_ldo15_data = {
 	.constraints	= {
@@ -343,6 +404,12 @@ static struct regulator_init_data lp3974_ldo15_data = {
 			.disabled	= 1,
 		},
 	},
+	.num_consumer_supplies	= 1,
+	.consumer_supplies	= &lp3974_ldo15_consumer,
+};
+
+static struct regulator_consumer_supply lp3974_ldo16_consumer[] = {
+	REGULATOR_SUPPLY("a_sensor", "0-001f"),
 };
 
 static struct regulator_init_data lp3974_ldo16_data = {
@@ -356,6 +423,8 @@ static struct regulator_init_data lp3974_ldo16_data = {
 			.disabled	= 1,
 		},
 	},
+	.num_consumer_supplies	= ARRAY_SIZE(lp3974_ldo16_consumer),
+	.consumer_supplies	= lp3974_ldo16_consumer,
 };
 
 static struct regulator_init_data lp3974_ldo17_data = {
@@ -466,6 +535,43 @@ static struct max8998_platform_data universal_lp3974_pdata = {
 	.wakeup			= true,
 };
 
+
+enum fixed_regulator_id {
+	FIXED_REG_ID_MMC0,
+	FIXED_REG_ID_HDMI_5V,
+	FIXED_REG_ID_CAM_S_IF,
+	FIXED_REG_ID_CAM_I_CORE,
+	FIXED_REG_ID_CAM_VT_DIO,
+};
+
+static struct regulator_consumer_supply hdmi_fixed_consumer =
+	REGULATOR_SUPPLY("hdmi-en", "exynos4-hdmi");
+
+static struct regulator_init_data hdmi_fixed_voltage_init_data = {
+	.constraints		= {
+		.name		= "HDMI_5V",
+		.valid_ops_mask	= REGULATOR_CHANGE_STATUS,
+	},
+	.num_consumer_supplies	= 1,
+	.consumer_supplies	= &hdmi_fixed_consumer,
+};
+
+static struct fixed_voltage_config hdmi_fixed_voltage_config = {
+	.supply_name		= "HDMI_EN1",
+	.microvolts		= 5000000,
+	.gpio			= EXYNOS4_GPE0(1),
+	.enable_high		= true,
+	.init_data		= &hdmi_fixed_voltage_init_data,
+};
+
+static struct platform_device hdmi_fixed_voltage = {
+	.name			= "reg-fixed-voltage",
+	.id			= FIXED_REG_ID_HDMI_5V,
+	.dev			= {
+		.platform_data	= &hdmi_fixed_voltage_config,
+	},
+};
+
 /* GPIO I2C 5 (PMIC) */
 static struct i2c_board_info i2c5_devs[] __initdata = {
 	{
@@ -475,6 +581,101 @@ static struct i2c_board_info i2c5_devs[] __initdata = {
 		I2C_BOARD_INFO("lp3974", 0xCC >> 1),
 		.platform_data	= &universal_lp3974_pdata,
 	},
+};
+
+/* I2C3 (TSP) */
+static struct mxt_platform_data qt602240_platform_data = {
+	.x_line		= 19,
+	.y_line		= 11,
+	.x_size		= 800,
+	.y_size		= 480,
+	.blen		= 0x11,
+	.threshold	= 0x28,
+	.voltage	= 2800000,		/* 2.8V */
+	.orient		= MXT_DIAGONAL,
+};
+
+static struct i2c_board_info i2c3_devs[] __initdata = {
+	{
+		I2C_BOARD_INFO("qt602240_ts", 0x4a),
+		.platform_data = &qt602240_platform_data,
+	},
+};
+
+static void __init universal_tsp_init(void)
+{
+	int gpio;
+
+	/* TSP_LDO_ON: XMDMADDR_11 */
+	gpio = EXYNOS4_GPE2(3);
+	gpio_request(gpio, "TSP_LDO_ON");
+	gpio_direction_output(gpio, 1);
+	gpio_export(gpio, 0);
+
+	/* TSP_INT: XMDMADDR_7 */
+	gpio = EXYNOS4_GPE1(7);
+	gpio_request(gpio, "TSP_INT");
+
+	s5p_register_gpio_interrupt(gpio);
+	s3c_gpio_cfgpin(gpio, S3C_GPIO_SFN(0xf));
+	s3c_gpio_setpull(gpio, S3C_GPIO_PULL_UP);
+	i2c3_devs[0].irq = gpio_to_irq(gpio);
+}
+
+
+/* GPIO I2C 12 (3 Touchkey) */
+static uint32_t touchkey_keymap[] = {
+	/* MCS_KEY_MAP(value, keycode) */
+	MCS_KEY_MAP(0, KEY_MENU),		/* KEY_SEND */
+	MCS_KEY_MAP(1, KEY_BACK),		/* KEY_END */
+};
+
+static struct mcs_platform_data touchkey_data = {
+	.keymap		= touchkey_keymap,
+	.keymap_size	= ARRAY_SIZE(touchkey_keymap),
+	.key_maxval	= 2,
+};
+
+/* GPIO I2C 3_TOUCH 2.8V */
+#define I2C_GPIO_BUS_12		12
+static struct i2c_gpio_platform_data i2c_gpio12_data = {
+	.sda_pin	= EXYNOS4_GPE4(0),	/* XMDMDATA_8 */
+	.scl_pin	= EXYNOS4_GPE4(1),	/* XMDMDATA_9 */
+};
+
+static struct platform_device i2c_gpio12 = {
+	.name		= "i2c-gpio",
+	.id		= I2C_GPIO_BUS_12,
+	.dev		= {
+		.platform_data	= &i2c_gpio12_data,
+	},
+};
+
+static struct i2c_board_info i2c_gpio12_devs[] __initdata = {
+	{
+		I2C_BOARD_INFO("mcs5080_touchkey", 0x20),
+		.platform_data = &touchkey_data,
+	},
+};
+
+static void __init universal_touchkey_init(void)
+{
+	int gpio;
+
+	gpio = EXYNOS4_GPE3(7);			/* XMDMDATA_7 */
+	gpio_request(gpio, "3_TOUCH_INT");
+	s5p_register_gpio_interrupt(gpio);
+	s3c_gpio_cfgpin(gpio, S3C_GPIO_SFN(0xf));
+	i2c_gpio12_devs[0].irq = gpio_to_irq(gpio);
+
+	gpio = EXYNOS4_GPE3(3);			/* XMDMDATA_3 */
+	gpio_request(gpio, "3_TOUCH_EN");
+	gpio_direction_output(gpio, 1);
+}
+
+static struct s3c2410_platform_i2c universal_i2c0_platdata __initdata = {
+	.frequency	= 300 * 1000,
+	.sda_delay	= 200,
 };
 
 /* GPIO KEYS */
@@ -562,7 +763,7 @@ static struct fixed_voltage_config mmc0_fixed_voltage_config = {
 
 static struct platform_device mmc0_fixed_voltage = {
 	.name			= "reg-fixed-voltage",
-	.id			= 0,
+	.id			= FIXED_REG_ID_MMC0,
 	.dev			= {
 		.platform_data	= &mmc0_fixed_voltage_config,
 	},
@@ -596,27 +797,197 @@ static void __init universal_sdhci_init(void)
 	s3c_sdhci3_set_platdata(&universal_hsmmc3_data);
 }
 
-/* I2C0 */
-static struct i2c_board_info i2c0_devs[] __initdata = {
-	/* Camera, To be updated */
-};
-
 /* I2C1 */
 static struct i2c_board_info i2c1_devs[] __initdata = {
 	/* Gyro, To be updated */
 };
 
+/* Frame Buffer */
+static struct s3c_fb_pd_win universal_fb_win0 = {
+	.win_mode = {
+		.left_margin	= 16,
+		.right_margin	= 16,
+		.upper_margin	= 2,
+		.lower_margin	= 28,
+		.hsync_len	= 2,
+		.vsync_len	= 1,
+		.xres		= 480,
+		.yres		= 800,
+		.refresh	= 55,
+	},
+	.max_bpp	= 32,
+	.default_bpp	= 16,
+};
+
+static struct s3c_fb_platdata universal_lcd_pdata __initdata = {
+	.win[0]		= &universal_fb_win0,
+	.vidcon0	= VIDCON0_VIDOUT_RGB | VIDCON0_PNRMODE_RGB |
+			  VIDCON0_CLKSEL_LCD,
+	.vidcon1	= VIDCON1_INV_VCLK | VIDCON1_INV_VDEN
+			  | VIDCON1_INV_HSYNC | VIDCON1_INV_VSYNC,
+	.setup_gpio	= exynos4_fimd0_gpio_setup_24bpp,
+};
+
+static struct regulator_consumer_supply cam_i_core_supply =
+	REGULATOR_SUPPLY("core", "0-001f");
+
+static struct regulator_init_data cam_i_core_reg_init_data = {
+	.constraints = { .valid_ops_mask = REGULATOR_CHANGE_STATUS },
+	.num_consumer_supplies = 1,
+	.consumer_supplies = &cam_i_core_supply,
+};
+
+static struct fixed_voltage_config cam_i_core_fixed_voltage_cfg = {
+	.supply_name	= "CAM_I_CORE_1.2V",
+	.microvolts	= 1200000,
+	.gpio		= EXYNOS4_GPE2(2),	/* CAM_8M_CORE_EN */
+	.enable_high	= 1,
+	.init_data	= &cam_i_core_reg_init_data,
+};
+
+static struct platform_device cam_i_core_fixed_reg_dev = {
+	.name = "reg-fixed-voltage", .id = FIXED_REG_ID_CAM_I_CORE,
+	.dev = { .platform_data	= &cam_i_core_fixed_voltage_cfg },
+};
+
+static struct regulator_consumer_supply cam_s_if_supply =
+	REGULATOR_SUPPLY("d_sensor", "0-001f");
+
+static struct regulator_init_data cam_s_if_reg_init_data = {
+	.constraints = { .valid_ops_mask = REGULATOR_CHANGE_STATUS },
+	.num_consumer_supplies = 1,
+	.consumer_supplies = &cam_s_if_supply,
+};
+
+static struct fixed_voltage_config cam_s_if_fixed_voltage_cfg = {
+	.supply_name	= "CAM_S_IF_1.8V",
+	.microvolts	= 1800000,
+	.gpio		= EXYNOS4_GPE3(0),	/* CAM_PWR_EN1 */
+	.enable_high	= 1,
+	.init_data	= &cam_s_if_reg_init_data,
+};
+
+static struct platform_device cam_s_if_fixed_reg_dev = {
+	.name = "reg-fixed-voltage", .id = FIXED_REG_ID_CAM_S_IF,
+	.dev = { .platform_data	= &cam_s_if_fixed_voltage_cfg },
+};
+
+static struct s5p_platform_mipi_csis mipi_csis_platdata = {
+	.clk_rate	= 166000000UL,
+	.lanes		= 2,
+	.alignment	= 32,
+	.hs_settle	= 12,
+	.phy_enable	= s5p_csis_phy_enable,
+};
+
+#define GPIO_CAM_LEVEL_EN(n)	EXYNOS4_GPE4(n + 3)
+#define GPIO_CAM_8M_ISP_INT	EXYNOS4_GPX1(5)	/* XEINT_13 */
+#define GPIO_CAM_MEGA_nRST	EXYNOS4_GPE2(5)
+
+static int m5mols_set_power(struct device *dev, int on)
+{
+	gpio_set_value(GPIO_CAM_LEVEL_EN(1), !on);
+	gpio_set_value(GPIO_CAM_LEVEL_EN(2), !!on);
+	return 0;
+}
+
+static struct m5mols_platform_data m5mols_platdata = {
+	.gpio_reset	= GPIO_CAM_MEGA_nRST,
+	.reset_polarity	= 0,
+	.set_power	= m5mols_set_power,
+};
+
+static struct i2c_board_info m5mols_board_info = {
+	I2C_BOARD_INFO("M5MOLS", 0x1F),
+	.platform_data = &m5mols_platdata,
+};
+
+static struct s5p_fimc_isp_info universal_camera_sensors[] = {
+	{
+		.mux_id		= 0,
+		.flags		= V4L2_MBUS_PCLK_SAMPLE_FALLING |
+				  V4L2_MBUS_VSYNC_ACTIVE_LOW,
+		.bus_type	= FIMC_MIPI_CSI2,
+		.board_info	= &m5mols_board_info,
+		.i2c_bus_num	= 0,
+		.clk_frequency	= 21600000UL,
+		.csi_data_align	= 32,
+	},
+};
+
+static struct s5p_platform_fimc fimc_md_platdata = {
+	.isp_info	= universal_camera_sensors,
+	.num_clients	= ARRAY_SIZE(universal_camera_sensors),
+};
+
+static struct gpio universal_camera_gpios[] = {
+	{ GPIO_CAM_LEVEL_EN(1),	GPIOF_OUT_INIT_HIGH, "CAM_LVL_EN1" },
+	{ GPIO_CAM_LEVEL_EN(2),	GPIOF_OUT_INIT_LOW,  "CAM_LVL_EN2" },
+	{ GPIO_CAM_8M_ISP_INT,	GPIOF_IN,            "8M_ISP_INT"  },
+	{ GPIO_CAM_MEGA_nRST,	GPIOF_OUT_INIT_LOW,  "CAM_8M_NRST" },
+};
+
+static void universal_camera_init(void)
+{
+	s3c_set_platdata(&mipi_csis_platdata, sizeof(mipi_csis_platdata),
+			 &s5p_device_mipi_csis0);
+	s3c_set_platdata(&fimc_md_platdata,  sizeof(fimc_md_platdata),
+			 &s5p_device_fimc_md);
+
+	if (gpio_request_array(universal_camera_gpios,
+			       ARRAY_SIZE(universal_camera_gpios))) {
+		pr_err("%s: GPIO request failed\n", __func__);
+		return;
+	}
+
+	if (!s3c_gpio_cfgpin(GPIO_CAM_8M_ISP_INT, S3C_GPIO_SFN(0xf)))
+		m5mols_board_info.irq = gpio_to_irq(GPIO_CAM_8M_ISP_INT);
+	else
+		pr_err("Failed to configure 8M_ISP_INT GPIO\n");
+
+	/* Free GPIOs controlled directly by the sensor drivers. */
+	gpio_free(GPIO_CAM_MEGA_nRST);
+	gpio_free(GPIO_CAM_8M_ISP_INT);
+
+	if (exynos4_fimc_setup_gpio(S5P_CAMPORT_A))
+		pr_err("Camera port A setup failed\n");
+}
+
 static struct platform_device *universal_devices[] __initdata = {
 	/* Samsung Platform Devices */
+	&s5p_device_mipi_csis0,
+	&s5p_device_fimc0,
+	&s5p_device_fimc1,
+	&s5p_device_fimc2,
+	&s5p_device_fimc3,
 	&mmc0_fixed_voltage,
 	&s3c_device_hsmmc0,
 	&s3c_device_hsmmc2,
 	&s3c_device_hsmmc3,
+	&s3c_device_i2c0,
+	&s3c_device_i2c3,
 	&s3c_device_i2c5,
+	&s5p_device_i2c_hdmiphy,
+	&hdmi_fixed_voltage,
+	&exynos4_device_pd[PD_TV],
+	&s5p_device_hdmi,
+	&s5p_device_sdo,
+	&s5p_device_mixer,
 
 	/* Universal Devices */
+	&i2c_gpio12,
 	&universal_gpio_keys,
 	&s5p_device_onenand,
+	&s5p_device_fimd0,
+	&s5p_device_mfc,
+	&s5p_device_mfc_l,
+	&s5p_device_mfc_r,
+	&exynos4_device_pd[PD_MFC],
+	&exynos4_device_pd[PD_LCD0],
+	&exynos4_device_pd[PD_CAM],
+	&cam_i_core_fixed_reg_dev,
+	&cam_s_if_fixed_reg_dev,
+	&s5p_device_fimc_md,
 };
 
 static void __init universal_map_io(void)
@@ -626,25 +997,68 @@ static void __init universal_map_io(void)
 	s3c24xx_init_uarts(universal_uartcfgs, ARRAY_SIZE(universal_uartcfgs));
 }
 
+void s5p_tv_setup(void)
+{
+	/* direct HPD to HDMI chip */
+	gpio_request(EXYNOS4_GPX3(7), "hpd-plug");
+
+	gpio_direction_input(EXYNOS4_GPX3(7));
+	s3c_gpio_cfgpin(EXYNOS4_GPX3(7), S3C_GPIO_SFN(0x3));
+	s3c_gpio_setpull(EXYNOS4_GPX3(7), S3C_GPIO_PULL_NONE);
+
+	/* setup dependencies between TV devices */
+	s5p_device_hdmi.dev.parent = &exynos4_device_pd[PD_TV].dev;
+	s5p_device_mixer.dev.parent = &exynos4_device_pd[PD_TV].dev;
+}
+
+static void __init universal_reserve(void)
+{
+	s5p_mfc_reserve_mem(0x43000000, 8 << 20, 0x51000000, 8 << 20);
+}
+
 static void __init universal_machine_init(void)
 {
 	universal_sdhci_init();
+	s5p_tv_setup();
 
-	i2c_register_board_info(0, i2c0_devs, ARRAY_SIZE(i2c0_devs));
+	s3c_i2c0_set_platdata(&universal_i2c0_platdata);
 	i2c_register_board_info(1, i2c1_devs, ARRAY_SIZE(i2c1_devs));
 
+	universal_tsp_init();
+	s3c_i2c3_set_platdata(NULL);
+	i2c_register_board_info(3, i2c3_devs, ARRAY_SIZE(i2c3_devs));
+
 	s3c_i2c5_set_platdata(NULL);
+	s5p_i2c_hdmiphy_set_platdata(NULL);
 	i2c_register_board_info(5, i2c5_devs, ARRAY_SIZE(i2c5_devs));
+
+	s5p_fimd0_set_platdata(&universal_lcd_pdata);
+
+	universal_touchkey_init();
+	i2c_register_board_info(I2C_GPIO_BUS_12, i2c_gpio12_devs,
+			ARRAY_SIZE(i2c_gpio12_devs));
+
+	universal_camera_init();
 
 	/* Last */
 	platform_add_devices(universal_devices, ARRAY_SIZE(universal_devices));
+
+	s5p_device_mfc.dev.parent = &exynos4_device_pd[PD_MFC].dev;
+	s5p_device_fimd0.dev.parent = &exynos4_device_pd[PD_LCD0].dev;
+
+	s5p_device_fimc0.dev.parent = &exynos4_device_pd[PD_CAM].dev;
+	s5p_device_fimc1.dev.parent = &exynos4_device_pd[PD_CAM].dev;
+	s5p_device_fimc2.dev.parent = &exynos4_device_pd[PD_CAM].dev;
+	s5p_device_fimc3.dev.parent = &exynos4_device_pd[PD_CAM].dev;
+	s5p_device_mipi_csis0.dev.parent = &exynos4_device_pd[PD_CAM].dev;
 }
 
 MACHINE_START(UNIVERSAL_C210, "UNIVERSAL_C210")
 	/* Maintainer: Kyungmin Park <kyungmin.park@samsung.com> */
-	.boot_params	= S5P_PA_SDRAM + 0x100,
+	.atag_offset	= 0x100,
 	.init_irq	= exynos4_init_irq,
 	.map_io		= universal_map_io,
 	.init_machine	= universal_machine_init,
 	.timer		= &exynos4_timer,
+	.reserve        = &universal_reserve,
 MACHINE_END

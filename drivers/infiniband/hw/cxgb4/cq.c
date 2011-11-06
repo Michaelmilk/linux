@@ -185,7 +185,7 @@ static void insert_recv_cqe(struct t4_wq *wq, struct t4_cq *cq)
 				 V_CQE_OPCODE(FW_RI_SEND) |
 				 V_CQE_TYPE(0) |
 				 V_CQE_SWCQE(1) |
-				 V_CQE_QPID(wq->rq.qid));
+				 V_CQE_QPID(wq->sq.qid));
 	cqe.bits_type_ts = cpu_to_be64(V_CQE_GENBIT((u64)cq->gen));
 	cq->sw_queue[cq->sw_pidx] = cqe;
 	t4_swcq_produce(cq);
@@ -801,6 +801,10 @@ struct ib_cq *c4iw_create_cq(struct ib_device *ibdev, int entries,
 	if (ucontext) {
 		memsize = roundup(memsize, PAGE_SIZE);
 		hwentries = memsize / sizeof *chp->cq.queue;
+		while (hwentries > T4_MAX_IQ_SIZE) {
+			memsize -= PAGE_SIZE;
+			hwentries = memsize / sizeof *chp->cq.queue;
+		}
 	}
 	chp->cq.size = hwentries;
 	chp->cq.memsize = memsize;
@@ -814,6 +818,7 @@ struct ib_cq *c4iw_create_cq(struct ib_device *ibdev, int entries,
 	chp->cq.size--;				/* status page */
 	chp->ibcq.cqe = entries - 2;
 	spin_lock_init(&chp->lock);
+	spin_lock_init(&chp->comp_handler_lock);
 	atomic_set(&chp->refcnt, 1);
 	init_waitqueue_head(&chp->wait);
 	ret = insert_handle(rhp, &rhp->cqidr, chp, chp->cq.cqid);

@@ -16,15 +16,24 @@
 
 #include <asm/proc-fns.h>
 #include <asm/hardware/cache-l2x0.h>
+#include <asm/hardware/gic.h>
 
 #include <plat/cpu.h>
 #include <plat/clock.h>
-#include <plat/exynos4.h>
-#include <plat/sdhci.h>
 #include <plat/devs.h>
+#include <plat/exynos4.h>
+#include <plat/adc-core.h>
+#include <plat/sdhci.h>
+#include <plat/fb-core.h>
 #include <plat/fimc-core.h>
+#include <plat/iic-core.h>
+#include <plat/reset.h>
+#include <plat/tv-core.h>
 
 #include <mach/regs-irq.h>
+#include <mach/regs-pmu.h>
+
+unsigned int gic_bank_offset __read_mostly;
 
 extern int combiner_init(unsigned int combiner_nr, void __iomem *base,
 			 unsigned int irq_start);
@@ -37,11 +46,6 @@ static struct map_desc exynos4_iodesc[] __initdata = {
 		.pfn		= __phys_to_pfn(EXYNOS4_PA_SYSTIMER),
 		.length		= SZ_4K,
 		.type	 	= MT_DEVICE,
-	}, {
-		.virtual	= (unsigned long)S5P_VA_SYSRAM,
-		.pfn		= __phys_to_pfn(EXYNOS4_PA_SYSRAM),
-		.length		= SZ_4K,
-		.type		= MT_DEVICE,
 	}, {
 		.virtual	= (unsigned long)S5P_VA_CMU,
 		.pfn		= __phys_to_pfn(EXYNOS4_PA_CMU),
@@ -102,7 +106,35 @@ static struct map_desc exynos4_iodesc[] __initdata = {
 		.pfn		= __phys_to_pfn(EXYNOS4_PA_HSPHY),
 		.length		= SZ_4K,
 		.type		= MT_DEVICE,
-	}
+	}, {
+		.virtual	= (unsigned long)S5P_VA_GIC_CPU,
+		.pfn		= __phys_to_pfn(EXYNOS4_PA_GIC_CPU),
+		.length		= SZ_64K,
+		.type		= MT_DEVICE,
+	}, {
+		.virtual	= (unsigned long)S5P_VA_GIC_DIST,
+		.pfn		= __phys_to_pfn(EXYNOS4_PA_GIC_DIST),
+		.length		= SZ_64K,
+		.type		= MT_DEVICE,
+	},
+};
+
+static struct map_desc exynos4_iodesc0[] __initdata = {
+	{
+		.virtual	= (unsigned long)S5P_VA_SYSRAM,
+		.pfn		= __phys_to_pfn(EXYNOS4_PA_SYSRAM0),
+		.length		= SZ_4K,
+		.type		= MT_DEVICE,
+	},
+};
+
+static struct map_desc exynos4_iodesc1[] __initdata = {
+	{
+		.virtual	= (unsigned long)S5P_VA_SYSRAM,
+		.pfn		= __phys_to_pfn(EXYNOS4_PA_SYSRAM1),
+		.length		= SZ_4K,
+		.type		= MT_DEVICE,
+	},
 };
 
 static void exynos4_idle(void)
@@ -111,6 +143,11 @@ static void exynos4_idle(void)
 		cpu_do_idle();
 
 	local_irq_enable();
+}
+
+static void exynos4_sw_reset(void)
+{
+	__raw_writel(0x1, S5P_SWRESET);
 }
 
 /*
@@ -122,16 +159,31 @@ void __init exynos4_map_io(void)
 {
 	iotable_init(exynos4_iodesc, ARRAY_SIZE(exynos4_iodesc));
 
+	if (soc_is_exynos4210() && samsung_rev() == EXYNOS4210_REV_0)
+		iotable_init(exynos4_iodesc0, ARRAY_SIZE(exynos4_iodesc0));
+	else
+		iotable_init(exynos4_iodesc1, ARRAY_SIZE(exynos4_iodesc1));
+
 	/* initialize device information early */
 	exynos4_default_sdhci0();
 	exynos4_default_sdhci1();
 	exynos4_default_sdhci2();
 	exynos4_default_sdhci3();
 
+	s3c_adc_setname("samsung-adc-v3");
+
 	s3c_fimc_setname(0, "exynos4-fimc");
 	s3c_fimc_setname(1, "exynos4-fimc");
 	s3c_fimc_setname(2, "exynos4-fimc");
 	s3c_fimc_setname(3, "exynos4-fimc");
+
+	/* The I2C bus controllers are directly compatible with s3c2440 */
+	s3c_i2c0_setname("s3c2440-i2c");
+	s3c_i2c1_setname("s3c2440-i2c");
+	s3c_i2c2_setname("s3c2440-i2c");
+
+	s5p_fb_setname(0, "exynos4-fb");
+	s5p_hdmi_setname("exynos4-hdmi");
 }
 
 void __init exynos4_init_clocks(int xtal)
@@ -140,25 +192,39 @@ void __init exynos4_init_clocks(int xtal)
 
 	s3c24xx_register_baseclocks(xtal);
 	s5p_register_clocks(xtal);
+
+	if (soc_is_exynos4210())
+		exynos4210_register_clocks();
+	else if (soc_is_exynos4212() || soc_is_exynos4412())
+		exynos4212_register_clocks();
+
 	exynos4_register_clocks();
 	exynos4_setup_clocks();
+}
+
+static void exynos4_gic_irq_fix_base(struct irq_data *d)
+{
+	struct gic_chip_data *gic_data = irq_data_get_irq_chip_data(d);
+
+	gic_data->cpu_base = S5P_VA_GIC_CPU +
+			    (gic_bank_offset * smp_processor_id());
+
+	gic_data->dist_base = S5P_VA_GIC_DIST +
+			    (gic_bank_offset * smp_processor_id());
 }
 
 void __init exynos4_init_irq(void)
 {
 	int irq;
 
-	gic_init(0, IRQ_LOCALTIMER, S5P_VA_GIC_DIST, S5P_VA_GIC_CPU);
+	gic_bank_offset = soc_is_exynos4412() ? 0x4000 : 0x8000;
+
+	gic_init(0, IRQ_PPI(0), S5P_VA_GIC_DIST, S5P_VA_GIC_CPU);
+	gic_arch_extn.irq_eoi = exynos4_gic_irq_fix_base;
+	gic_arch_extn.irq_unmask = exynos4_gic_irq_fix_base;
+	gic_arch_extn.irq_mask = exynos4_gic_irq_fix_base;
 
 	for (irq = 0; irq < MAX_COMBINER_NR; irq++) {
-
-		/*
-		 * From SPI(0) to SPI(39) and SPI(51), SPI(53) are
-		 * connected to the interrupt combiner. These irqs
-		 * should be initialized to support cascade interrupt.
-		 */
-		if ((irq >= 40) && !(irq == 51) && !(irq == 53))
-			continue;
 
 		combiner_init(irq, (void __iomem *)S5P_VA_COMBINER(irq),
 				COMBINER_IRQ(irq, 0));
@@ -192,7 +258,11 @@ static int __init exynos4_l2x0_cache_init(void)
 {
 	/* TAG, Data Latency Control: 2cycle */
 	__raw_writel(0x110, S5P_VA_L2CC + L2X0_TAG_LATENCY_CTRL);
-	__raw_writel(0x110, S5P_VA_L2CC + L2X0_DATA_LATENCY_CTRL);
+
+	if (soc_is_exynos4210())
+		__raw_writel(0x110, S5P_VA_L2CC + L2X0_DATA_LATENCY_CTRL);
+	else if (soc_is_exynos4212() || soc_is_exynos4412())
+		__raw_writel(0x120, S5P_VA_L2CC + L2X0_DATA_LATENCY_CTRL);
 
 	/* L2X0 Prefetch Control */
 	__raw_writel(0x30000007, S5P_VA_L2CC + L2X0_PREFETCH_CTRL);
@@ -215,6 +285,9 @@ int __init exynos4_init(void)
 
 	/* set idle function */
 	pm_idle = exynos4_idle;
+
+	/* set sw_reset function */
+	s5p_reset_hook = exynos4_sw_reset;
 
 	return sysdev_register(&exynos4_sysdev);
 }
