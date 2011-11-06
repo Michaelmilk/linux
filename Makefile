@@ -297,12 +297,12 @@ else
 _all: modules
 endif
 
-	# 为srctree赋值，如果KBUILD_SRC有值的话则使用KBUILD_SRC的值
-	# 因为如果上面使用了KBUILD_OUTPUT的话，此时make是在KBUILD_OUTPUT目录中
-	# sub-make的命令中使用KBUILD_SRC记录了内核源码目录
-	# 通常情况下直接在内核源码目录中make，则直接使用CURDIR为srctree变量的值
-	#
-	# 为objtree赋值，即目标对象所在目录，KBUILD_OUTPUT指定的目录或内核源码目录
+    # 为srctree赋值，如果KBUILD_SRC有值的话则使用KBUILD_SRC的值
+    # 因为如果上面使用了KBUILD_OUTPUT的话，此时make是在KBUILD_OUTPUT目录中
+    # sub-make的命令中使用KBUILD_SRC记录了内核源码目录
+    # 通常情况下直接在内核源码目录中make，则直接使用CURDIR为srctree变量的值
+    #
+    # 为objtree赋值，即目标对象所在目录，KBUILD_OUTPUT指定的目录或内核源码目录
 
 srctree		:= $(if $(KBUILD_SRC),$(KBUILD_SRC),$(CURDIR))
 objtree		:= $(CURDIR)
@@ -837,16 +837,16 @@ ifeq ($(KBUILD_EXTMOD),)
 # To avoid any implicit rule to kick in, define an empty command
 $(KCONFIG_CONFIG) include/config/auto.conf.cmd: ;
 
-	# tinker : 修补
+    # tinker : 修补
 
 # If .config is newer than include/config/auto.conf, someone tinkered
 # with it and forgot to run make oldconfig.
 # if auto.conf.cmd is missing then we are probably in a cleaned tree so
 # we execute the config step to be sure to catch updated Kconfig files
 
-	# .config有修改，或auto.conf.cmd不存在
-	# 则会执行silentoldconfig
-	# 递归到scripts/kconfig/Makefile中的silentoldconfig目标规则，然后执行conf程序
+    # .config有修改，或auto.conf.cmd不存在
+    # 则会执行silentoldconfig
+    # 递归到scripts/kconfig/Makefile中的silentoldconfig目标规则，然后执行conf程序
 
 include/config/%.conf: $(KCONFIG_CONFIG) include/config/auto.conf.cmd
 	$(Q)$(MAKE) -f $(srctree)/Makefile silentoldconfig
