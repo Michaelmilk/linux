@@ -16,6 +16,10 @@
  * @s: the string to duplicate
  * @gfp: the GFP mask used in the kmalloc() call when allocating memory
  */
+/*
+@s	: 需要复制的源字符串
+@gfp: 内存分配标志
+*/
 char *kstrdup(const char *s, gfp_t gfp)
 {
 	size_t len;
@@ -24,10 +28,14 @@ char *kstrdup(const char *s, gfp_t gfp)
 	if (!s)
 		return NULL;
 
+	/* +1作为字符串的结束符'\0' */
 	len = strlen(s) + 1;
+	/* 分配内存空间 */
 	buf = kmalloc_track_caller(len, gfp);
+	/* 内存分配成功，复制源字符串内容 */
 	if (buf)
 		memcpy(buf, s, len);
+	/* 返回复制出的字符串空间指针 */
 	return buf;
 }
 EXPORT_SYMBOL(kstrdup);

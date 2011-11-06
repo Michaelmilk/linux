@@ -174,12 +174,21 @@ static inline void bitmap_fill(unsigned long *dst, int nbits)
 	dst[nlongs - 1] = BITMAP_LAST_WORD_MASK(nbits);
 }
 
+/*
+复制位图
+
+@dst	: 目的位图指针
+@src	: 源位图指针
+@nbits	: 位图中bit的个数
+*/
 static inline void bitmap_copy(unsigned long *dst, const unsigned long *src,
 			int nbits)
 {
+	/* @nbits在一个unsigned long内，直接进行数赋值 */
 	if (small_const_nbits(nbits))
 		*dst = *src;
 	else {
+		/* 计算承载@nbits个位使用了多少字节空间 */
 		int len = BITS_TO_LONGS(nbits) * sizeof(unsigned long);
 		memcpy(dst, src, len);
 	}

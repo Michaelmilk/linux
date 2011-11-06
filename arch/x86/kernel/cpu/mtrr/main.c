@@ -773,6 +773,10 @@ void __init mtrr_bp_init(void)
 	}
 }
 
+/*
+mtrr: Memory Type Range Register 存储区域类型寄存器
+规定了读写某段范围物理内存的策略，用于优化cpu数据传送性能
+*/
 void mtrr_ap_init(void)
 {
 	if (!use_intel() || mtrr_aps_delayed_init)

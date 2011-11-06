@@ -1798,14 +1798,19 @@ static inline void file_accessed(struct file *file)
 int sync_inode(struct inode *inode, struct writeback_control *wbc);
 int sync_inode_metadata(struct inode *inode, int wait);
 
+/* 用来描述各种特定文件系统类型，比如ext3或XFS */
 struct file_system_type {
+	/* 文件系统的名字，如:ext3 */
 	const char *name;
+	/* 文件系统类型标志 */
 	int fs_flags;
 	struct dentry *(*mount) (struct file_system_type *, int,
 		       const char *, void *);
 	void (*kill_sb) (struct super_block *);
 	struct module *owner;
+	/* 链表中下一个文件系统类型 */
 	struct file_system_type * next;
+	/* 超级块对象链表 */
 	struct list_head fs_supers;
 
 	struct lock_class_key s_lock_key;

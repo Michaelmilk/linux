@@ -223,6 +223,10 @@ static inline void map_compat_vdso(int map)
 #define vdso32_sysenter()	(boot_cpu_has(X86_FEATURE_SEP))
 #define vdso32_syscall()	(0)
 
+/*
+检查cpu是否支持SYSENTER/SYSEXIT
+支持则使能
+*/
 void enable_sep_cpu(void)
 {
 	int cpu = get_cpu();

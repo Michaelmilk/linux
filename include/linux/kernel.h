@@ -37,6 +37,9 @@
 
 #define STACK_MAGIC	0xdeadbeef
 
+/*
+将@x按照@a进行对齐
+*/
 #define ALIGN(x, a)		__ALIGN_KERNEL((x), (a))
 #define __ALIGN_MASK(x, mask)	__ALIGN_KERNEL_MASK((x), (mask))
 #define PTR_ALIGN(p, a)		((typeof(p))ALIGN((unsigned long)(p), (a)))

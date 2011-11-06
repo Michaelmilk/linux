@@ -89,6 +89,11 @@ static inline unsigned long long native_read_msr_safe(unsigned int msr,
 	return EAX_EDX_VAL(val, low, high);
 }
 
+/*
+msr: model specific register 模式指定寄存器
+
+wrmsr将寄存器edx:eax的内容写到由ecx寄存器指定的64位msr中
+*/
 static inline void native_write_msr(unsigned int msr,
 				    unsigned low, unsigned high)
 {

@@ -43,6 +43,12 @@ EXPORT_SYMBOL(down_read_trylock);
 /*
  * lock for writing
  */
+/*
+P原语操作
+1. S减1
+2. 若S减1后仍大于或等于0，则进程继续执行
+3. 若S减1后小于0，则该进程被阻塞后进入与该信号相对应的队列中，然后转进程调度
+*/
 void __sched down_write(struct rw_semaphore *sem)
 {
 	might_sleep();
@@ -82,6 +88,13 @@ EXPORT_SYMBOL(up_read);
 /*
  * release a write lock
  */
+/*
+V原语操作
+1. S加1
+2. 若相加结果大于0，则进程继续执行
+3. 若相加结果小于或等于0，则从该信号的等待队列中唤醒一等待进程，
+   然后再返回原进程继续执行或转进程调度
+*/
 void up_write(struct rw_semaphore *sem)
 {
 	rwsem_release(&sem->dep_map, 1, _RET_IP_);

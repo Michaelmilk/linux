@@ -46,8 +46,11 @@ struct kmem_cache_cpu {
 };
 
 struct kmem_cache_node {
+	/* 链表锁 */
 	spinlock_t list_lock;	/* Protect partial list and nr_partial */
+	/* 链表长度 */
 	unsigned long nr_partial;
+	/* page结构链表 */
 	struct list_head partial;
 #ifdef CONFIG_SLUB_DEBUG
 	atomic_long_t nr_slabs;
@@ -61,6 +64,10 @@ struct kmem_cache_node {
  * contains both the order and the number of objects that a slab of the
  * given order would contain.
  */
+/*
+分配2^order个连续页面
+order的值即@x
+*/
 struct kmem_cache_order_objects {
 	unsigned long x;
 };
@@ -68,22 +75,33 @@ struct kmem_cache_order_objects {
 /*
  * Slab cache management.
  */
+/*
+对象池管理结构
+每一个kmem_cache实例管理一种类型的对象
+*/
 struct kmem_cache {
+	/* 每cpu变量 */
 	struct kmem_cache_cpu __percpu *cpu_slab;
 	/* Used for retriving partial slabs etc */
 	unsigned long flags;
 	unsigned long min_partial;
+	/* 对象对齐后占用的空间大小，包含元数据 */
 	int size;		/* The size of an object including meta data */
+	/* 对象本身的大小 */
 	int objsize;		/* The size of an object without meta data */
+	/* 指针在对象空间中的偏移 */
 	int offset;		/* Free pointer offset. */
+	/* 首选的page分配策略 */
 	struct kmem_cache_order_objects oo;
 
 	/* Allocation and freeing of slabs */
 	struct kmem_cache_order_objects max;
 	struct kmem_cache_order_objects min;
 	gfp_t allocflags;	/* gfp flags to use on each alloc */
+	/* 引用计数 */
 	int refcount;		/* Refcount for slab cache destroy */
 	void (*ctor)(void *);
+	/* objsize按照指针字节大小对齐后的值 */
 	int inuse;		/* Offset to metadata */
 	int align;		/* Alignment */
 	int reserved;		/* Reserved bytes at the end of slabs */
@@ -99,6 +117,8 @@ struct kmem_cache {
 	 */
 	int remote_node_defrag_ratio;
 #endif
+	/* 管理对应节点下的内存
+	   在init_kmem_cache_nodes()中分配及初始化 */
 	struct kmem_cache_node *node[MAX_NUMNODES];
 };
 

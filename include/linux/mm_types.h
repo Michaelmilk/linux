@@ -63,7 +63,9 @@ struct page {
 					 * & limit reverse map searches.
 					 */
 		struct {		/* SLUB */
+			/* 已经使用的对象个数 */
 			u16 inuse;
+			/* page中分割的对象个数 */
 			u16 objects;
 		};
 	};

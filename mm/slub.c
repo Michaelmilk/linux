@@ -185,7 +185,14 @@ static enum {
 } slab_state = DOWN;
 
 /* A list of all slab caches on the system */
+/*
+通过读写信号量控制对链表slab_caches的并发操作
+*/
 static DECLARE_RWSEM(slub_lock);
+/*
+所有slab_caches的链表头节点
+结构struct kmem_cache的实例通过成员变量list链入slab_caches
+*/
 static LIST_HEAD(slab_caches);
 
 /*
@@ -2170,6 +2177,10 @@ static int slub_min_objects;
  * Merge control. If this is set then no merging of slab caches will occur.
  * (Could be removed. This was introduced to pacify the merge skeptics.)
  */
+/*
+pacify: 使平静
+skeptic: 怀疑论者
+*/
 static int slub_nomerge;
 
 /*
@@ -2279,6 +2290,9 @@ static inline int calculate_order(int size, int reserved)
 /*
  * Figure out what the alignment of the objects will be.
  */
+/*
+计算cache中对象的对齐值
+*/
 static unsigned long calculate_alignment(unsigned long flags,
 		unsigned long align, unsigned long size)
 {
@@ -2289,6 +2303,7 @@ static unsigned long calculate_alignment(unsigned long flags,
 	 * The hardware cache alignment cannot override the specified
 	 * alignment though. If that is greater then use it.
 	 */
+	/* 按硬件缓存线大小对齐 */
 	if (flags & SLAB_HWCACHE_ALIGN) {
 		unsigned long ralign = cache_line_size();
 		while (size <= ralign / 2)
@@ -2315,6 +2330,9 @@ init_kmem_cache_node(struct kmem_cache_node *n, struct kmem_cache *s)
 #endif
 }
 
+/*
+分配cpu_slab字段变量空间并初始化
+*/
 static inline int alloc_kmem_cache_cpus(struct kmem_cache *s)
 {
 	BUILD_BUG_ON(PERCPU_DYNAMIC_EARLY_SIZE <
@@ -2404,6 +2422,7 @@ static int init_kmem_cache_nodes(struct kmem_cache *s)
 {
 	int node;
 
+	/* 遍历含有normal memory的节点 */
 	for_each_node_state(node, N_NORMAL_MEMORY) {
 		struct kmem_cache_node *n;
 
@@ -2438,6 +2457,10 @@ static void set_min_partial(struct kmem_cache *s, unsigned long min)
  * calculate_sizes() determines the order and the distribution of data within
  * a slab object.
  */
+/*
+计算页面分配的指数
+计算数据在kmem_cache实例中的分布位置
+*/
 static int calculate_sizes(struct kmem_cache *s, int forced_order)
 {
 	unsigned long flags = s->flags;
@@ -2450,6 +2473,7 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 	 * place the free pointer at word boundaries and this determines
 	 * the possible location of the free pointer.
 	 */
+	/* 按指针字节大小对齐 */
 	size = ALIGN(size, sizeof(void *));
 
 #ifdef CONFIG_SLUB_DEBUG
@@ -2558,6 +2582,14 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 
 }
 
+/*
+@s		: 结构kmem_cache实例空间指针
+@name	: 名称空间指针
+@size	: 对象大小
+@align	: 对齐
+@flags	: 控制标志
+@ctor	: 构造函数
+*/
 static int kmem_cache_open(struct kmem_cache *s,
 		const char *name, size_t size,
 		size_t align, unsigned long flags,
@@ -2571,6 +2603,7 @@ static int kmem_cache_open(struct kmem_cache *s,
 	s->flags = kmem_cache_flags(size, flags, name, ctor);
 	s->reserved = 0;
 
+	/* 对象由RCU控制，则预留RCU的控制结构空间 */
 	if (need_reserve_slab_rcu && (s->flags & SLAB_DESTROY_BY_RCU))
 		s->reserved = sizeof(struct rcu_head);
 
@@ -3355,23 +3388,33 @@ static int slab_unmergeable(struct kmem_cache *s)
 	return 0;
 }
 
+/*
+在已经存在的缓存中寻找可以与本次请求合并的cache
+即使用同一个kmem_cache
+*/
 static struct kmem_cache *find_mergeable(size_t size,
 		size_t align, unsigned long flags, const char *name,
 		void (*ctor)(void *))
 {
 	struct kmem_cache *s;
 
+	/* 命令行使用了slub_nomerge配置参数
+	   或者标志中使用了SLUB_NEVER_MERGE则不进行合并 */
 	if (slub_nomerge || (flags & SLUB_NEVER_MERGE))
 		return NULL;
 
+	/* 如果设置了构造函数，则返回
+	   因为本次缓存请求适用的构造函数与已经存在的缓存很难使用相同的构造函数 */
 	if (ctor)
 		return NULL;
 
+	/* 大小至少要按指针对齐 */
 	size = ALIGN(size, sizeof(void *));
 	align = calculate_alignment(flags, align, size);
 	size = ALIGN(size, align);
 	flags = kmem_cache_flags(size, flags, name, NULL);
 
+	/* 遍历slab_caches链表 */
 	list_for_each_entry(s, &slab_caches, list) {
 		if (slab_unmergeable(s))
 			continue;
@@ -3391,22 +3434,35 @@ static struct kmem_cache *find_mergeable(size_t size,
 		if (s->size - size >= sizeof(void *))
 			continue;
 
+		/* 返回可以合并使用的缓存项 */
 		return s;
 	}
 	return NULL;
 }
 
+/*
+创建一个struct kmem_cache实例
+
+@name	: cache的名称
+@size	: 此cache中对象的大小
+@align	: 对象的对齐
+@flags	: 控制标志
+@ctor	: 可选的构造函数
+*/
 struct kmem_cache *kmem_cache_create(const char *name, size_t size,
 		size_t align, unsigned long flags, void (*ctor)(void *))
 {
 	struct kmem_cache *s;
 	char *n;
 
+	/* cache必须要有一个名字 */
 	if (WARN_ON(!name))
 		return NULL;
 
+	/* 获取信号量 */
 	down_write(&slub_lock);
 	s = find_mergeable(size, align, flags, name, ctor);
+	/* 如果有kmem_cache可以合并使用 */
 	if (s) {
 		s->refcount++;
 		/*
@@ -3420,7 +3476,9 @@ struct kmem_cache *kmem_cache_create(const char *name, size_t size,
 			s->refcount--;
 			goto err;
 		}
+		/* 增加信号量，释放写锁 */
 		up_write(&slub_lock);
+		/* 返回kmem_cache指针 */
 		return s;
 	}
 
@@ -3428,10 +3486,13 @@ struct kmem_cache *kmem_cache_create(const char *name, size_t size,
 	if (!n)
 		goto err;
 
+	/* 分配结构struct kmem_cache的实例空间 */
 	s = kmalloc(kmem_size, GFP_KERNEL);
+	/* struct kmem_cache实例空间分配成功 */
 	if (s) {
 		if (kmem_cache_open(s, n,
 				size, align, flags, ctor)) {
+			/* 新的实例加入slab_caches链表 */
 			list_add(&s->list, &slab_caches);
 			if (sysfs_slab_add(s)) {
 				list_del(&s->list);
@@ -3439,19 +3500,23 @@ struct kmem_cache *kmem_cache_create(const char *name, size_t size,
 				kfree(s);
 				goto err;
 			}
+			/* 增加信号量，释放写锁 */
 			up_write(&slub_lock);
+			/* 返回创建的kmem_cache实例指针 */
 			return s;
 		}
 		kfree(n);
 		kfree(s);
 	}
 err:
+	/* 增加信号量，释放写锁 */
 	up_write(&slub_lock);
 
 	if (flags & SLAB_PANIC)
 		panic("Cannot create slabcache %s\n", name);
 	else
 		s = NULL;
+	/* 返回NULL */
 	return s;
 }
 EXPORT_SYMBOL(kmem_cache_create);
@@ -4662,6 +4727,9 @@ static char *create_unique_id(struct kmem_cache *s)
 	return name;
 }
 
+/*
+加入对象管理模型
+*/
 static int sysfs_slab_add(struct kmem_cache *s)
 {
 	int err;
