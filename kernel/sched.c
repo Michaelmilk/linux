@@ -94,9 +94,16 @@
 /*
 将nice值 [ -20 ... 0 ... 19 ]
 与静态优先级 [ MAX_RT_PRIO..MAX_PRIO-1 ] 进行转换
+即 [ 100 ... 139 ]
 */
 #define NICE_TO_PRIO(nice)	(MAX_RT_PRIO + (nice) + 20)
+/*
+将静态优先级转换为nice值
+*/
 #define PRIO_TO_NICE(prio)	((prio) - MAX_RT_PRIO - 20)
+/*
+返回进程@p的nice值，范围在 [ -20 ... 0 ... 19 ]
+*/
 #define TASK_NICE(p)		PRIO_TO_NICE((p)->static_prio)
 
 /*
@@ -104,15 +111,27 @@
  * can work with better when scaling various scheduler parameters,
  * it's a [ 0 ... 39 ] range.
  */
+/*
+优先级转换到 [ 0 ... 39 ] 这个范围
+对应nice的 [ -20 ... 19 ]
+*/
 #define USER_PRIO(p)		((p)-MAX_RT_PRIO)
+/* 根据进程的静态优先级计算，返回 [ 0 ... 39 ] */
 #define TASK_USER_PRIO(p)	USER_PRIO((p)->static_prio)
+/* 40 */
 #define MAX_USER_PRIO		(USER_PRIO(MAX_PRIO))
 
 /*
  * Helpers for converting nanosecond timing to jiffy resolution
  */
+/*
+(NSEC_PER_SEC / HZ)计算一个jiffy有多少纳秒
+
+@TIME是一个较小的间隔时间，将其转换为jiffy数
+*/
 #define NS_TO_JIFFIES(TIME)	((unsigned long)(TIME) / (NSEC_PER_SEC / HZ))
 
+/* 进程nice为0的负载权重1024，与数组prio_to_weight[]中对应的1024一致 */
 #define NICE_0_LOAD		SCHED_LOAD_SCALE
 #define NICE_0_SHIFT		SCHED_LOAD_SHIFT
 
@@ -122,6 +141,9 @@
  * default timeslice is 100 msecs (used only for SCHED_RR tasks).
  * Timeslices get refilled after they expire.
  */
+/*
+计算100毫秒对应的jiffy数
+*/
 #define DEF_TIMESLICE		(100 * HZ / 1000)
 
 /*
@@ -129,6 +151,9 @@
  */
 #define RUNTIME_INF	((u64)~0ULL)
 
+/*
+判断@policy是否为实时调度策略
+*/
 static inline int rt_policy(int policy)
 {
 	if (policy == SCHED_FIFO || policy == SCHED_RR)
@@ -136,6 +161,9 @@ static inline int rt_policy(int policy)
 	return 0;
 }
 
+/*
+判断进程@p使用的是否为实时调度策略
+*/
 static inline int task_has_rt_policy(struct task_struct *p)
 {
 	return rt_policy(p->policy);
@@ -144,8 +172,15 @@ static inline int task_has_rt_policy(struct task_struct *p)
 /*
  * This is the priority-queue data structure of the RT scheduling class:
  */
+/*
+实时调度类的优先级队列
+
+delimiter: 分隔符
+*/
 struct rt_prio_array {
+	/* 位图表示链表是否有节点 */
 	DECLARE_BITMAP(bitmap, MAX_RT_PRIO+1); /* include 1 bit for delimiter */
+	/* 100个链表头节点 */
 	struct list_head queue[MAX_RT_PRIO];
 };
 
@@ -341,12 +376,15 @@ struct cfs_rq {
 	unsigned long nr_running, h_nr_running;
 
 	u64 exec_clock;
+	/* 单调递增 */
 	u64 min_vruntime;
 #ifndef CONFIG_64BIT
 	u64 min_vruntime_copy;
 #endif
 
+	/* 红黑树的根节点，用于管理所有运行进程 */
 	struct rb_root tasks_timeline;
+	/* 指向红黑树最左面的节点，即最需要被调度的进程 */
 	struct rb_node *rb_leftmost;
 
 	struct list_head tasks;
@@ -356,6 +394,7 @@ struct cfs_rq {
 	 * 'curr' points to currently running entity on this cfs_rq.
 	 * It is set to NULL otherwise (i.e when none are currently running).
 	 */
+	/* curr: 指向当前执行进程内嵌的调度实体 */
 	struct sched_entity *curr, *next, *last, *skip;
 
 #ifdef	CONFIG_SCHED_DEBUG
@@ -596,17 +635,25 @@ static struct root_domain def_root_domain;
  * (such as the load balancing or the thread migration code), lock
  * acquire operations must be ordered by ascending &runqueue.
  */
+/*
+运行队列，也叫就绪队列
+*/
 struct rq {
 	/* runqueue lock: */
+	/* 控制对rq实例的并发操作 */
 	raw_spinlock_t lock;
 
 	/*
 	 * nr_running and cpu_load should be in the same cacheline because
 	 * remote CPUs use both these fields when doing load calculation.
 	 */
+	/* 运行队列中处于TASK_RUNNING状态的进程数目
+	   为0则说明运行队列中只有idle进程 */
 	unsigned long nr_running;
 	#define CPU_LOAD_IDX_MAX 5
+	/* 跟踪该运行队列的负载状态 */
 	unsigned long cpu_load[CPU_LOAD_IDX_MAX];
+	/* 记录上次负载更新时的jiffies值 */
 	unsigned long last_load_update_tick;
 #ifdef CONFIG_NO_HZ
 	u64 nohz_stamp;
@@ -616,10 +663,13 @@ struct rq {
 
 	/* capture load from *all* tasks on this cpu: */
 	struct load_weight load;
+	/* 负载更新的次数统计 */
 	unsigned long nr_load_updates;
 	u64 nr_switches;
 
+	/* 内嵌的完全公平调度器运行队列 */
 	struct cfs_rq cfs;
+	/* 内嵌的实时调度器运行队列 */
 	struct rt_rq rt;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
@@ -638,10 +688,14 @@ struct rq {
 	 */
 	unsigned long nr_uninterruptible;
 
+	/* curr: 指向当前的运行进程
+	   idle: 指向idle进程
+	   stop: */
 	struct task_struct *curr, *idle, *stop;
 	unsigned long next_balance;
 	struct mm_struct *prev_mm;
 
+	/* 运行队列时间戳，系统启动以来的纳秒数 */
 	u64 clock;
 	u64 clock_task;
 
@@ -653,6 +707,7 @@ struct rq {
 
 	unsigned long cpu_power;
 
+	/* 1表示当前运行队列空闲，当前cpu可用于负载均衡 */
 	unsigned char idle_balance;
 	/* For active balancing */
 	int post_schedule;
@@ -660,6 +715,8 @@ struct rq {
 	int push_cpu;
 	struct cpu_stop_work active_balance_work;
 	/* cpu of this runqueue: */
+	/* 该rq所对应的cpu
+	   在函数sched_init()中初始化赋值 */
 	int cpu;
 	int online;
 
@@ -715,11 +772,17 @@ struct rq {
 #endif
 };
 
+/*
+每cpu一个运行队列struct rq结构实例
+*/
 static DEFINE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues);
 
 
 static void check_preempt_curr(struct rq *rq, struct task_struct *p, int flags);
 
+/*
+取得@rq所属的cpu
+*/
 static inline int cpu_of(struct rq *rq)
 {
 #ifdef CONFIG_SMP
@@ -743,8 +806,14 @@ static inline int cpu_of(struct rq *rq)
 #define for_each_domain(cpu, __sd) \
 	for (__sd = rcu_dereference_check_sched_domain(cpu_rq(cpu)->sd); __sd; __sd = __sd->parent)
 
+/*
+取得每cpu变量runqueues中@cpu对应的运行队列实例的指针
+*/
 #define cpu_rq(cpu)		(&per_cpu(runqueues, (cpu)))
 #define this_rq()		(&__get_cpu_var(runqueues))
+/*
+取得进程@p所在cpu的运行队列指针
+*/
 #define task_rq(p)		cpu_rq(task_cpu(p))
 #define cpu_curr(cpu)		(cpu_rq(cpu)->curr)
 #define raw_rq()		(&__raw_get_cpu_var(runqueues))
@@ -1083,6 +1152,10 @@ static inline void finish_lock_switch(struct rq *rq, struct task_struct *prev)
 /*
  * __task_rq_lock - lock the rq @p resides on.
  */
+/*
+取得进程@p所在运行队列的自旋锁
+以便控制对rq的并发操作
+*/
 static inline struct rq *__task_rq_lock(struct task_struct *p)
 	__acquires(rq->lock)
 {
@@ -1567,6 +1640,14 @@ static inline void update_load_set(struct load_weight *lw, unsigned long w)
  * If a task goes up by ~10% and another task goes down by ~10% then
  * the relative distance between them is ~25%.)
  */
+/*
+优先级权重对应nice值 [ -20 ... 0 ... 19 ]
+
+10%的效应是相对和累加的
+nice值增加1，则减少其10%的cpu利用率，减少1，则增加其10%的cpu利用率
+为了达到这样的效果，使用了乘数1.25
+
+*/
 static const int prio_to_weight[40] = {
  /* -20 */     88761,     71755,     56483,     46273,     36291,
  /* -15 */     29154,     23254,     18705,     14949,     11916,
@@ -1908,6 +1989,7 @@ static inline void __set_task_cpu(struct task_struct *p, unsigned int cpu)
 	 * per-task data have been completed by this moment.
 	 */
 	smp_wmb();
+	/* 记录进程所属cpu */
 	task_thread_info(p)->cpu = cpu;
 #endif
 }
@@ -1915,6 +1997,11 @@ static inline void __set_task_cpu(struct task_struct *p, unsigned int cpu)
 static const struct sched_class rt_sched_class;
 
 #define sched_class_highest (&stop_sched_class)
+/*
+各个调度器类的实例在定义的时候初始化由next域串联
+顺序为:
+stop_sched_class => rt_sched_class => fair_sched_class => idle_sched_class => NULL
+*/
 #define for_each_class(class) \
    for (class = sched_class_highest; class; class = class->next)
 
@@ -1932,6 +2019,7 @@ static void dec_nr_running(struct rq *rq)
 
 static void set_load_weight(struct task_struct *p)
 {
+	/* 计算nice值 */
 	int prio = p->static_prio - MAX_RT_PRIO;
 	struct load_weight *load = &p->se.load;
 
@@ -1965,6 +2053,14 @@ static void dequeue_task(struct rq *rq, struct task_struct *p, int flags)
 /*
  * activate_task - move a task to the runqueue.
  */
+/*
+激活进程
+将进程@p加入到运行队列@rq中
+
+@rq		: 运行队列
+@p		: 待激活进程
+@flags	:
+*/
 static void activate_task(struct rq *rq, struct task_struct *p, int flags)
 {
 	if (task_contributes_to_load(p))
@@ -1976,6 +2072,9 @@ static void activate_task(struct rq *rq, struct task_struct *p, int flags)
 /*
  * deactivate_task - remove a task from the runqueue.
  */
+/*
+将进程@p从运行队列@rq中移除
+*/
 static void deactivate_task(struct rq *rq, struct task_struct *p, int flags)
 {
 	if (task_contributes_to_load(p))
@@ -2255,13 +2354,21 @@ static inline int __normal_prio(struct task_struct *p)
  * setprio syscalls, and whenever the interactivity
  * estimator recalculates.
  */
+/*
+计算普通优先级，也就是还未考虑实时性的优先级
+交互式进程会相应提升
+fork，setprio系统调用，交互式进程评估都会改变此值
+*/
 static inline int normal_prio(struct task_struct *p)
 {
 	int prio;
 
+	/* 进程@p使用的是实时调度策略，即是实时进程
+	   计算返回其实时优先级 */
 	if (task_has_rt_policy(p))
 		prio = MAX_RT_PRIO-1 - p->rt_priority;
 	else
+	/* 否则返回其静态优先级 */
 		prio = __normal_prio(p);
 	return prio;
 }
@@ -2273,14 +2380,24 @@ static inline int normal_prio(struct task_struct *p)
  * interactivity modifiers. Will be RT if the task got
  * RT-boosted. If not then it returns p->normal_prio.
  */
+/*
+计算进程@p的动态优先级，也就是由调度器参考的优先级
+实时进程和交互式进程可能会相应的提高其优先级
+
+普通进程的话则返回普通优先级
+*/
 static int effective_prio(struct task_struct *p)
 {
+	/* 计算其普通优先级 */
 	p->normal_prio = normal_prio(p);
 	/*
 	 * If we are RT tasks or we were boosted to RT priority,
 	 * keep the priority unchanged. Otherwise, update priority
 	 * to the normal priority:
 	 */
+	/* 如果进程@p是实时进程，或者已经提升至实时进程优先级，
+	   则不改变其值，即返回原动态优先级
+	   否则返回普通优先级 */
 	if (!rt_prio(p->prio))
 		return p->normal_prio;
 	return p->prio;
@@ -2393,6 +2510,8 @@ void set_task_cpu(struct task_struct *p, unsigned int new_cpu)
 
 	trace_sched_migrate_task(p, new_cpu);
 
+	/* 如果@p进程所在的cpu与参数@new_cpu不一致
+	   即进程@p从一个cpu迁移到了另一个cpu上运行 */
 	if (task_cpu(p) != new_cpu) {
 		p->se.nr_migrations++;
 		perf_sw_event(PERF_COUNT_SW_CPU_MIGRATIONS, 1, NULL, 0);
@@ -2951,6 +3070,9 @@ int wake_up_state(struct task_struct *p, unsigned int state)
  *
  * __sched_fork() is basic setup used by init_idle() too:
  */
+/*
+初始化由当前current进程fork出来的进程@p与调度相关的字段
+*/
 static void __sched_fork(struct task_struct *p)
 {
 	p->on_rq			= 0;
@@ -3000,13 +3122,16 @@ void sched_fork(struct task_struct *p)
 	 */
 	/* 按照fork的是否请求，恢复为默认的优先级/策略 */
 	if (unlikely(p->sched_reset_on_fork)) {
+		/* 如果@p原来继承的是实时进程，则将其设置为普通进程 */
 		if (task_has_rt_policy(p)) {
 			p->policy = SCHED_NORMAL;
 			p->static_prio = NICE_TO_PRIO(0);
 			p->rt_priority = 0;
 		} else if (PRIO_TO_NICE(p->static_prio) < 0)
+		/* 静态优先级小于0，则将其置为nice 0对应的静态优先级 */
 			p->static_prio = NICE_TO_PRIO(0);
 
+		/* 初始化为静态优先级 */
 		p->prio = p->normal_prio = __normal_prio(p);
 		set_load_weight(p);
 
@@ -3021,6 +3146,8 @@ void sched_fork(struct task_struct *p)
 	if (!rt_prio(p->prio))
 		p->sched_class = &fair_sched_class;
 
+	/* 公平调度类fair_sched_class中有task_fork方法
+	   调用task_fork_fair()函数 */
 	if (p->sched_class->task_fork)
 		p->sched_class->task_fork(p);
 
@@ -3061,6 +3188,13 @@ void sched_fork(struct task_struct *p)
  * that must be done for every newly created context, then puts the task
  * on the runqueue and wakes it.
  */
+/*
+首次唤醒新创建的进程
+
+该函数会初始化一些与调度器相关的统计数据
+这是每一个新创建的进程上下文时必须要做的
+然后将进程加入运行队列并唤醒它
+*/
 void wake_up_new_task(struct task_struct *p)
 {
 	unsigned long flags;
@@ -3662,6 +3796,7 @@ static void calc_load_account_active(struct rq *this_rq)
 	if (delta)
 		atomic_long_add(delta, &calc_load_tasks);
 
+	/* 更新间隔为5秒 */
 	this_rq->calc_load_update += LOAD_FREQ;
 }
 
@@ -3708,11 +3843,15 @@ static const unsigned char
  * would be when CPU is idle and so we just decay the old load without
  * adding any new load.
  */
+/*
+decay: 衰退
+*/
 static unsigned long
 decay_load_missed(unsigned long load, unsigned long missed_updates, int idx)
 {
 	int j = 0;
 
+	/* 没有丢失jiffy，即每个jiffy都更新了负载 */
 	if (!missed_updates)
 		return load;
 
@@ -3747,10 +3886,14 @@ static void update_cpu_load(struct rq *this_rq)
 	this_rq->nr_load_updates++;
 
 	/* Avoid repeated calls on same jiffy, when moving in and out of idle */
+	/* 避免在同一个jiffy内重复计算负载 */
 	if (curr_jiffies == this_rq->last_load_update_tick)
 		return;
 
+	/* 正常情况应该是每个jiffy计算一次负载
+	   在动态时钟时计算错过的次数，以便进行修正 */
 	pending_updates = curr_jiffies - this_rq->last_load_update_tick;
+	/* 记录本次负载计算的jiffy值 */
 	this_rq->last_load_update_tick = curr_jiffies;
 
 	/* Update our load: */
@@ -4244,18 +4387,34 @@ void thread_group_times(struct task_struct *p, cputime_t *ut, cputime_t *st)
  * This function gets called by the timer code, with HZ frequency.
  * We call it with interrupts disabled.
  */
+/*
+该函数由定时器代码以HZ频率调用
+调用此函数时关中断
+*/
 void scheduler_tick(void)
 {
+	/* 取当前代码所处的cpu */
 	int cpu = smp_processor_id();
+	/* 取对应cpu上的运行队列指针 */
 	struct rq *rq = cpu_rq(cpu);
+	/* 运行队列中当前的运行进程 */
 	struct task_struct *curr = rq->curr;
 
 	sched_clock_tick();
 
+	/* 锁当前运行队列 */
 	raw_spin_lock(&rq->lock);
+	/* 更新当前rq实例的时间戳 */
 	update_rq_clock(rq);
+	/* 更新当前cpu运行队列负载 */
 	update_cpu_load_active(rq);
+	/* 根据进程所使用不同的调度类，调用对应的task_tick函数
+	   task_tick_rt()
+	   task_tick_fair()
+	   task_tick_idle()
+	   task_tick_stop() */
 	curr->sched_class->task_tick(rq, curr, 0);
+	/* 解锁 */
 	raw_spin_unlock(&rq->lock);
 
 	perf_event_task_tick();
@@ -5169,21 +5328,30 @@ EXPORT_SYMBOL(task_nice);
  * idle_cpu - is a given cpu idle currently?
  * @cpu: the processor in question.
  */
+/*
+判断@cpu是否空闲
+*/
 int idle_cpu(int cpu)
 {
+	/* 当前@cpu的运行队列 */
 	struct rq *rq = cpu_rq(cpu);
 
+	/* 正在运行的进程不是空闲进程 */
 	if (rq->curr != rq->idle)
 		return 0;
 
+	/* 运行队列中有运行进程 */
 	if (rq->nr_running)
 		return 0;
 
 #ifdef CONFIG_SMP
+	/* 唤醒链表非空 */
 	if (!llist_empty(&rq->wake_list))
 		return 0;
 #endif
 
+	/* 上面条件都不满足
+	   则@cpu为空闲cpu */
 	return 1;
 }
 

@@ -37,12 +37,19 @@
 #include <linux/init_task.h>
 #include <linux/syscalls.h>
 
+/* 根据@nr和@ns计算哈希值 */
 #define pid_hashfn(nr, ns)	\
 	hash_long((unsigned long)nr + (unsigned long)ns, pidhash_shift)
+/*
+头节点空间由pidhash_init()分配空间初始化
+所有的struct upid实例都会链入这个哈希表中
+*/
 static struct hlist_head *pid_hash;
+/* 头节点数量的log2 */
 static unsigned int pidhash_shift = 4;
 struct pid init_struct_pid = INIT_STRUCT_PID;
 
+/* 进程的最大数量 */
 int pid_max = PID_MAX_DEFAULT;
 
 #define RESERVED_PIDS		300
@@ -50,7 +57,9 @@ int pid_max = PID_MAX_DEFAULT;
 int pid_max_min = RESERVED_PIDS + 1;
 int pid_max_max = PID_MAX_LIMIT;
 
+/* 一个页中含有的bit位数 */
 #define BITS_PER_PAGE		(PAGE_SIZE*8)
+/* bit位数为2的n次方，减1成为掩码 */
 #define BITS_PER_PAGE_MASK	(BITS_PER_PAGE-1)
 
 static inline int mk_pid(struct pid_namespace *pid_ns,
@@ -164,7 +173,9 @@ static int alloc_pidmap(struct pid_namespace *pid_ns)
 	int i, offset, max_scan, pid, last = pid_ns->last_pid;
 	struct pidmap *map;
 
+	/* 该命名空间下前一次的pid值+1得到当前可用的pid */
 	pid = last + 1;
+	/* 如果达到最大值了，则回绕，从预留的值后面开始 */
 	if (pid >= pid_max)
 		pid = RESERVED_PIDS;
 	offset = pid & BITS_PER_PAGE_MASK;
@@ -192,6 +203,7 @@ static int alloc_pidmap(struct pid_namespace *pid_ns)
 			if (unlikely(!map->page))
 				break;
 		}
+		/* 读可用pid的数量 */
 		if (likely(atomic_read(&map->nr_free))) {
 			do {
 				if (!test_and_set_bit(offset, map->page)) {
@@ -285,6 +297,7 @@ struct pid *alloc_pid(struct pid_namespace *ns)
 	struct pid_namespace *tmp;
 	struct upid *upid;
 
+	/* 从命名空间缓存中分配一个pid实例 */
 	pid = kmem_cache_alloc(ns->pid_cachep, GFP_KERNEL);
 	if (!pid)
 		goto out;
@@ -349,13 +362,19 @@ EXPORT_SYMBOL_GPL(find_vpid);
 /*
  * attach_pid() must be called with the tasklist_lock write-held.
  */
+/*
+建立@task与@pid的相互联系
+*/
 void attach_pid(struct task_struct *task, enum pid_type type,
 		struct pid *pid)
 {
 	struct pid_link *link;
 
+	/* 进程@task内嵌的pid_link */
 	link = &task->pids[type];
+	/* pid_link的pid字段指针记录进程对应的pid实例 */
 	link->pid = pid;
+	/* 通过pid_link的node字段链入pid的哈希表 */
 	hlist_add_head_rcu(&link->node, &pid->tasks[type]);
 }
 
@@ -551,8 +570,10 @@ void __init pidhash_init(void)
 	pid_hash = alloc_large_system_hash("PID", sizeof(*pid_hash), 0, 18,
 					   HASH_EARLY | HASH_SMALL,
 					   &pidhash_shift, NULL, 4096);
+	/* pidhash_shift保存了哈希表大小的幂次 */
 	pidhash_size = 1 << pidhash_shift;
 
+	/* 将哈希表头节点指针first初始化为NULL */
 	for (i = 0; i < pidhash_size; i++)
 		INIT_HLIST_HEAD(&pid_hash[i]);
 }

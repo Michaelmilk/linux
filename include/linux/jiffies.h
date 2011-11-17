@@ -106,10 +106,24 @@ static inline u64 get_jiffies_64(void)
  * good compiler would generate better code (and a really good compiler
  * wouldn't care). Gcc is currently neither.
  */
+/*
+    ----------------------------------------- <= timeline
+	^			^			^			^
+	0			b			a			...
+
+				time_after(a, b)
+*/
 #define time_after(a,b)		\
 	(typecheck(unsigned long, a) && \
 	 typecheck(unsigned long, b) && \
 	 ((long)(b) - (long)(a) < 0))
+/*
+    ----------------------------------------- <= timeline
+	^			^			^			^
+	0			a			b			...
+
+				time_before(a, b)
+*/
 #define time_before(a,b)	time_after(b,a)
 
 #define time_after_eq(a,b)	\

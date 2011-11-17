@@ -1319,6 +1319,11 @@ unsigned long get_next_timer_interrupt(unsigned long now)
  * Called from the timer interrupt handler to charge one tick to the current
  * process.  user_tick is 1 if the tick is user time, 0 for system.
  */
+/*
+定时器中断处理函数中调用
+
+@user_tick : 定时器中断到来时，是否正处于用户态
+*/
 void update_process_times(int user_tick)
 {
 	struct task_struct *p = current;
@@ -1333,6 +1338,7 @@ void update_process_times(int user_tick)
 	if (in_irq())
 		irq_work_run();
 #endif
+	/* 进程调度 */
 	scheduler_tick();
 	run_posix_cpu_timers(p);
 }

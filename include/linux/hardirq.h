@@ -29,10 +29,18 @@
  * HARDIRQ_MASK: 0x03ff0000
  *     NMI_MASK: 0x04000000
  */
+/*
+硬中断和软中断计数器保存在抢占计数器字段preempt_count中
+*/
+
+/* 进程抢占占8个bit，0-7 */
 #define PREEMPT_BITS	8
+/* 软中断占8个bit，8-15 */
 #define SOFTIRQ_BITS	8
+/* 不可屏蔽中断占1个bit，26 */
 #define NMI_BITS	1
 
+/* 硬中断留了10个bit，16-25 */
 #define MAX_HARDIRQ_BITS 10
 
 #ifndef HARDIRQ_BITS
@@ -50,9 +58,13 @@
 
 #define __IRQ_MASK(x)	((1UL << (x))-1)
 
+/* PREEMPT_MASK: 0x000000ff */
 #define PREEMPT_MASK	(__IRQ_MASK(PREEMPT_BITS) << PREEMPT_SHIFT)
+/* SOFTIRQ_MASK: 0x0000ff00 */
 #define SOFTIRQ_MASK	(__IRQ_MASK(SOFTIRQ_BITS) << SOFTIRQ_SHIFT)
+/* HARDIRQ_MASK: 0x03ff0000 */
 #define HARDIRQ_MASK	(__IRQ_MASK(HARDIRQ_BITS) << HARDIRQ_SHIFT)
+/*     NMI_MASK: 0x04000000 */
 #define NMI_MASK	(__IRQ_MASK(NMI_BITS)     << NMI_SHIFT)
 
 #define PREEMPT_OFFSET	(1UL << PREEMPT_SHIFT)
@@ -83,8 +95,11 @@
  * in_softirq - Are we currently processing softirq or have bh disabled?
  * in_serving_softirq - Are we currently processing softirq?
  */
+/* 硬中断 */
 #define in_irq()		(hardirq_count())
+/* 软中断 */
 #define in_softirq()		(softirq_count())
+/* 硬中断 软中断 不可屏蔽中断 */
 #define in_interrupt()		(irq_count())
 #define in_serving_softirq()	(softirq_count() & SOFTIRQ_OFFSET)
 

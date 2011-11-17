@@ -33,7 +33,7 @@ p->se.vruntime (nanosec-unit) value.  This way, it's possible to accurately
 timestamp and measure the "expected CPU time" a task should have gotten.
 
 [ small detail: on "ideal" hardware, at any time all tasks would have the same
-  p->se.vruntime value --- i.e., tasks would execute simultaneously and no task
+  p->se.vruntime value --- i.e., tasks would execute simultaneously(同时地) and no task
   would ever get "out of balance" from the "ideal" share of CPU time.  ]
 
 CFS's task picking logic is based on this p->se.vruntime value and it is thus
@@ -43,17 +43,20 @@ up CPU time between runnable tasks as close to "ideal multitasking hardware" as
 possible.
 
 Most of the rest of CFS's design just falls out of this really simple concept,
-with a few add-on embellishments like nice levels, multiprocessing and various
+with a few add-on embellishments(修饰) like nice levels, multiprocessing and various
 algorithm variants to recognize sleepers.
 
 
 
 3.  THE RBTREE
 
-CFS's design is quite radical: it does not use the old data structures for the
+CFS's design is quite radical(全新的): it does not use the old data structures for the
 runqueues, but it uses a time-ordered rbtree to build a "timeline" of future
 task execution, and thus has no "array switch" artifacts (by which both the
 previous vanilla scheduler and RSDL/SD are affected).
+
+RSDL: rotating staircase deadline scheduler
+SD: staircase scheduler 楼梯调度算法
 
 CFS also maintains the rq->cfs.min_vruntime value, which is a monotonic
 increasing value tracking the smallest vruntime among all tasks in the
@@ -71,7 +74,7 @@ account for possible wraparounds).  CFS picks the "leftmost" task from this
 tree and sticks to it.
 As the system progresses forwards, the executed tasks are put into the tree
 more and more to the right --- slowly but surely giving a chance for every task
-to become the "leftmost task" and thus get on the CPU within a deterministic
+to become the "leftmost task" and thus get on the CPU within a deterministic(确定性的)
 amount of time.
 
 Summing up, CFS works like this: it runs a task a bit, and when the task
@@ -89,7 +92,7 @@ picked and the current task is preempted.
 
 CFS uses nanosecond granularity accounting and does not rely on any jiffies or
 other HZ detail.  Thus the CFS scheduler has no notion of "timeslices" in the
-way the previous scheduler had, and has no heuristics whatsoever.  There is
+way the previous scheduler had, and has no heuristics(启发) whatsoever.  There is
 only one central tunable (you have to switch on CONFIG_SCHED_DEBUG):
 
    /proc/sys/kernel/sched_min_granularity_ns
@@ -98,8 +101,8 @@ which can be used to tune the scheduler from "desktop" (i.e., low latencies) to
 "server" (i.e., good batching) workloads.  It defaults to a setting suitable
 for desktop workloads.  SCHED_BATCH is handled by the CFS scheduler module too.
 
-Due to its design, the CFS scheduler is not prone to any of the "attacks" that
-exist today against the heuristics of the stock scheduler: fiftyp.c, thud.c,
+Due to its design, the CFS scheduler is not prone(易于) to any of the "attacks" that
+exist today against the heuristics of the stock(现有的) scheduler: fiftyp.c, thud.c,
 chew.c, ring-test.c, massive_intr.c all work fine and do not impact
 interactivity and produce the expected behavior.
 
@@ -107,7 +110,7 @@ The CFS scheduler has a much stronger handling of nice levels and SCHED_BATCH
 than the previous vanilla scheduler: both types of workloads are isolated much
 more aggressively.
 
-SMP load-balancing has been reworked/sanitized: the runqueue-walking
+SMP load-balancing has been reworked/sanitized(审查): the runqueue-walking
 assumptions are gone from the load-balancing code now, and iterators of the
 scheduling modules are used.  The balancing code got quite a bit simpler as a
 result.
@@ -183,7 +186,7 @@ This is the (partial) list of the hooks:
 
  - pick_next_task(...)
 
-   This function chooses the most appropriate task eligible to run next.
+   This function chooses the most appropriate task eligible(合适的) to run next.
 
  - set_curr_task(...)
 
@@ -200,7 +203,7 @@ This is the (partial) list of the hooks:
 
 7.  GROUP SCHEDULER EXTENSIONS TO CFS
 
-Normally, the scheduler operates on individual tasks and strives to provide
+Normally, the scheduler operates on individual tasks and strives(力求) to provide
 fair CPU time to each task.  Sometimes, it may be desirable to group tasks and
 provide fair CPU time to each such task group.  For example, it may be
 desirable to first provide fair CPU time to each user on the system and then to

@@ -7,7 +7,12 @@
 #include <linux/nsproxy.h>
 #include <linux/kref.h>
 
+/*
+实现pid号与某页内存中bit位之间的映射
+内存页中的bit位表示对应pid号是否已经使用
+*/
 struct pidmap {
+		/* 剩余可用pid的数量 */
        atomic_t nr_free;
        void *page;
 };
@@ -20,9 +25,12 @@ struct pid_namespace {
 	struct kref kref;
 	struct pidmap pidmap[PIDMAP_ENTRIES];
 	int last_pid;
+	/* 每个命名空间下对孤儿进程调用wait4的进程 */
 	struct task_struct *child_reaper;
 	struct kmem_cache *pid_cachep;
+	/* 当前命名空间在命名空间层次结构中的深度 */
 	unsigned int level;
+	/* 指向父命名空间 */
 	struct pid_namespace *parent;
 #ifdef CONFIG_PROC_FS
 	struct vfsmount *proc_mnt;
@@ -46,6 +54,9 @@ extern struct pid_namespace *copy_pid_ns(unsigned long flags, struct pid_namespa
 extern void free_pid_ns(struct kref *kref);
 extern void zap_pid_ns_processes(struct pid_namespace *pid_ns);
 
+/*
+@ns的引用计数减1，减1后计数为0则释放该实例
+*/
 static inline void put_pid_ns(struct pid_namespace *ns)
 {
 	if (ns != &init_pid_ns)

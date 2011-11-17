@@ -55,10 +55,13 @@ int kref_put(struct kref *kref, void (*release)(struct kref *kref))
 	WARN_ON(release == NULL);
 	WARN_ON(release == (void (*)(struct kref *))kfree);
 
+	/* 如果引用计数减1后为0了，则调用release函数 */
 	if (atomic_dec_and_test(&kref->refcount)) {
 		release(kref);
+		/* 对象被释放了，返回1 */
 		return 1;
 	}
+	/* 仍有引用计数，未释放，返回0 */
 	return 0;
 }
 

@@ -135,11 +135,15 @@ void free_pid_ns(struct kref *kref)
 {
 	struct pid_namespace *ns, *parent;
 
+	/* 根据@kref取其容器实例pid_namespace */
 	ns = container_of(kref, struct pid_namespace, kref);
 
+	/* 记录父命名空间 */
 	parent = ns->parent;
+	/* 释放pid_namespace命名空间 */
 	destroy_pid_namespace(ns);
 
+	/* 如果有父命名空间，则减其引用计数直至释放 */
 	if (parent != NULL)
 		put_pid_ns(parent);
 }
@@ -191,6 +195,9 @@ void zap_pid_ns_processes(struct pid_namespace *pid_ns)
 	return;
 }
 
+/*
+创建@pid_namespace的cache
+*/
 static __init int pid_namespaces_init(void)
 {
 	pid_ns_cachep = KMEM_CACHE(pid_namespace, SLAB_PANIC);

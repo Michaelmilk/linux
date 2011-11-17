@@ -37,8 +37,14 @@ extern int no_timer_check;
 DECLARE_PER_CPU(unsigned long, cyc2ns);
 DECLARE_PER_CPU(unsigned long long, cyc2ns_offset);
 
+/*
+cpu周期转换为纳秒的比例因子
+*/
 #define CYC2NS_SCALE_FACTOR 10 /* 2^10, carefully chosen */
 
+/*
+将cpu周期数@cyc转换为纳秒数
+*/
 static inline unsigned long long __cycles_2_ns(unsigned long long cyc)
 {
 	int cpu = smp_processor_id();

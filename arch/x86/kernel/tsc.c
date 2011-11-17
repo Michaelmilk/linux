@@ -39,6 +39,10 @@ static int tsc_clocksource_reliable;
 /*
  * Scheduler clock - returns current time in nanosec units.
  */
+/*
+调度器的时钟
+返回以纳秒为单位的系统运行时间
+*/
 u64 native_sched_clock(void)
 {
 	u64 this_offset;
@@ -53,10 +57,12 @@ u64 native_sched_clock(void)
 	 */
 	if (unlikely(tsc_disabled)) {
 		/* No locking but a rare wrong value is not a big deal: */
+		/* 系统开机以来经过的jiffies转换位纳秒 */
 		return (jiffies_64 - INITIAL_JIFFIES) * (1000000000 / HZ);
 	}
 
 	/* read the Time Stamp Counter: */
+	/* 读取时间戳计数器 */
 	rdtscll(this_offset);
 
 	/* return the value in ns */
@@ -71,6 +77,11 @@ unsigned long long sched_clock(void)
 	return paravirt_sched_clock();
 }
 #else
+/*
+没有定义CONFIG_PARAVIRT并行虚拟化
+则sched_clock()就是函数native_sched_clock()的一个别名
+即调用native_sched_clock()函数
+*/
 unsigned long long
 sched_clock(void) __attribute__((alias("native_sched_clock")));
 #endif

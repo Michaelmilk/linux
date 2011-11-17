@@ -337,6 +337,9 @@ static inline int entity_before(struct sched_entity *a,
 	return (s64)(a->vruntime - b->vruntime) < 0;
 }
 
+/*
+更新@cfs_rq->min_vruntime
+*/
 static void update_min_vruntime(struct cfs_rq *cfs_rq)
 {
 	u64 vruntime = cfs_rq->min_vruntime;
@@ -345,6 +348,8 @@ static void update_min_vruntime(struct cfs_rq *cfs_rq)
 		vruntime = cfs_rq->curr->vruntime;
 
 	if (cfs_rq->rb_leftmost) {
+		/* 红黑树节点内嵌在调度实体结构中
+		   根据节点rb_leftmost取其容器结构sched_entity的指针 */
 		struct sched_entity *se = rb_entry(cfs_rq->rb_leftmost,
 						   struct sched_entity,
 						   run_node);
@@ -478,9 +483,11 @@ int sched_proc_update_handler(struct ctl_table *table, int write,
 static inline unsigned long
 calc_delta_fair(unsigned long delta, struct sched_entity *se)
 {
+	/* 如果调度实体的负载权重不是nice0对应的权重，则计算调整 */
 	if (unlikely(se->load.weight != NICE_0_LOAD))
 		delta = calc_delta_mine(delta, NICE_0_LOAD, &se->load);
 
+	/* 如果进程nice为0，则其实际的物理运行时间与虚拟时间相等 */
 	return delta;
 }
 
@@ -511,6 +518,10 @@ static u64 __sched_period(unsigned long nr_running)
  *
  * s = p*P[w/rw]
  */
+/*
+proportional: 成比例的
+
+*/
 static u64 sched_slice(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
 	u64 slice = __sched_period(cfs_rq->nr_running + !se->on_rq);
@@ -550,6 +561,9 @@ static void update_cfs_shares(struct cfs_rq *cfs_rq);
  * Update the current task's runtime statistics. Skip current tasks that
  * are not in our scheduling class.
  */
+/*
+更新进程的物理运行时间和虚拟运行时间
+*/
 static inline void
 __update_curr(struct cfs_rq *cfs_rq, struct sched_entity *curr,
 	      unsigned long delta_exec)
@@ -559,8 +573,10 @@ __update_curr(struct cfs_rq *cfs_rq, struct sched_entity *curr,
 	schedstat_set(curr->statistics.exec_max,
 		      max((u64)delta_exec, curr->statistics.exec_max));
 
+	/* 更新物理运行时间 */
 	curr->sum_exec_runtime += delta_exec;
 	schedstat_add(cfs_rq, exec_clock, delta_exec);
+	/* 计算进程的加权执行时间 */
 	delta_exec_weighted = calc_delta_fair(delta_exec, curr);
 
 	curr->vruntime += delta_exec_weighted;
@@ -574,6 +590,7 @@ __update_curr(struct cfs_rq *cfs_rq, struct sched_entity *curr,
 static void update_curr(struct cfs_rq *cfs_rq)
 {
 	struct sched_entity *curr = cfs_rq->curr;
+	/* clock_task的值在scheduler_tick() => update_rq_clock()中刚更新过 */
 	u64 now = rq_of(cfs_rq)->clock_task;
 	unsigned long delta_exec;
 
@@ -585,6 +602,7 @@ static void update_curr(struct cfs_rq *cfs_rq)
 	 * since the last time we changed load (this cannot
 	 * overflow on 32 bits):
 	 */
+	/* 本次更新与上次更新的差值，实际的物理运行时间差值，纳秒 */
 	delta_exec = (unsigned long)(now - curr->exec_start);
 	if (!delta_exec)
 		return;
@@ -592,7 +610,10 @@ static void update_curr(struct cfs_rq *cfs_rq)
 	__update_curr(cfs_rq, curr, delta_exec);
 	curr->exec_start = now;
 
+	/* 调度实体curr对应的是一个进程 */
 	if (entity_is_task(curr)) {
+		/* 调度实体内嵌在进程结构task_struct中
+		   取curr的容器结构task_struct */
 		struct task_struct *curtask = task_of(curr);
 
 		trace_sched_stat_runtime(curtask, delta_exec, curr->vruntime);
@@ -1264,6 +1285,8 @@ entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
 		return;
 #endif
 
+	/* 运行队列中进程数大于1
+	   检查是否进行抢占 */
 	if (cfs_rq->nr_running > 1)
 		check_preempt_tick(cfs_rq, curr);
 }
@@ -1913,8 +1936,10 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	struct sched_entity *se = &p->se;
 
 	for_each_sched_entity(se) {
+		/* 该调度实体已经在运行队列上了 */
 		if (se->on_rq)
 			break;
+		/* 取对应的完全公平调度队列 */
 		cfs_rq = cfs_rq_of(se);
 		enqueue_entity(cfs_rq, se, flags);
 
@@ -2502,12 +2527,16 @@ static void set_skip_buddy(struct sched_entity *se)
  */
 static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_flags)
 {
+	/* 运行队列中当前运行进程 */
 	struct task_struct *curr = rq->curr;
+	/* 当前运行进程的调度实体指针
+	   进程@p的调度实体指针 */
 	struct sched_entity *se = &curr->se, *pse = &p->se;
 	struct cfs_rq *cfs_rq = task_cfs_rq(curr);
 	int scale = cfs_rq->nr_running >= sched_nr_latency;
 	int next_buddy_marked = 0;
 
+	/* 如果进程@p要抢占的curr就是其自己，则返回 */
 	if (unlikely(se == pse))
 		return;
 
@@ -4733,6 +4762,10 @@ static inline int on_null_domain(int cpu)
 /*
  * Trigger the SCHED_SOFTIRQ if it is time to do periodic load balancing.
  */
+/*
+触发周期性的负载均衡
+即触发软中断SCHED_SOFTIRQ，调用函数run_rebalance_domains()
+*/
 static inline void trigger_load_balance(struct rq *rq, int cpu)
 {
 	/* Don't need to rebalance while attached to NULL domain */
@@ -4769,12 +4802,19 @@ static inline void idle_balance(int cpu, struct rq *rq)
 /*
  * scheduler tick hitting a task of our scheduling class:
  */
+/*
+@rq		: 运行队列
+@curr	: @rq->curr
+@queued	: 
+*/
 static void task_tick_fair(struct rq *rq, struct task_struct *curr, int queued)
 {
 	struct cfs_rq *cfs_rq;
+	/* 进程内嵌的调度实体结构指针 */
 	struct sched_entity *se = &curr->se;
 
 	for_each_sched_entity(se) {
+		/* 调度实体所属的cfs_rq */
 		cfs_rq = cfs_rq_of(se);
 		entity_tick(cfs_rq, se, queued);
 	}
@@ -4948,7 +4988,11 @@ static unsigned int get_rr_interval_fair(struct rq *rq, struct task_struct *task
 /*
  * All the scheduling class methods:
  */
+/*
+完全公平调度器类实例
+*/
 static const struct sched_class fair_sched_class = {
+	/* 参考宏for_each_class，next域组成链表 */
 	.next			= &idle_sched_class,
 	.enqueue_task		= enqueue_task_fair,
 	.dequeue_task		= dequeue_task_fair,

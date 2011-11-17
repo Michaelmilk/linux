@@ -72,8 +72,14 @@
  * This is default implementation.
  * Architectures and sub-architectures can override this.
  */
+/*
+调度器时钟
+这是一个默认的实现方式
+各种架构的具体实现可以重载该函数
+*/
 unsigned long long __attribute__((weak)) sched_clock(void)
 {
+	/* 系统开机以来经过的jiffies转换位纳秒 */
 	return (unsigned long long)(jiffies - INITIAL_JIFFIES)
 					* (NSEC_PER_SEC / HZ);
 }
@@ -211,11 +217,18 @@ again:
  *
  * See cpu_clock().
  */
+/*
+和函数cpu_clock()相似
+不过调用该函数前需要关闭本地中断
+
+返回系统启动以来经过的纳秒数
+*/
 u64 sched_clock_cpu(int cpu)
 {
 	struct sched_clock_data *scd;
 	u64 clock;
 
+	/* 警告中断未关闭 */
 	WARN_ON_ONCE(!irqs_disabled());
 
 	if (sched_clock_stable)

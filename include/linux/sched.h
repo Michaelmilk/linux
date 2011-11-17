@@ -867,7 +867,9 @@ enum cpu_idle_type {
 # define scale_load_down(w)	(w)
 #endif
 
+/* 10 */
 #define SCHED_LOAD_SHIFT	(10 + SCHED_LOAD_RESOLUTION)
+/* 权重计算的负载比例 1024 */
 #define SCHED_LOAD_SCALE	(1L << SCHED_LOAD_SHIFT)
 
 /*
@@ -1131,15 +1133,22 @@ struct sched_domain;
 #define DEQUEUE_SLEEP		1
 
 struct sched_class {
+	/* next指针用于将各个调度器类串联起来
+	   stop_sched_class => rt_sched_class => fair_sched_class => idle_sched_class => NULL */
 	const struct sched_class *next;
 
+	/* 将进程p加入运行队列rq */
 	void (*enqueue_task) (struct rq *rq, struct task_struct *p, int flags);
+	/* 将进程@p从运行队列移除 */
 	void (*dequeue_task) (struct rq *rq, struct task_struct *p, int flags);
+	/* 进程主动放弃cpu时调用 */
 	void (*yield_task) (struct rq *rq);
 	bool (*yield_to_task) (struct rq *rq, struct task_struct *p, bool preempt);
 
+	/* 检查当前进程rq->curr可否被进程p抢占 */
 	void (*check_preempt_curr) (struct rq *rq, struct task_struct *p, int flags);
 
+	/* 从运行队列rq中选择下一个运行进程 */
 	struct task_struct * (*pick_next_task) (struct rq *rq);
 	void (*put_prev_task) (struct rq *rq, struct task_struct *p);
 
@@ -1158,7 +1167,9 @@ struct sched_class {
 	void (*rq_offline)(struct rq *rq);
 #endif
 
+	/* 进程的调度策略发生变化时调用 */
 	void (*set_curr_task) (struct rq *rq);
+	/* 在周期性调度器中调用，如scheduler_tick() */
 	void (*task_tick) (struct rq *rq, struct task_struct *p, int queued);
 	void (*task_fork) (struct task_struct *p);
 
@@ -1180,6 +1191,9 @@ struct load_weight {
 };
 
 #ifdef CONFIG_SCHEDSTATS
+/*
+调度统计数据
+*/
 struct sched_statistics {
 	u64			wait_start;
 	u64			wait_max;
@@ -1215,17 +1229,28 @@ struct sched_statistics {
 };
 #endif
 
+/*
+调度实体
+*/
 struct sched_entity {
+	/* 负载权重，用于负载均衡
+	   参考函数set_load_weight() */
 	struct load_weight	load;		/* for load-balancing */
+	/* 内嵌的红黑树节点，用于链入红黑树 */
 	struct rb_node		run_node;
 	struct list_head	group_node;
+	/* 该调度实体是否在运行队列上 */
 	unsigned int		on_rq;
 
+	/* 调度实体信息更新时间戳，系统启动以来的纳秒数 */
 	u64			exec_start;
+	/* 调度实体自创建以来经过的真实时间纳秒数 */
 	u64			sum_exec_runtime;
+	/* 虚拟运行时间，单位纳秒 */
 	u64			vruntime;
 	u64			prev_sum_exec_runtime;
 
+	/* 记录调度实体在cpu间迁移的次数 */
 	u64			nr_migrations;
 
 #ifdef CONFIG_SCHEDSTATS
@@ -1283,13 +1308,23 @@ struct task_struct {
 	struct llist_node wake_entry;
 	int on_cpu;
 #endif
+	/* 是否已经加入运行队列 */
 	int on_rq;
 
-	/* 进程(包括实时和普通)的静态优先级 */
+	/* prio: 动态优先级，调度器参考该值
+	   static_prio: 进程(包括实时和普通)的静态优先级，[ 100 ... 139 ]
+					与nice值对应，参考宏TASK_NICE
+	   normal_prio: 普通优先级，根据进程的静态优先级和调度策略计算而来，
+					参考函数normal_prio()
+
+	   普通进程的话，该3个值相等 */
 	int prio, static_prio, normal_prio;
-	/* 实时进程特有的，用于实时进程间的选择 */
+	/* 实时进程特有的，用于实时进程间的选择
+	   [ 0 ... 99 ] 值越大，优先级越高，参考normal_prio()函数的计算方法 */
 	unsigned int rt_priority;
+	/* 该进程所属的调度器类，包含具体的调度函数指针 */
 	const struct sched_class *sched_class;
+	/* 进程内嵌的调度实体 */
 	struct sched_entity se;
 	struct sched_rt_entity rt;
 
@@ -1313,6 +1348,7 @@ struct task_struct {
 
 	/* 进程的调度策略，用来区分实时进程和普通进程，实时进程优先于普通进程运行 */
 	unsigned int policy;
+	/* cpu掩码，用来表示该进程可以在哪些cpu上运行 */
 	cpumask_t cpus_allowed;
 
 #ifdef CONFIG_PREEMPT_RCU
@@ -1385,6 +1421,7 @@ struct task_struct {
 	 * older sibling, respectively.  (p->father can be replaced with 
 	 * p->real_parent->pid)
 	 */
+	/* 在调试的时候指向真正的父进程 */
 	struct task_struct *real_parent; /* real parent process */
 	struct task_struct *parent; /* recipient of SIGCHLD, wait4() reports */
 	/*
@@ -1418,7 +1455,9 @@ struct task_struct {
 #ifndef CONFIG_VIRT_CPU_ACCOUNTING
 	cputime_t prev_utime, prev_stime;
 #endif
+	/* 上下文切换计数 */
 	unsigned long nvcsw, nivcsw; /* context switch counts */
+	/* 单调时间 */
 	struct timespec start_time; 		/* monotonic time */
 	struct timespec real_start_time;	/* boot based time */
 /* mm fault and swap info: this can arguably be seen as either mm-specific or thread-specific */
@@ -1677,9 +1716,12 @@ SCHED_NORMAL/SCHED_BATCH普通进程和批处理进程优先级从100..139
 注意:MAX_RT_PRIO不能小于MAX_USER_RT_PRIO
 */
 #define MAX_USER_RT_PRIO	100
+/* 实时进程的优先级最大值 */
 #define MAX_RT_PRIO		MAX_USER_RT_PRIO
 
+/* 普通进程优先级的最大值140 */
 #define MAX_PRIO		(MAX_RT_PRIO + 40)
+/* 默认优先级120，即对应的nice值为0 */
 #define DEFAULT_PRIO		(MAX_RT_PRIO + 20)
 
 /*
@@ -1700,6 +1742,10 @@ static inline int rt_task(struct task_struct *p)
 	return rt_prio(p->prio);
 }
 
+/*
+获取进程@task对应的PIDTYPE_PID类型的pid实例指针
+该字段指针在函数attach_pid()中赋值
+*/
 static inline struct pid *task_pid(struct task_struct *task)
 {
 	return task->pids[PIDTYPE_PID].pid;
@@ -2511,6 +2557,10 @@ static inline void threadgroup_fork_write_unlock(struct task_struct *tsk) {}
 
 #ifndef __HAVE_THREAD_FUNCTIONS
 
+/*
+返回进程@task所使用栈空间
+最下面的struct thread_info结构指针
+*/
 #define task_thread_info(task)	((struct thread_info *)(task)->stack)
 #define task_stack_page(task)	((task)->stack)
 
@@ -2721,6 +2771,9 @@ extern void signal_wake_up(struct task_struct *t, int resume_stopped);
  */
 #ifdef CONFIG_SMP
 
+/*
+取得进程@p所在的cpu
+*/
 static inline unsigned int task_cpu(const struct task_struct *p)
 {
 	return task_thread_info(p)->cpu;

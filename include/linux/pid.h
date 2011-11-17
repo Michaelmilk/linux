@@ -49,14 +49,18 @@ enum pid_type
 
 struct upid {
 	/* Try to keep pid_chain in the same cacheline as nr for find_vpid */
+	/* nr和ns为哈希表的关键字 */
 	int nr;
 	struct pid_namespace *ns;
+	/* 链入哈希表pid_hash */
 	struct hlist_node pid_chain;
 };
 
 struct pid
 {
+	/* pid实例的引用计数 */
 	atomic_t count;
+	/* 该pid实例在命名空间中的深度，该值从0开始 ... */
 	unsigned int level;
 	/* lists of tasks that use this pid */
 	struct hlist_head tasks[PIDTYPE_MAX];
@@ -68,10 +72,15 @@ extern struct pid init_struct_pid;
 
 struct pid_link
 {
+	/* 链入下面pid字段指针所指实例的tasks哈希表中 */
 	struct hlist_node node;
+	/* 指向进程所属的pid实例 */
 	struct pid *pid;
 };
 
+/*
+增加@pid所指实例的引用计数
+*/
 static inline struct pid *get_pid(struct pid *pid)
 {
 	if (pid)
@@ -132,6 +141,9 @@ extern void free_pid(struct pid *pid);
  * 	is expected to be non-NULL. If @pid is NULL, caller should handle
  * 	the resulting NULL pid-ns.
  */
+/*
+取@pid所属的pid_namespace
+*/
 static inline struct pid_namespace *ns_of_pid(struct pid *pid)
 {
 	struct pid_namespace *ns = NULL;
