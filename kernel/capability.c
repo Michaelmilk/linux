@@ -369,6 +369,7 @@ EXPORT_SYMBOL(capable);
  */
 bool ns_capable(struct user_namespace *ns, int cap)
 {
+	/* 检查@cap值的范围有效性 */
 	if (unlikely(!cap_valid(cap))) {
 		printk(KERN_CRIT "capable() called with invalid cap=%u\n", cap);
 		BUG();

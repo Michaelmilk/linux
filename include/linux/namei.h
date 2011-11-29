@@ -15,6 +15,10 @@ struct open_intent {
 
 enum { MAX_NESTED_LINKS = 8 };
 
+/*
+在递归寻找目标节点的过程中，需要借助一个搜索辅助结构nameidata，
+这是一个临时结构，仅仅用在寻找目标节点的过程中。
+*/
 struct nameidata {
 	struct path	path;
 	struct qstr	last;

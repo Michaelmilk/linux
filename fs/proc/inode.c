@@ -86,13 +86,20 @@ static void proc_destroy_inode(struct inode *inode)
 	call_rcu(&inode->i_rcu, proc_i_callback);
 }
 
+/*
+从缓存proc_inode_cachep中分配struct proc_inode结构实例的时候调用的构造函数
+*/
 static void init_once(void *foo)
 {
 	struct proc_inode *ei = (struct proc_inode *) foo;
 
+	/* 初始化内嵌的inode节点 */
 	inode_init_once(&ei->vfs_inode);
 }
 
+/*
+创建结构proc_inode的slab缓存
+*/
 void __init proc_init_inodecache(void)
 {
 	proc_inode_cachep = kmem_cache_create("proc_inode_cache",

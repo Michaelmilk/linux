@@ -89,12 +89,17 @@ static struct file_system_type proc_fs_type = {
 	.kill_sb	= proc_kill_sb,
 };
 
+/*
+proc文件系统初始化
+*/
 void __init proc_root_init(void)
 {
 	struct vfsmount *mnt;
 	int err;
 
+	/* 初始化proc_inode_cachep缓存 */
 	proc_init_inodecache();
+	/* 将proc文件系统注册进全局链表file_systems */
 	err = register_filesystem(&proc_fs_type);
 	if (err)
 		return;

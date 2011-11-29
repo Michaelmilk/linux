@@ -317,6 +317,9 @@ likely和unlikely不是指令,它只是给编译器看的，
  * use is to mediate communication between process-level code and irq/NMI
  * handlers, all running on the same CPU.
  */
+/*
+保证从内存中读取@x的值
+*/
 #define ACCESS_ONCE(x) (*(volatile typeof(x) *)&(x))
 
 #endif /* __LINUX_COMPILER_H */

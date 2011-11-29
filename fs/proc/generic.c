@@ -306,6 +306,7 @@ static int __xlate_proc_name(const char *name, struct proc_dir_entry **ret,
 	unsigned int		len;
 
 	de = *ret;
+	/* 未指定父目录，则默认放在"/proc"目录下 */
 	if (!de)
 		de = &proc_root;
 
@@ -350,6 +351,9 @@ static DEFINE_SPINLOCK(proc_inum_lock); /* protects the above */
  * Return an inode number between PROC_DYNAMIC_FIRST and
  * 0xffffffff, or zero on failure.
  */
+/*
+返回一个inode节点号
+*/
 static unsigned int get_inode_number(void)
 {
 	unsigned int i;
@@ -552,6 +556,12 @@ static const struct inode_operations proc_dir_inode_operations = {
 	.setattr	= proc_notify_change,
 };
 
+/*
+将proc文件@dp注册到目录@dir下
+
+@dir	: proc文件目录对象
+@dp	:
+*/
 static int proc_register(struct proc_dir_entry * dir, struct proc_dir_entry * dp)
 {
 	unsigned int i;
@@ -562,6 +572,7 @@ static int proc_register(struct proc_dir_entry * dir, struct proc_dir_entry * dp
 		return -EAGAIN;
 	dp->low_ino = i;
 
+	/* 根据文件的不同模式，为其设置默认的操作函数 */
 	if (S_ISDIR(dp->mode)) {
 		if (dp->proc_iops == NULL) {
 			dp->proc_fops = &proc_dir_operations;
@@ -580,6 +591,7 @@ static int proc_register(struct proc_dir_entry * dir, struct proc_dir_entry * dp
 
 	spin_lock(&proc_subdir_lock);
 
+	/* 检查是否有重复项 */
 	for (tmp = dir->subdir; tmp; tmp = tmp->next)
 		if (strcmp(tmp->name, dp->name) == 0) {
 			WARN(1, KERN_WARNING "proc_dir_entry '%s/%s' already registered\n",
@@ -587,6 +599,7 @@ static int proc_register(struct proc_dir_entry * dir, struct proc_dir_entry * dp
 			break;
 		}
 
+	/* 将@dp链入@dir下的树形链表 */
 	dp->next = dir->subdir;
 	dp->parent = dir;
 	dir->subdir = dp;
@@ -595,6 +608,14 @@ static int proc_register(struct proc_dir_entry * dir, struct proc_dir_entry * dp
 	return 0;
 }
 
+/*
+创建一个proc_dir_entry实例
+
+@parent	: 一个2级指针，会记录父目录对象
+@name	:
+@mode	:
+@nlink	:
+*/
 static struct proc_dir_entry *__proc_create(struct proc_dir_entry **parent,
 					  const char *name,
 					  mode_t mode,
@@ -611,19 +632,27 @@ static struct proc_dir_entry *__proc_create(struct proc_dir_entry **parent,
 		goto out;
 
 	/* At this point there must not be any '/' characters beyond *fn */
+	/* 在xlate_proc_name()中对于fn进行了处理
+	   此时fn为不带'/'的文件名称 */
 	if (strchr(fn, '/'))
 		goto out;
 
 	len = strlen(fn);
 
+	/* 结构struct proc_dir_entry最后一个字段name[]为0长度数组占位符
+	   这里分配空间的时候额外加上文件名称的长度，1为字符串结束符'\0' */
 	ent = kmalloc(sizeof(struct proc_dir_entry) + len + 1, GFP_KERNEL);
 	if (!ent) goto out;
 
+	/* 结构清0 */
 	memset(ent, 0, sizeof(struct proc_dir_entry));
+	/* 复制文件名称 */
 	memcpy(ent->name, fn, len + 1);
+	/* 记录文件名称长度 */
 	ent->namelen = len;
 	ent->mode = mode;
 	ent->nlink = nlink;
+	/* 引用计数置为1 */
 	atomic_set(&ent->count, 1);
 	ent->pde_users = 0;
 	spin_lock_init(&ent->pde_unload_lock);
@@ -692,6 +721,10 @@ struct proc_dir_entry *proc_net_mkdir(struct net *net, const char *name,
 }
 EXPORT_SYMBOL_GPL(proc_net_mkdir);
 
+/*
+@name	: 要创建的目录名称
+@parent	: 父目录指针
+*/
 struct proc_dir_entry *proc_mkdir(const char *name,
 		struct proc_dir_entry *parent)
 {
@@ -699,17 +732,26 @@ struct proc_dir_entry *proc_mkdir(const char *name,
 }
 EXPORT_SYMBOL(proc_mkdir);
 
+/*
+创建proc文件
+
+@name	: proc文件名称(目录或文件)
+@mode	: 文件模式
+@parent	: 父目录
+*/
 struct proc_dir_entry *create_proc_entry(const char *name, mode_t mode,
 					 struct proc_dir_entry *parent)
 {
 	struct proc_dir_entry *ent;
 	nlink_t nlink;
 
+	/* 创建的是目录文件 */
 	if (S_ISDIR(mode)) {
 		if ((mode & S_IALLUGO) == 0)
 			mode |= S_IRUGO | S_IXUGO;
 		nlink = 2;
 	} else {
+	/* 创建的是普通文件 */
 		if ((mode & S_IFMT) == 0)
 			mode |= S_IFREG;
 		if ((mode & S_IALLUGO) == 0)
@@ -774,6 +816,7 @@ static void free_proc_entry(struct proc_dir_entry *de)
 
 void pde_put(struct proc_dir_entry *pde)
 {
+	/* 引用计数减1后为0了，则释放 */
 	if (atomic_dec_and_test(&pde->count))
 		free_proc_entry(pde);
 }
@@ -781,6 +824,9 @@ void pde_put(struct proc_dir_entry *pde)
 /*
  * Remove a /proc entry and free it if it's not currently in use.
  */
+/*
+删除一个proc文件
+*/
 void remove_proc_entry(const char *name, struct proc_dir_entry *parent)
 {
 	struct proc_dir_entry **p;
@@ -795,8 +841,11 @@ void remove_proc_entry(const char *name, struct proc_dir_entry *parent)
 	}
 	len = strlen(fn);
 
+	/* 遍历父目录的子链表 */
 	for (p = &parent->subdir; *p; p=&(*p)->next ) {
+		/* 看是否有名称一致的项 */
 		if (proc_match(len, fn, *p)) {
+			/* 找到一致项，则将其从链表中移出 */
 			de = *p;
 			*p = de->next;
 			de->next = NULL;
@@ -804,6 +853,7 @@ void remove_proc_entry(const char *name, struct proc_dir_entry *parent)
 		}
 	}
 	spin_unlock(&proc_subdir_lock);
+	/* 未找到匹配项，则返回 */
 	if (!de) {
 		WARN(1, "name '%s'\n", name);
 		return;

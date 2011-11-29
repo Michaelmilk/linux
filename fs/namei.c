@@ -115,18 +115,25 @@
  * POSIX.1 2.4: an empty pathname is invalid (ENOENT).
  * PATH_MAX includes the nul terminator --RR.
  */
+/*
+将用户空间的@filename内容复制到内核空间的@page中
+*/
 static int do_getname(const char __user *filename, char *page)
 {
 	int retval;
 	unsigned long len = PATH_MAX;
 
+	/* 不是内核数据段 */
 	if (!segment_eq(get_fs(), KERNEL_DS)) {
+		/* 文件名称地址超过进程空间上限 */
 		if ((unsigned long) filename >= TASK_SIZE)
 			return -EFAULT;
+		/* 调整长度，不能让源数据溢出到内核空间 */
 		if (TASK_SIZE - (unsigned long) filename < PATH_MAX)
 			len = TASK_SIZE - (unsigned long) filename;
 	}
 
+	/* 将用户空间的字符串复制到内核空间中 */
 	retval = strncpy_from_user(page, filename, len);
 	if (retval > 0) {
 		if (retval < len)
@@ -137,16 +144,21 @@ static int do_getname(const char __user *filename, char *page)
 	return retval;
 }
 
+/*
+返回包含@filename内容的内核空间地址
+*/
 static char *getname_flags(const char __user *filename, int flags, int *empty)
 {
 	char *tmp, *result;
 
 	result = ERR_PTR(-ENOMEM);
+	/* 从names_cachep中分配一个PATH_MAX长度的空间 */
 	tmp = __getname();
 	if (tmp)  {
 		int retval = do_getname(filename, tmp);
 
 		result = tmp;
+		/* do_getname()出错 */
 		if (retval < 0) {
 			if (retval == -ENOENT && empty)
 				*empty = 1;

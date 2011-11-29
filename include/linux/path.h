@@ -4,8 +4,13 @@
 struct dentry;
 struct vfsmount;
 
+/*
+封装在一起的路径信息
+*/
 struct path {
+	/* 指向dentry对应的一个已经装载的文件系统 */
 	struct vfsmount *mnt;
+	/* 指向缓存的目录 */
 	struct dentry *dentry;
 };
 

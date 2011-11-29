@@ -120,20 +120,32 @@ void free_fdtable_rcu(struct rcu_head *rcu)
  * Expand the fdset in the files_struct.  Called with the files spinlock
  * held for write.
  */
+/*
+将旧表@ofdt中的数据复制到新表@nfdt中
+*/
 static void copy_fdtable(struct fdtable *nfdt, struct fdtable *ofdt)
 {
 	unsigned int cpy, set;
 
+	/* 只有新的描述符表大于旧的描述符表，才可以将旧的数据复制到新的表中 */
 	BUG_ON(nfdt->max_fds < ofdt->max_fds);
 
+	/* 计算要复制的长度 */
 	cpy = ofdt->max_fds * sizeof(struct file *);
+	/* 清0的长度 */
 	set = (nfdt->max_fds - ofdt->max_fds) * sizeof(struct file *);
+	/* 从旧表中复制指针数据 */
 	memcpy(nfdt->fd, ofdt->fd, cpy);
+	/* 新表中的剩余项清0 */
 	memset((char *)(nfdt->fd) + cpy, 0, set);
 
+	/* bit位占用的字节数 */
 	cpy = ofdt->max_fds / BITS_PER_BYTE;
+	/* 剩余要清0的字节数 */
 	set = (nfdt->max_fds - ofdt->max_fds) / BITS_PER_BYTE;
+	/* 复制位图 */
 	memcpy(nfdt->open_fds, ofdt->open_fds, cpy);
+	/* 剩余的位图清0 */
 	memset((char *)(nfdt->open_fds) + cpy, 0, set);
 	memcpy(nfdt->close_on_exec, ofdt->close_on_exec, cpy);
 	memset((char *)(nfdt->close_on_exec) + cpy, 0, set);
@@ -165,20 +177,25 @@ static struct fdtable * alloc_fdtable(unsigned int nr)
 	if (unlikely(nr > sysctl_nr_open))
 		nr = ((sysctl_nr_open - 1) | (BITS_PER_LONG - 1)) + 1;
 
+	/* 分配结构struct fdtable空间 */
 	fdt = kmalloc(sizeof(struct fdtable), GFP_KERNEL);
 	if (!fdt)
 		goto out;
 	fdt->max_fds = nr;
+	/* 分配指针数组空间 */
 	data = alloc_fdmem(nr * sizeof(struct file *));
 	if (!data)
 		goto out_fdt;
 	fdt->fd = (struct file **)data;
+	/* 分配2个位图空间，不小于一级cache的大小 */
 	data = alloc_fdmem(max_t(unsigned int,
 				 2 * nr / BITS_PER_BYTE, L1_CACHE_BYTES));
 	if (!data)
 		goto out_arr;
+	/* 指向第一个位图空间 */
 	fdt->open_fds = (fd_set *)data;
 	data += nr / BITS_PER_BYTE;
+	/* 指向第二个位图空间 */
 	fdt->close_on_exec = (fd_set *)data;
 	fdt->next = NULL;
 
@@ -199,6 +216,12 @@ out:
  * Return <0 error code on error; 1 on successful completion.
  * The files->file_lock should be held on entry, and will be held on exit.
  */
+/*
+扩大进程的文件描述符表
+
+<0 出错
+1 扩大成功
+*/
 static int expand_fdtable(struct files_struct *files, int nr)
 	__releases(files->file_lock)
 	__acquires(files->file_lock)
@@ -254,6 +277,7 @@ int expand_files(struct files_struct *files, int nr)
 	 * N.B. For clone tasks sharing a files structure, this test
 	 * will limit the total number of files that can be opened.
 	 */
+	/* 已经达到进程资源限制的上限 */
 	if (nr >= rlimit(RLIMIT_NOFILE))
 		return -EMFILE;
 

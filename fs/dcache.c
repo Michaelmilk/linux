@@ -100,8 +100,12 @@ static struct kmem_cache *dentry_cache __read_mostly;
 static unsigned int d_hash_mask __read_mostly;
 static unsigned int d_hash_shift __read_mostly;
 
+/* 所有活动的dentry都会链入该哈希表 */
 static struct hlist_bl_head *dentry_hashtable __read_mostly;
 
+/*
+从全局变量dentry_hashtable中取对应的哈希桶头
+*/
 static inline struct hlist_bl_head *d_hash(struct dentry *parent,
 					unsigned long hash)
 {
@@ -262,6 +266,9 @@ static void dentry_lru_del(struct dentry *dentry)
  * (unhashed and destroyed) from the LRU, and inform the file system.
  * This wrapper should be called _prior_ to unhashing a victim dentry.
  */
+/*
+prune: 修剪
+*/
 static void dentry_lru_prune(struct dentry *dentry)
 {
 	if (!list_empty(&dentry->d_lru)) {
@@ -326,6 +333,11 @@ static struct dentry *d_kill(struct dentry *dentry, struct dentry *parent)
  * dentry->d_lock is locked.  The caller must take care of that, if
  * appropriate.
  */
+/*
+shrink: 收缩
+
+将@dentry从哈希表中移除
+*/
 static void __d_shrink(struct dentry *dentry)
 {
 	if (!d_unhashed(dentry)) {
@@ -336,7 +348,9 @@ static void __d_shrink(struct dentry *dentry)
 			b = d_hash(dentry->d_parent, dentry->d_name.hash);
 
 		hlist_bl_lock(b);
+		/* 从哈希表桶链表中移除 */
 		__hlist_bl_del(&dentry->d_hash);
+		/* pprev置为NULL，表示其已经不在哈希表中 */
 		dentry->d_hash.pprev = NULL;
 		hlist_bl_unlock(b);
 	}
@@ -359,6 +373,7 @@ static void __d_shrink(struct dentry *dentry)
  */
 void __d_drop(struct dentry *dentry)
 {
+	/* @dentry链入了哈希表 */
 	if (!d_unhashed(dentry)) {
 		__d_shrink(dentry);
 		dentry_rcuwalk_barrier(dentry);
@@ -366,6 +381,9 @@ void __d_drop(struct dentry *dentry)
 }
 EXPORT_SYMBOL(__d_drop);
 
+/*
+将@dentry从其所在的哈希表中移除
+*/
 void d_drop(struct dentry *dentry)
 {
 	spin_lock(&dentry->d_lock);
@@ -1203,10 +1221,12 @@ struct dentry *__d_alloc(struct super_block *sb, const struct qstr *name)
 	struct dentry *dentry;
 	char *dname;
 
+	/* 从dentry_cache缓存中分配一个dentry实例 */
 	dentry = kmem_cache_alloc(dentry_cache, GFP_KERNEL);
 	if (!dentry)
 		return NULL;
 
+	/* 根据文件名长度确定使用的空间 */
 	if (name->len > DNAME_INLINE_LEN-1) {
 		dname = kmalloc(name->len + 1, GFP_KERNEL);
 		if (!dname) {
@@ -1220,15 +1240,21 @@ struct dentry *__d_alloc(struct super_block *sb, const struct qstr *name)
 
 	dentry->d_name.len = name->len;
 	dentry->d_name.hash = name->hash;
+	/* 复制名称 */
 	memcpy(dname, name->name, name->len);
+	/* 字符串名称结束 */
 	dname[name->len] = 0;
 
+	/* 引用计数置为1 */
 	dentry->d_count = 1;
 	dentry->d_flags = 0;
 	spin_lock_init(&dentry->d_lock);
 	seqcount_init(&dentry->d_seq);
+	/* 现在还为NULL */
 	dentry->d_inode = NULL;
+	/* 父目录 */
 	dentry->d_parent = dentry;
+	/* 超级块 */
 	dentry->d_sb = sb;
 	dentry->d_op = NULL;
 	dentry->d_fsdata = NULL;
@@ -1237,6 +1263,7 @@ struct dentry *__d_alloc(struct super_block *sb, const struct qstr *name)
 	INIT_LIST_HEAD(&dentry->d_subdirs);
 	INIT_LIST_HEAD(&dentry->d_alias);
 	INIT_LIST_HEAD(&dentry->d_u.d_child);
+	/* 使用超级块的目录操作方法 */
 	d_set_d_op(dentry, dentry->d_sb->s_d_op);
 
 	this_cpu_inc(nr_dentry);
@@ -1255,10 +1282,12 @@ struct dentry *__d_alloc(struct super_block *sb, const struct qstr *name)
  */
 struct dentry *d_alloc(struct dentry * parent, const struct qstr *name)
 {
+	/* 分配struct dentry实例 */
 	struct dentry *dentry = __d_alloc(parent->d_sb, name);
 	if (!dentry)
 		return NULL;
 
+	/* 自旋锁控制父目录的链表并发操作 */
 	spin_lock(&parent->d_lock);
 	/*
 	 * don't need child lock because it is not subject
@@ -1266,6 +1295,7 @@ struct dentry *d_alloc(struct dentry * parent, const struct qstr *name)
 	 */
 	__dget_dlock(parent);
 	dentry->d_parent = parent;
+	/* 使用d_child字段链入父目录的d_subdirs链表 */
 	list_add(&dentry->d_u.d_child, &parent->d_subdirs);
 	spin_unlock(&parent->d_lock);
 
@@ -1325,6 +1355,7 @@ static void __d_instantiate(struct dentry *dentry, struct inode *inode)
 			dentry->d_flags |= DCACHE_NEED_AUTOMOUNT;
 		list_add(&dentry->d_alias, &inode->i_dentry);
 	}
+	/* 记录dentry对应的inode */
 	dentry->d_inode = inode;
 	dentry_rcuwalk_barrier(dentry);
 	spin_unlock(&dentry->d_lock);
@@ -1346,8 +1377,12 @@ static void __d_instantiate(struct dentry *dentry, struct inode *inode)
  * in use by the dcache.
  */
  
+/*
+将@entry与@inode关联起来
+*/
 void d_instantiate(struct dentry *entry, struct inode * inode)
 {
+	/* 此时@entry->d_alias必须还没有链入@inode */
 	BUG_ON(!list_empty(&entry->d_alias));
 	if (inode)
 		spin_lock(&inode->i_lock);
@@ -1791,6 +1826,12 @@ seqretry:
  * dentry is returned. The caller must use dput to free the entry when it has
  * finished using it. %NULL is returned if the dentry does not exist.
  */
+/*
+在父目录@parent的子目录中查找与@name名称一致的dentry
+
+因为找到的dentry引用计数增加了
+所以调用者需要使用dput()显式的释放该dentry
+*/
 struct dentry *d_lookup(struct dentry *parent, struct qstr *name)
 {
 	struct dentry *dentry;
@@ -1826,6 +1867,7 @@ struct dentry *__d_lookup(struct dentry *parent, struct qstr *name)
 	unsigned int len = name->len;
 	unsigned int hash = name->hash;
 	const unsigned char *str = name->name;
+	/* 取桶头节点 */
 	struct hlist_bl_head *b = d_hash(parent, hash);
 	struct hlist_bl_node *node;
 	struct dentry *found = NULL;
@@ -1853,6 +1895,7 @@ struct dentry *__d_lookup(struct dentry *parent, struct qstr *name)
 	 */
 	rcu_read_lock();
 	
+	/* 遍历桶链表 */
 	hlist_bl_for_each_entry_rcu(dentry, node, b, d_hash) {
 		const char *tname;
 		int tlen;
@@ -1872,6 +1915,7 @@ struct dentry *__d_lookup(struct dentry *parent, struct qstr *name)
 		 */
 		tlen = dentry->d_name.len;
 		tname = dentry->d_name.name;
+		/* 有d_compare函数的话，则使用d_compare函数进行比较 */
 		if (parent->d_flags & DCACHE_OP_COMPARE) {
 			if (parent->d_op->d_compare(parent, parent->d_inode,
 						dentry, dentry->d_inode,
@@ -3027,6 +3071,7 @@ void __init vfs_caches_init(unsigned long mempages)
 	reserve = min((mempages - nr_free_pages()) * 3/2, mempages - 1);
 	mempages -= reserve;
 
+	/* 创建路径名称的slab缓存 */
 	names_cachep = kmem_cache_create("names_cache", PATH_MAX, 0,
 			SLAB_HWCACHE_ALIGN|SLAB_PANIC, NULL);
 

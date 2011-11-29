@@ -18,7 +18,7 @@
  */
 /*
 @s	: 需要复制的源字符串
-@gfp: 内存分配标志
+@gfp	: 内存分配标志
 */
 char *kstrdup(const char *s, gfp_t gfp)
 {
@@ -99,10 +99,12 @@ void *memdup_user(const void __user *src, size_t len)
 	 * cause pagefault, which makes it pointless to use GFP_NOFS
 	 * or GFP_ATOMIC.
 	 */
+	/* 在内核空间分配字符串长度的空间，@len是包含结束符NUL的 */
 	p = kmalloc_track_caller(len, GFP_KERNEL);
 	if (!p)
 		return ERR_PTR(-ENOMEM);
 
+	/* 复制字符串内容 */
 	if (copy_from_user(p, src, len)) {
 		kfree(p);
 		return ERR_PTR(-EFAULT);
@@ -201,26 +203,37 @@ EXPORT_SYMBOL(kzfree);
  * @s: The string to duplicate
  * @n: Maximum number of bytes to copy, including the trailing NUL.
  */
+/*
+从用户空间中复制一个字符串
+
+@s	: 源字符串
+@n	: 复制的最大字节数，包含结尾的NUL
+*/
 char *strndup_user(const char __user *s, long n)
 {
 	char *p;
 	long length;
 
+	/* 获取用户空间字符串的长度，该长度值包含结束符NUL的1个字节 */
 	length = strnlen_user(s, n);
 
+	/* 检查长度的合法性 */
 	if (!length)
 		return ERR_PTR(-EFAULT);
 
 	if (length > n)
 		return ERR_PTR(-EINVAL);
 
+	/* 复制字符串 */
 	p = memdup_user(s, length);
 
 	if (IS_ERR(p))
 		return p;
 
+	/* 标记字符串结束符 */
 	p[length - 1] = '\0';
 
+	/* 返回复制的字符串地址 */
 	return p;
 }
 EXPORT_SYMBOL(strndup_user);

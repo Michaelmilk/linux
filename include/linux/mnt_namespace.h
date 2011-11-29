@@ -7,8 +7,11 @@
 #include <linux/wait.h>
 
 struct mnt_namespace {
+	/* 引用计数 */
 	atomic_t		count;
+	/* 指向根目录的struct vfsmount实例 */
 	struct vfsmount *	root;
+	/* struct vfsmount链表 */
 	struct list_head	list;
 	wait_queue_head_t poll;
 	int event;

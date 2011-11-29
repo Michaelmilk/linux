@@ -30,9 +30,14 @@ struct embedded_fd_set {
 };
 
 struct fdtable {
+	/* 进程所能处理的文件描述符最大数目 */
 	unsigned int max_fds;
+	/* 指针数组，每个指针指向一个file结构实例
+	   由文件描述符的值作为数组的索引 */
 	struct file __rcu **fd;      /* current fd array */
+	/* 进程退出时需要关闭的文件描述符位图 */
 	fd_set *close_on_exec;
+	/* 打开的文件描述符位图 */
 	fd_set *open_fds;
 	struct rcu_head rcu;
 	struct fdtable *next;
@@ -50,15 +55,18 @@ struct files_struct {
    * read mostly part
    */
 	atomic_t count;
+	/* 指向文件表 */
 	struct fdtable __rcu *fdt;
 	struct fdtable fdtab;
   /*
    * written part on a separate cache line in SMP
    */
 	spinlock_t file_lock ____cacheline_aligned_in_smp;
+	/* 下一次打开文件时使用的文件描述符 */
 	int next_fd;
 	struct embedded_fd_set close_on_exec_init;
 	struct embedded_fd_set open_fds_init;
+	/* 指针数组，指向每个打开的文件struct file实例 */
 	struct file __rcu * fd_array[NR_OPEN_DEFAULT];
 };
 

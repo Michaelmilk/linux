@@ -23,6 +23,9 @@ struct vfsmount;
  * with heavy changes by Linus Torvalds
  */
 
+/*
+dentry的d_parent字段指向其自身，即为根目录
+*/
 #define IS_ROOT(x) ((x) == (x)->d_parent)
 
 /*
@@ -32,6 +35,10 @@ struct vfsmount;
  * hash comes first so it snuggles against d_parent in the
  * dentry.
  */
+/*
+hash字段放在第1个位置
+这样在结构struct dentry中便紧挨在d_parent字段后面
+*/
 struct qstr {
 	unsigned int hash;
 	unsigned int len;
@@ -51,6 +58,9 @@ extern struct dentry_stat_t dentry_stat;
  * Compare 2 name strings, return 0 if they match, otherwise non-zero.
  * The strings are both count bytes long, and count is non-zero.
  */
+/*
+相同的话返回0
+*/
 static inline int dentry_cmp(const unsigned char *cs, size_t scount,
 				const unsigned char *ct, size_t tcount)
 {
@@ -113,34 +123,63 @@ full_name_hash(const unsigned char *name, unsigned int len)
 # endif
 #endif
 
+/*
+目录项对象有三种状态：被使用、未被使用和负状态。
+
+一个被使用的目录项对应一个有效的索引节点（即d_inode指向相应的索引节点）
+并且表明该对象存在一个或多个使用者（即d_count为正值）。
+
+一个未被使用的目录项对应一个有效的索引节点，
+但是VFS当前并未使用它（d_count为0）。
+该目录项对象仍然指向一个有效对象，而且被保留在缓存中以便需要时再使用它。
+
+一个负状态的目录项没有对应的有效节点，
+索引节点已经被删除或路径不再正确了，
+但是目录项仍然保留着，以便快速解析以后的路径查询。
+
+dentry记录着文件名，上级目录等信息，正是它形成了我们所看到的树状结构
+
+dentry结构的主要用途是建立文件名与其对应的inode之间的关联
+*/
 struct dentry {
 	/* RCU lookup touched fields */
 	unsigned int d_flags;		/* protected by d_lock */
 	seqcount_t d_seq;		/* per dentry seqlock */
+	/* 链入dentry_hashtable哈希表 */
 	struct hlist_bl_node d_hash;	/* lookup hash list */
+	/* 指向父目录的dentry实例 */
 	struct dentry *d_parent;	/* parent directory */
 	struct qstr d_name;
+	/* 文件名称对应的inode */
 	struct inode *d_inode;		/* Where the name belongs to - NULL is
 					 * negative */
+	/* 保存较短的目录/文件名称 */
 	unsigned char d_iname[DNAME_INLINE_LEN];	/* small names */
 
 	/* Ref lookup also touches following */
 	unsigned int d_count;		/* protected by d_lock */
 	spinlock_t d_lock;		/* per dentry lock */
 	const struct dentry_operations *d_op;
+	/* 目录树的根，该dentry所属文件系统的超级块实例 */
 	struct super_block *d_sb;	/* The root of the dentry tree */
 	unsigned long d_time;		/* used by d_revalidate */
+	/* 特定于文件系统的数据 */
 	void *d_fsdata;			/* fs-specific data */
 
+	/* Least Recently Used链表 */
 	struct list_head d_lru;		/* LRU list */
 	/*
 	 * d_child and d_rcu can share memory
 	 */
 	union {
+		/* 将当前dentry实例链入其父dentry的d_subdirs链表 */
 		struct list_head d_child;	/* child of parent list */
 	 	struct rcu_head d_rcu;
 	} d_u;
+	/* 子目录/文件的目录项链表 */
 	struct list_head d_subdirs;	/* our children */
+	/* 链入struct inode的i_dentry链表
+	   该链表表示关联相同文件的各个dentry项，例如文件的硬链接 */
 	struct list_head d_alias;	/* inode alias list */
 };
 
@@ -157,15 +196,21 @@ enum dentry_d_lock_class
 };
 
 struct dentry_operations {
+	/* 确保数据一致性 */
 	int (*d_revalidate)(struct dentry *, struct nameidata *);
+	/* 哈希函数，计算哈希值 */
 	int (*d_hash)(const struct dentry *, const struct inode *,
 			struct qstr *);
+	/* 比较两个dentry实例对应的文件名 */
 	int (*d_compare)(const struct dentry *, const struct inode *,
 			const struct dentry *, const struct inode *,
 			unsigned int, const char *, const struct qstr *);
+	/* 当dentry的d_count减为0时调用 */
 	int (*d_delete)(const struct dentry *);
+	/* 在释放dentry实例前调用 */
 	void (*d_release)(struct dentry *);
 	void (*d_prune)(struct dentry *);
+	/* dentry实例不再使用时，释放该dentry中的inode */
 	void (*d_iput)(struct dentry *, struct inode *);
 	char *(*d_dname)(struct dentry *, char *, int);
 	struct vfsmount *(*d_automount)(struct path *);
@@ -181,12 +226,17 @@ struct dentry_operations {
  */
 
 /* d_flags entries */
+/*
+struct dentry_operations中含有对应函数的标志位
+参考函数d_set_d_op()
+*/
 #define DCACHE_OP_HASH		0x0001
 #define DCACHE_OP_COMPARE	0x0002
 #define DCACHE_OP_REVALIDATE	0x0004
 #define DCACHE_OP_DELETE	0x0008
 #define DCACHE_OP_PRUNE         0x0010
 
+/* 目录项没有链入超级块的目录树 */
 #define	DCACHE_DISCONNECTED	0x0020
      /* This dentry is possibly not currently connected to the dcache tree, in
       * which case its parent will either be itself, or will have this flag as
@@ -211,6 +261,7 @@ struct dentry_operations {
 #define DCACHE_FSNOTIFY_PARENT_WATCHED 0x4000
      /* Parent inode is watched by some fsnotify listener */
 
+/* 目录项是一个挂载点 */
 #define DCACHE_MOUNTED		0x10000	/* is a mountpoint */
 #define DCACHE_NEED_AUTOMOUNT	0x20000	/* handle automount on this dir */
 #define DCACHE_MANAGE_TRANSIT	0x40000	/* manage transit from this dirent */
@@ -362,9 +413,13 @@ static inline struct dentry *dget_dlock(struct dentry *dentry)
 	return dentry;
 }
 
+/*
+增加实例@dentry的引用计数
+*/
 static inline struct dentry *dget(struct dentry *dentry)
 {
 	if (dentry) {
+		/* 使用自旋锁进行并发控制 */
 		spin_lock(&dentry->d_lock);
 		dget_dlock(dentry);
 		spin_unlock(&dentry->d_lock);
@@ -381,6 +436,9 @@ extern struct dentry *dget_parent(struct dentry *dentry);
  *	Returns true if the dentry passed is not currently hashed.
  */
  
+/*
+@dentry没有链入哈希表则返回真
+*/
 static inline int d_unhashed(struct dentry *dentry)
 {
 	return hlist_bl_unhashed(&dentry->d_hash);
@@ -410,6 +468,9 @@ static inline bool d_managed(struct dentry *dentry)
 	return dentry->d_flags & DCACHE_MANAGED_DENTRY;
 }
 
+/*
+返回目录项@dentry是否为一个挂载点
+*/
 static inline bool d_mountpoint(struct dentry *dentry)
 {
 	return dentry->d_flags & DCACHE_MOUNTED;

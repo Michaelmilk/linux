@@ -21,7 +21,9 @@ struct vfsmount;
 struct dentry;
 struct mnt_namespace;
 
+/* 禁止执行setuid */
 #define MNT_NOSUID	0x01
+/* 没有对应的物理设备，如虚拟文件系统，设置该标志 */
 #define MNT_NODEV	0x02
 #define MNT_NOEXEC	0x04
 #define MNT_NOATIME	0x08
@@ -52,10 +54,25 @@ struct mnt_pcp {
 	int mnt_writers;
 };
 
+/*
+对于每一个mount的文件系统，都由一个vfsmount实例来表示
+
+对于某个文件系统实例，内存中super_block和vfsmount都是唯一的。
+比如，我们将某个挂载硬盘分区mount -t vfat /dev/hda2 /mnt/d。
+实际上就是新建一个vfsmount结构作为连接件，
+vfsmount->mnt_sb = /dev/hda2的超级块结构；
+vfsmount->mntroot = /dev/hda2的"根"目录的dentry；
+vfsmount->mnt_mountpoint = /mnt/d的dentry； 
+vfsmount->mnt_parent = /mnt/d所属的文件系统的vfsmount。
+并且把这个新建的vfsmount链入一个全局的hash表mount_hashtable中。
+*/
 struct vfsmount {
 	struct list_head mnt_hash;
+	/* 指向挂载目录所属的文件系统 */
 	struct vfsmount *mnt_parent;	/* fs we are mounted on */
+	/* 装载点在父文件系统中的目录 */
 	struct dentry *mnt_mountpoint;	/* dentry of mountpoint */
+	/* 当前文件系统根目录 */
 	struct dentry *mnt_root;	/* root of the mounted tree */
 	struct super_block *mnt_sb;	/* pointer to superblock */
 #ifdef CONFIG_SMP
@@ -65,7 +82,10 @@ struct vfsmount {
 	int mnt_count;
 	int mnt_writers;
 #endif
+	/* 孩子文件系统的链表头 */
 	struct list_head mnt_mounts;	/* list of children, anchored here */
+	/* 子文件系统通过该链表节点mnt_child链入父文件系统的mnt_mounts链表头
+	   mnt_child之间为兄弟结点 */
 	struct list_head mnt_child;	/* and going through their mnt_child */
 	int mnt_flags;
 	/* 4 bytes hole on 64bits arches without fsnotify */
@@ -74,6 +94,7 @@ struct vfsmount {
 	struct hlist_head mnt_fsnotify_marks;
 #endif
 	const char *mnt_devname;	/* Name of device e.g. /dev/dsk/hda1 */
+	/* 通过mnt_list节点链入struct mnt_namespace的list链表 */
 	struct list_head mnt_list;
 	struct list_head mnt_expire;	/* link in fs-specific expiry list */
 	struct list_head mnt_share;	/* circular list of shared mounts */

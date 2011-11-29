@@ -36,7 +36,12 @@
 #include "pnode.h"
 #include "internal.h"
 
+/*
+在申请的一页空间中保存n个struct list_head头节点
+计算n个的幂次
+*/
 #define HASH_SHIFT ilog2(PAGE_SIZE / sizeof(struct list_head))
+/* 计算头节点的个数，即哈希表mount_hashtable桶头节点的个数 */
 #define HASH_SIZE (1UL << HASH_SHIFT)
 
 static int event;
@@ -47,6 +52,7 @@ static int mnt_id_start = 0;
 static int mnt_group_start = 1;
 
 static struct list_head *mount_hashtable __read_mostly;
+/* 结构struct vfsmount的缓存，在mnt_init()中初始化 */
 static struct kmem_cache *mnt_cache __read_mostly;
 static struct rw_semaphore namespace_sem;
 
@@ -64,6 +70,10 @@ EXPORT_SYMBOL_GPL(fs_kobj);
  */
 DEFINE_BRLOCK(vfsmount_lock);
 
+/*
+根据地址@mnt和@dentry计算哈希值
+以便确定桶头节点
+*/
 static inline unsigned long hash(struct vfsmount *mnt, struct dentry *dentry)
 {
 	unsigned long tmp = ((unsigned long)mnt / L1_CACHE_BYTES);
@@ -196,8 +206,12 @@ unsigned int mnt_get_count(struct vfsmount *mnt)
 #endif
 }
 
+/*
+分配一个struct vfsmount结构实例
+*/
 static struct vfsmount *alloc_vfsmnt(const char *name)
 {
+	/* 从mnt_cache缓存中分配一个struct vfsmount实例 */
 	struct vfsmount *mnt = kmem_cache_zalloc(mnt_cache, GFP_KERNEL);
 	if (mnt) {
 		int err;
@@ -207,12 +221,14 @@ static struct vfsmount *alloc_vfsmnt(const char *name)
 			goto out_free_cache;
 
 		if (name) {
+			/* 复制设备名称 */
 			mnt->mnt_devname = kstrdup(name, GFP_KERNEL);
 			if (!mnt->mnt_devname)
 				goto out_free_id;
 		}
 
 #ifdef CONFIG_SMP
+		/* 分配多核结构空间，每个核单独维护一个计数器 */
 		mnt->mnt_pcp = alloc_percpu(struct mnt_pcp);
 		if (!mnt->mnt_pcp)
 			goto out_free_devname;
@@ -223,6 +239,7 @@ static struct vfsmount *alloc_vfsmnt(const char *name)
 		mnt->mnt_writers = 0;
 #endif
 
+		/* 初始化各个链表头节点 */
 		INIT_LIST_HEAD(&mnt->mnt_hash);
 		INIT_LIST_HEAD(&mnt->mnt_child);
 		INIT_LIST_HEAD(&mnt->mnt_mounts);
@@ -670,6 +687,14 @@ static struct vfsmount *skip_mnt_tree(struct vfsmount *p)
 	return p;
 }
 
+/*
+这个函数是内核最终实现mount的函数
+
+@type	: 文件系统描述符，例如传递ext3_fs_type
+@flags	:
+@name	: 设备名称，例如/dev/dsk/hda1
+@data	:
+*/
 struct vfsmount *
 vfs_kern_mount(struct file_system_type *type, int flags, const char *name, void *data)
 {
@@ -679,10 +704,12 @@ vfs_kern_mount(struct file_system_type *type, int flags, const char *name, void 
 	if (!type)
 		return ERR_PTR(-ENODEV);
 
+	/* 根据挂载点名称分配一个vfsmount挂载点实例 */
 	mnt = alloc_vfsmnt(name);
 	if (!mnt)
 		return ERR_PTR(-ENOMEM);
 
+	/* kern_mount_data()中调用时传递此标志 */
 	if (flags & MS_KERNMOUNT)
 		mnt->mnt_flags = MNT_INTERNAL;
 
@@ -1818,6 +1845,9 @@ static int change_mount_flags(struct vfsmount *mnt, int ms_flags)
  * If you've mounted a non-root directory somewhere and want to do remount
  * on it - tough luck.
  */
+/*
+修改已经装载的文件系统的选项
+*/
 static int do_remount(struct path *path, int flags, int mnt_flags,
 		      void *data)
 {
@@ -2013,6 +2043,9 @@ unlock:
  * create a new mount for userspace and request it to be added into the
  * namespace's tree
  */
+/*
+普通的挂载操作
+*/
 static int do_new_mount(struct path *path, char *type, int flags,
 			int mnt_flags, char *name, void *data)
 {
@@ -2255,6 +2288,10 @@ int copy_mount_options(const void __user * data, unsigned long *where)
 	return 0;
 }
 
+/*
+复制用户空间数据@data
+新的字符串由@where记录
+*/
 int copy_mount_string(const void __user *data, char **where)
 {
 	char *tmp;
@@ -2294,11 +2331,13 @@ long do_mount(char *dev_name, char *dir_name, char *type_page,
 	int mnt_flags = 0;
 
 	/* Discard magic */
+	/* 忽略MS_MGC_VAL魔数的值 */
 	if ((flags & MS_MGC_MSK) == MS_MGC_VAL)
 		flags &= ~MS_MGC_MSK;
 
 	/* Basic sanity checks */
 
+	/* 基本的检查目录名称是否有效 */
 	if (!dir_name || !*dir_name || !memchr(dir_name, 0, PAGE_SIZE))
 		return -EINVAL;
 
@@ -2488,6 +2527,15 @@ struct mnt_namespace *create_mnt_ns(struct vfsmount *mnt)
 }
 EXPORT_SYMBOL(create_mnt_ns);
 
+/*
+系统调用mount
+
+@dev_name	: 设备名称
+@dir_name	: 挂载目录
+@type		: 文件系统类型名称
+@flags		:
+@data		:
+*/
 SYSCALL_DEFINE5(mount, char __user *, dev_name, char __user *, dir_name,
 		char __user *, type, unsigned long, flags, void __user *, data)
 {
@@ -2497,31 +2545,39 @@ SYSCALL_DEFINE5(mount, char __user *, dev_name, char __user *, dir_name,
 	char *kernel_dev;
 	unsigned long data_page;
 
+	/* 类型 */
 	ret = copy_mount_string(type, &kernel_type);
 	if (ret < 0)
 		goto out_type;
 
+	/* 目录 */
 	kernel_dir = getname(dir_name);
 	if (IS_ERR(kernel_dir)) {
 		ret = PTR_ERR(kernel_dir);
 		goto out_dir;
 	}
 
+	/* 设备 */
 	ret = copy_mount_string(dev_name, &kernel_dev);
 	if (ret < 0)
 		goto out_dev;
 
+	/* 挂载选项 */
 	ret = copy_mount_options(data, &data_page);
 	if (ret < 0)
 		goto out_data;
 
+	/* 用户空间数据已经复制到内核空间
+	   传递给函数do_mount() */
 	ret = do_mount(kernel_dev, kernel_dir, kernel_type, flags,
 		(void *) data_page);
 
+	/* 释放动态申请的page空间 */
 	free_page(data_page);
 out_data:
 	kfree(kernel_dev);
 out_dev:
+	/* 将缓存放回names_cachep */
 	putname(kernel_dir);
 out_dir:
 	kfree(kernel_type);
@@ -2678,9 +2734,11 @@ void __init mnt_init(void)
 
 	init_rwsem(&namespace_sem);
 
+	/* 创建mnt_cache的slab缓存 */
 	mnt_cache = kmem_cache_create("mnt_cache", sizeof(struct vfsmount),
 			0, SLAB_HWCACHE_ALIGN | SLAB_PANIC, NULL);
 
+	/* 申请哈希表头节点空间 */
 	mount_hashtable = (struct list_head *)__get_free_page(GFP_ATOMIC);
 
 	if (!mount_hashtable)
@@ -2688,6 +2746,7 @@ void __init mnt_init(void)
 
 	printk(KERN_INFO "Mount-cache hash table entries: %lu\n", HASH_SIZE);
 
+	/* 初始化头节点 */
 	for (u = 0; u < HASH_SIZE; u++)
 		INIT_LIST_HEAD(&mount_hashtable[u]);
 

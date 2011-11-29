@@ -59,8 +59,11 @@
  *   inode_hash_lock
  */
 
+/* 哈希表项的掩码 */
 static unsigned int i_hash_mask __read_mostly;
+/* (1 << i_hash_shift)哈希表头节点的项数 */
 static unsigned int i_hash_shift __read_mostly;
+/* inode的哈希表 */
 static struct hlist_head *inode_hashtable __read_mostly;
 static __cacheline_aligned_in_smp DEFINE_SPINLOCK(inode_hash_lock);
 
@@ -82,6 +85,7 @@ struct inodes_stat_t inodes_stat;
 static DEFINE_PER_CPU(unsigned int, nr_inodes);
 static DEFINE_PER_CPU(unsigned int, nr_unused);
 
+/* inode的slab缓存 */
 static struct kmem_cache *inode_cachep __read_mostly;
 
 static int get_nr_inodes(void)
@@ -286,6 +290,12 @@ EXPORT_SYMBOL(address_space_init_once);
  * once, because the fields are idempotent across use
  * of the inode, so let the slab aware of that.
  */
+/*
+idempotent: 等幂
+
+初始化@inode节点
+对每个inode只需执行一次
+*/
 void inode_init_once(struct inode *inode)
 {
 	memset(inode, 0, sizeof(*inode));
@@ -302,6 +312,9 @@ void inode_init_once(struct inode *inode)
 }
 EXPORT_SYMBOL(inode_init_once);
 
+/*
+从slab缓存inode_cachep中分配inode节点时执行的构造函数
+*/
 static void init_once(void *foo)
 {
 	struct inode *inode = (struct inode *) foo;
@@ -369,6 +382,9 @@ static inline void inode_sb_list_del(struct inode *inode)
 	}
 }
 
+/*
+根据超级块的地址和inode节点号的组合计算哈希值
+*/
 static unsigned long hash(struct super_block *sb, unsigned long hashval)
 {
 	unsigned long tmp;
@@ -1595,6 +1611,7 @@ void __init inode_init(void)
 	int loop;
 
 	/* inode slab cache */
+	/* 建立inode的slab缓存 */
 	inode_cachep = kmem_cache_create("inode_cache",
 					 sizeof(struct inode),
 					 0,
@@ -1606,6 +1623,7 @@ void __init inode_init(void)
 	if (!hashdist)
 		return;
 
+	/* 根据系统内存分配inode哈希表 */
 	inode_hashtable =
 		alloc_large_system_hash("Inode-cache",
 					sizeof(struct hlist_head),
@@ -1616,6 +1634,7 @@ void __init inode_init(void)
 					&i_hash_mask,
 					0);
 
+	/* 初始化哈希表的头节点 */
 	for (loop = 0; loop < (1 << i_hash_shift); loop++)
 		INIT_HLIST_HEAD(&inode_hashtable[loop]);
 }

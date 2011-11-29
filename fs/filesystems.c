@@ -43,13 +43,22 @@ void put_filesystem(struct file_system_type *fs)
 	module_put(fs->owner);
 }
 
+/*
+判断以@name为名称的文件系统是否已经存在于全局链表file_systems中
+查找结果由2级指针返回
+*/
 static struct file_system_type **find_filesystem(const char *name, unsigned len)
 {
 	struct file_system_type **p;
+	/* 遍历file_systems链表 */
 	for (p=&file_systems; *p; p=&(*p)->next)
+		/* 比较名称 */
 		if (strlen((*p)->name) == len &&
 		    strncmp((*p)->name, name, len) == 0)
 			break;
+	/* 找到则会返回对应文件系统的2级指针
+	   未找到则会返回一个指向NULL的2级指针
+	   即链表中最后一项的next指针的指针 */
 	return p;
 }
 
@@ -66,22 +75,37 @@ static struct file_system_type **find_filesystem(const char *name, unsigned len)
  *	unregistered.
  */
  
+/*
+将@fs通过静态全局变量file_systems及其next指针串成链表
+注册过程实际上将表示各实际文件系统的struct file_system_type数据结构实例化，
+然后形成一个链表，内核中用一个名为file_systems的全局变量来指向该链表的表头。
+*/
 int register_filesystem(struct file_system_type * fs)
 {
 	int res = 0;
 	struct file_system_type ** p;
 
+	/* 文件系统的名称中不能含有'.' */
 	BUG_ON(strchr(fs->name, '.'));
+	/* @fs只能是单一实例，不能是已经组成链表的 */
 	if (fs->next)
 		return -EBUSY;
+	/* 初始化超级块链表头 */
 	INIT_LIST_HEAD(&fs->fs_supers);
+	/* 获取链表file_systems的写锁 */
 	write_lock(&file_systems_lock);
+	/* 检查是否有重复项 */
 	p = find_filesystem(fs->name, strlen(fs->name));
+	/* 名称重复则返回错误码 */
 	if (*p)
 		res = -EBUSY;
+	/* 将新文件系统@fs链入全局链表file_systems */
 	else
 		*p = fs;
+	/* 释放写锁 */
 	write_unlock(&file_systems_lock);
+	/* 成功则返回0
+	   重复则返回-EBUSY */
 	return res;
 }
 
@@ -260,6 +284,7 @@ static struct file_system_type *__get_fs_type(const char *name, int len)
 	struct file_system_type *fs;
 
 	read_lock(&file_systems_lock);
+	/* 根据文件系统的名称@name查找file_system_type */
 	fs = *(find_filesystem(name, len));
 	if (fs && !try_module_get(fs->owner))
 		fs = NULL;

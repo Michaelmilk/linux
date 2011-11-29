@@ -48,13 +48,23 @@ typedef	int (read_proc_t)(char *page, char **start, off_t off,
 typedef	int (write_proc_t)(struct file *file, const char __user *buffer,
 			   unsigned long count, void *data);
 
+/*
+所有属于proc文件系统的文件都对应一个proc_dir_entry实例
+
+*/
 struct proc_dir_entry {
+	/* 节点号，由get_inode_number()产生 */
 	unsigned int low_ino;
+	/* 文件的权限标志 */
 	mode_t mode;
 	nlink_t nlink;
+	/* 用户id */
 	uid_t uid;
+	/* 组id */
 	gid_t gid;
+	/* 文件的字节单位大小 */
 	loff_t size;
+	/* proc索引节点inode的操作函数*/
 	const struct inode_operations *proc_iops;
 	/*
 	 * NULL ->proc_fops means "PDE is going away RSN" or
@@ -64,17 +74,22 @@ struct proc_dir_entry {
 	 * If you're allocating ->proc_fops dynamically, save a pointer
 	 * somewhere.
 	 */
+	/* proc文件的操作函数 */
 	const struct file_operations *proc_fops;
+	/* 组成树形链表 */
 	struct proc_dir_entry *next, *parent, *subdir;
 	void *data;
+	/* proc文件的读写函数 */
 	read_proc_t *read_proc;
 	write_proc_t *write_proc;
+	/* 结构实例的引用计数 */
 	atomic_t count;		/* use count */
 	int pde_users;	/* number of callers into module in progress */
 	struct completion *pde_unload_completion;
 	struct list_head pde_openers;	/* who did ->open, but not ->release */
 	spinlock_t pde_unload_lock; /* proc_fops checks and pde_users bumps */
 	u8 namelen;
+	/* proc文件名称 */
 	char name[];
 };
 
@@ -264,7 +279,9 @@ struct ctl_table_header;
 struct ctl_table;
 
 struct proc_inode {
+	/* 指向进程的pid实例 */
 	struct pid *pid;
+	/* 文件描述符，对应/proc/pid/fd/中的某个文件 */
 	int fd;
 	union proc_op op;
 	struct proc_dir_entry *pde;
@@ -272,9 +289,13 @@ struct proc_inode {
 	struct ctl_table *sysctl_entry;
 	void *ns;
 	const struct proc_ns_operations *ns_ops;
+	/* 内嵌的inode节点 */
 	struct inode vfs_inode;
 };
 
+/*
+根据@inode取其容器结构proc_inode
+*/
 static inline struct proc_inode *PROC_I(const struct inode *inode)
 {
 	return container_of(inode, struct proc_inode, vfs_inode);
