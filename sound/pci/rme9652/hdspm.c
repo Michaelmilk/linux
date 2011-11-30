@@ -41,7 +41,7 @@
 #include <linux/init.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
-#include <linux/moduleparam.h>
+#include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/pci.h>
 #include <linux/math64.h>
@@ -6518,7 +6518,7 @@ static int __devinit snd_hdspm_create(struct snd_card *card,
 			hdspm->io_type = AES32;
 			hdspm->card_name = "RME AES32";
 			hdspm->midiPorts = 2;
-		} else if ((hdspm->firmware_rev == 0xd5) ||
+		} else if ((hdspm->firmware_rev == 0xd2) ||
 			((hdspm->firmware_rev >= 0xc8)  &&
 				(hdspm->firmware_rev <= 0xcf))) {
 			hdspm->io_type = MADI;
