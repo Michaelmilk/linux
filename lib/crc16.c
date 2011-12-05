@@ -10,6 +10,17 @@
 #include <linux/crc16.h>
 
 /** CRC table for the CRC-16. The poly is 0x8005 (x^16 + x^15 + x^2 + 1) */
+/*
+CRC: Cyclical Redundancy Check 循环冗余校验
+poly: 多项式 polynomial
+
+0x8005: 10000000 00000101 b
+        ^             ^ ^
+       15             2 0
+
+生成多项式最高幂次项系数固定为1，故简记式0x8005中，最高位的1省略了，即原来为0x18005
+最高位和最低位必须为1
+*/
 u16 const crc16_table[256] = {
 	0x0000, 0xC0C1, 0xC181, 0x0140, 0xC301, 0x03C0, 0x0280, 0xC241,
 	0xC601, 0x06C0, 0x0780, 0xC741, 0x0500, 0xC5C1, 0xC481, 0x0440,

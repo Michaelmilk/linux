@@ -6,6 +6,11 @@ MODULE_AUTHOR("Akinobu Mita <akinobu.mita@gmail.com>");
 MODULE_DESCRIPTION("Bit ordering reversal functions");
 MODULE_LICENSE("GPL");
 
+/*
+8bit字节的位反转表
+即 0x01 => 0x80  --  00000001b => 10000000b
+   0x02 => 0x40  --  00000010b => 01000000b
+*/
 const u8 byte_rev_table[256] = {
 	0x00, 0x80, 0x40, 0xc0, 0x20, 0xa0, 0x60, 0xe0,
 	0x10, 0x90, 0x50, 0xd0, 0x30, 0xb0, 0x70, 0xf0,
@@ -42,8 +47,12 @@ const u8 byte_rev_table[256] = {
 };
 EXPORT_SYMBOL_GPL(byte_rev_table);
 
+/*
+将16bit数@x按位反转
+*/
 u16 bitrev16(u16 x)
 {
+	/* 按字节反转，并将每个字节中的位反转 */
 	return (bitrev8(x & 0xff) << 8) | bitrev8(x >> 8);
 }
 EXPORT_SYMBOL(bitrev16);
@@ -52,6 +61,9 @@ EXPORT_SYMBOL(bitrev16);
  * bitrev32 - reverse the order of bits in a u32 value
  * @x: value to be bit-reversed
  */
+/*
+将32bit数@x按位反转
+*/
 u32 bitrev32(u32 x)
 {
 	return (bitrev16(x & 0xffff) << 16) | bitrev16(x >> 16);

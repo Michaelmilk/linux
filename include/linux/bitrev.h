@@ -5,6 +5,9 @@
 
 extern u8 const byte_rev_table[256];
 
+/*
+返回8bit字节@byte的位反转值
+*/
 static inline u8 bitrev8(u8 byte)
 {
 	return byte_rev_table[byte];

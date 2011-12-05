@@ -20,6 +20,9 @@
  * Version 2.  See the file COPYING for more details.
  */
 
+/*
+incantation: ·ûÖä
+*/
 #include <linux/crc32.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
