@@ -9,6 +9,18 @@
 
 /* Optimization barrier */
 /* The "volatile" is due to gcc bugs */
+/*
+cpu越过内存屏障后，会刷新寄存器的状态
+这条语句实际上不生成任何代码
+barrier()宏只约束gcc编译器，不会约束运行时cpu的行为
+
+__asm__内嵌汇编
+__volatile__编译器不要对内嵌汇编代码进行优化
+""指令为空
+ 输入部为空
+ 输出部位空
+"memory"破坏部位内存
+*/
 #define barrier() __asm__ __volatile__("": : :"memory")
 
 /*
@@ -29,6 +41,9 @@
  * the inline assembly constraint from =g to =r, in this particular
  * case either is valid.
  */
+/*
+obfuscate: 使模糊
+*/
 #define RELOC_HIDE(ptr, off)					\
   ({ unsigned long __ptr;					\
     __asm__ ("" : "=r"(__ptr) : "0"(ptr));		\

@@ -3,20 +3,37 @@
 
 #ifndef __ASSEMBLY__
 
+/*
+使用sparse工具进行检查时，会定义__CHECKER__宏
+以下各宏定义展开为对应的属性
+*/
 #ifdef __CHECKER__
+/* 用户地址空间指针属性，不可直接反引用 */
 # define __user		__attribute__((noderef, address_space(1)))
+/* 内核地址空间指针属性 */
 # define __kernel	__attribute__((address_space(0)))
+/* 安全的参数使用，无需警告 */
 # define __safe		__attribute__((safe))
+/* 允许大小端序数之间可以直接进行强制转换，sparse工具不警告 */
 # define __force	__attribute__((force))
+/* 不可进行强制转换 */
 # define __nocast	__attribute__((nocast))
+/* io地址空间指针属性，不可直接反引用 */
 # define __iomem	__attribute__((noderef, address_space(2)))
+/* @x在执行之前，必须为0，执行后为1 */
 # define __acquires(x)	__attribute__((context(x,0,1)))
+/* @x在执行之前，必须为1，执行后为0 */
 # define __releases(x)	__attribute__((context(x,1,0)))
+/* @x的计数增加1 */
 # define __acquire(x)	__context__(x,1)
+/* @x的计数减少1 */
 # define __release(x)	__context__(x,-1)
+/* 条件锁，@c为真时，@x的计数增加1 */
 # define __cond_lock(x,c)	((c) ? ({ __acquire(x); 1; }) : 0)
+/* 每cpu地址空间指针属性，不可直接反引用 */
 # define __percpu	__attribute__((noderef, address_space(3)))
 #ifdef CONFIG_SPARSE_RCU_POINTER
+/* 受rcu机制保护的指针，不可直接反引用 */
 # define __rcu		__attribute__((noderef, address_space(4)))
 #else
 # define __rcu
@@ -48,6 +65,10 @@ extern void __chk_io_ptr(const volatile void __iomem *);
 #include <linux/compiler-gcc.h>
 #endif
 
+/*
+当使用gcc选项-finstrument-functions的时候
+不跟踪使用notrace修饰的函数
+*/
 #define notrace __attribute__((no_instrument_function))
 
 /* Intel compiler defines __GNUC__. So we will overwrite implementations
@@ -159,6 +180,9 @@ likely和unlikely不是指令,它只是给编译器看的，
 #endif
 
 /* Optimization barrier */
+/*
+上面包含的compiler-gcc.h中已经对barrier()宏进行了定义
+*/
 #ifndef barrier
 # define barrier() __memory_barrier()
 #endif
@@ -229,6 +253,9 @@ likely和unlikely不是指令,它只是给编译器看的，
  * Mark functions that are referenced only in inline assembly as __used so
  * the code is emitted even though it appears to be unreferenced.
  */
+/*
+elide: 省略
+*/
 #ifndef __used
 # define __used			/* unimplemented */
 #endif

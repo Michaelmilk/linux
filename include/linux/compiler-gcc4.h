@@ -9,10 +9,14 @@
 # endif
 #endif
 
+/* 标记变量已经使用，不再产生警告 */
 #define __used			__attribute__((__used__))
+/* 必须对函数的返回值进行检查 */
 #define __must_check 		__attribute__((warn_unused_result))
+/* 编译器gcc4往后的版本内建支持offsetof(TYPE,MEMBER)宏的偏移计算功能 */
 #define __compiler_offsetof(a,b) __builtin_offsetof(a,b)
 
+/* gcc4.3往后的版本 */
 #if __GNUC_MINOR__ >= 3
 /* Mark functions as cold. gcc will assume any path leading to a call
    to them will be unlikely.  This means a lot of manual unlikely()s
@@ -27,9 +31,14 @@
    gcc also has a __attribute__((__hot__)) to move hot functions into
    a special section, but I don't see any sense in this right now in
    the kernel context */
+/*
+__cold__属性告诉编译器该函数不太可能会被执行
+编译的时候会进行相应的优化
+*/
 #define __cold			__attribute__((__cold__))
 
 
+/* gcc4.5往后的版本 */
 #if __GNUC_MINOR__ >= 5
 /*
  * Mark a position in code as unreachable.  This can be used to
@@ -43,6 +52,7 @@
 #define unreachable() __builtin_unreachable()
 
 /* Mark a function definition as prohibited from being cloned. */
+/* 阻止对整个函数的拷贝 */
 #define __noclone	__attribute__((__noclone__))
 
 #endif
