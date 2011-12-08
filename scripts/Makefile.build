@@ -176,6 +176,10 @@ __build: $(if $(KBUILD_BUILTIN),$(builtin-target) $(lib-target) $(extra-y)) \
 	@:
 
 # Linus' kernel sanity checking tool
+
+    # 命令行中使用了C=1或C=2参数
+    # 顶层Makefile中会将KBUILD_CHECKSRC赋为对应的值
+
 ifneq ($(KBUILD_CHECKSRC),0)
   ifeq ($(KBUILD_CHECKSRC),2)
     quiet_cmd_force_checksrc = CHECK   $<
