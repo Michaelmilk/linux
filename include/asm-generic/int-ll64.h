@@ -8,6 +8,9 @@
 #ifndef _ASM_GENERIC_INT_LL64_H
 #define _ASM_GENERIC_INT_LL64_H
 
+/*
+包含特定平台下关于long数据类型位长度的定义
+*/
 #include <asm/bitsperlong.h>
 
 #ifndef __ASSEMBLY__
@@ -16,6 +19,10 @@
  * header files exported to user space
  */
 
+/*
+使用"__"打头的定义不会污染POSIX的命名空间
+在导出给用户空间的头文件中使用这些定义
+*/
 typedef __signed__ char __s8;
 typedef unsigned char __u8;
 
@@ -39,6 +46,10 @@ typedef unsigned long long __u64;
 
 #ifndef __ASSEMBLY__
 
+/*
+内核中对基本数据类型的封装定义
+只在内核中使用
+*/
 typedef signed char s8;
 typedef unsigned char u8;
 
@@ -51,6 +62,9 @@ typedef unsigned int u32;
 typedef signed long long s64;
 typedef unsigned long long u64;
 
+/*
+限定数据类型的后缀
+*/
 #define S8_C(x)  x
 #define U8_C(x)  x ## U
 #define S16_C(x) x

@@ -171,6 +171,10 @@ typedef u32 dma_addr_t;
  * any application/library that wants linux/types.h.
  */
 
+/*
+按位检查
+主要用来检查不同的大小端序数之间的直接赋值
+*/
 #ifdef __CHECKER__
 #define __bitwise__ __attribute__((bitwise))
 #else
