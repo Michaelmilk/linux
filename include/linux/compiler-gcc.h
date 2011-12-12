@@ -17,9 +17,9 @@ barrier()宏只约束gcc编译器，不会约束运行时cpu的行为
 __asm__内嵌汇编
 __volatile__编译器不要对内嵌汇编代码进行优化
 ""指令为空
+ 输出部为空
  输入部为空
- 输出部位空
-"memory"破坏部位内存
+"memory"破坏部为内存
 */
 #define barrier() __asm__ __volatile__("": : :"memory")
 
