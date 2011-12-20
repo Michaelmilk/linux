@@ -22,6 +22,9 @@
  *
  * bit 0 is the LSB of addr; bit 32 is the LSB of (addr+1).
  */
+/*
+LSB: Least Significant Bit 最低有效位
+*/
 
 #if __GNUC__ < 4 || (__GNUC__ == 4 && __GNUC_MINOR__ < 1)
 /* Technically wrong, but this avoids compilation errors on some gcc
@@ -56,6 +59,11 @@
  * Note that @nr may be almost arbitrarily large; this function is not
  * restricted to acting on a single-word quantity.
  */
+/*
+bts nr, ADDR，该指令的两个操作数不能全是内存变量，
+因此将nr的限定字符串指定为“Ir”，将nr 与立即数或者寄存器相关联，
+这样两个操作数中只有ADDR为内存变量。
+*/
 static __always_inline void
 set_bit(unsigned int nr, volatile unsigned long *addr)
 {
@@ -79,6 +87,9 @@ set_bit(unsigned int nr, volatile unsigned long *addr)
  * If it's called on the same region of memory simultaneously, the effect
  * may be that only one operation succeeds.
  */
+/*
+无LOCK_PREFIX，不会锁定内存总线，对多处理器而言，不会是原子操作
+*/
 static inline void __set_bit(int nr, volatile unsigned long *addr)
 {
 	asm volatile("bts %1,%0" : ADDR : "Ir" (nr) : "memory");
@@ -192,6 +203,9 @@ static inline void change_bit(int nr, volatile unsigned long *addr)
  * This operation is atomic and cannot be reordered.
  * It also implies a memory barrier.
  */
+/*
+bts : 将ADDR操作数中的第nr位（从0始）送CF，并且第nr位置1。
+*/
 static inline int test_and_set_bit(int nr, volatile unsigned long *addr)
 {
 	int oldbit;
@@ -306,6 +320,12 @@ static inline int test_and_change_bit(int nr, volatile unsigned long *addr)
 	return oldbit;
 }
 
+/*
+检测从地址@addr开始，第@nr位是否为1(@nr从0开始)
+将@addr按照BITS_PER_LONG个位数进行分组
+(1UL << (nr % BITS_PER_LONG))表示第N个分组中的bit置位
+(addr[nr / BITS_PER_LONG])按BITS_PER_LONG取数组下标，与每次判断BITS_PER_LONG位对应
+*/
 static __always_inline int constant_test_bit(unsigned int nr, const volatile unsigned long *addr)
 {
 	return ((1UL << (nr % BITS_PER_LONG)) &
@@ -333,6 +353,10 @@ static inline int variable_test_bit(int nr, volatile const unsigned long *addr)
 static int test_bit(int nr, const volatile unsigned long *addr);
 #endif
 
+/*
+如果nr为一个常量，__builtin_constant_p(nr)返回1，则调用constant_test_bit() 
+如果nr为一个变量，__builtin_constant_p(nr)返回0，则调用variable_test_bit() 
+*/
 #define test_bit(nr, addr)			\
 	(__builtin_constant_p((nr))		\
 	 ? constant_test_bit((nr), (addr))	\
