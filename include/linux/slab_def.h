@@ -23,29 +23,39 @@
  * manages a cache.
  */
 
+/* 管理一个高速缓存 */
 struct kmem_cache {
 /* 1) Cache tunables. Protected by cache_chain_mutex */
+	/* 要转移本地高速缓存的大批对象的数量 */
 	unsigned int batchcount;
+	/* 本地高速缓存中空闲对象的最大数目 */
 	unsigned int limit;
 	unsigned int shared;
 
+	/* 高速缓存的大小 */
 	unsigned int buffer_size;
 	u32 reciprocal_buffer_size;
 /* 2) touched by every alloc & free from the backend */
 
+	/* 描述高速缓存永久属性的一组标志 */
 	unsigned int flags;		/* constant flags */
+	/* 封装在一个单独slab中的对象个数 */
 	unsigned int num;		/* # of objs per slab */
 
 /* 3) cache_grow/shrink */
 	/* order of pgs per slab (2^n) */
+	/* 一个单独slab中包含的连续页框数目的对数 */
 	unsigned int gfporder;
 
 	/* force GFP flags, e.g. GFP_DMA */
 	gfp_t gfpflags;
 
+	/* slab使用的颜色个数 */
 	size_t colour;			/* cache colouring range */
+	/* slab中的基本对齐偏移 */
 	unsigned int colour_off;	/* colour offset */
 	struct kmem_cache *slabp_cache;
+	/* slab的大小 */
 	unsigned int slab_size;
 	unsigned int dflags;		/* dynamic flags */
 
@@ -53,7 +63,9 @@ struct kmem_cache {
 	void (*ctor)(void *obj);
 
 /* 4) cache creation/removal */
+	/* 存放高速缓存名字的字符数组 */
 	const char *name;
+	/* 高速缓存描述符双向链表使用的指针 */
 	struct list_head next;
 
 /* 5) statistics */
@@ -80,6 +92,7 @@ struct kmem_cache {
 	 * variables contain the offset to the user object and its size.
 	 */
 	int obj_offset;
+	/* 高速缓存中包含的对象的大小 */
 	int obj_size;
 #endif /* CONFIG_DEBUG_SLAB */
 
@@ -91,6 +104,7 @@ struct kmem_cache {
 	 * We still use [NR_CPUS] and not [1] or [0] because cache_cache
 	 * is statically defined, so we reserve the max number of cpus.
 	 */
+	/* 高速缓存中的slab链表 */
 	struct kmem_list3 **nodelists;
 	struct array_cache *array[NR_CPUS];
 	/*

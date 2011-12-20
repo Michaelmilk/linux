@@ -130,7 +130,9 @@ unsigned int kmem_cache_size(struct kmem_cache *);
 #define KMALLOC_SHIFT_HIGH	((MAX_ORDER + PAGE_SHIFT - 1) <= 25 ? \
 				(MAX_ORDER + PAGE_SHIFT - 1) : 25)
 
+/* 最大32MB */
 #define KMALLOC_MAX_SIZE	(1UL << KMALLOC_SHIFT_HIGH)
+/* 最大2的幂次个页面 */
 #define KMALLOC_MAX_ORDER	(KMALLOC_SHIFT_HIGH - PAGE_SHIFT)
 
 /*
