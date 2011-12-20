@@ -1364,6 +1364,9 @@ EXPORT_SYMBOL(sock_wfree);
 /*
  * Read buffer destructor automatically called from kfree_skb.
  */
+/*
+最后，当释放一个SKB后，需要调用skb->destruction()来减少rmem_alloc的值。
+*/
 void sock_rfree(struct sk_buff *skb)
 {
 	struct sock *sk = skb->sk;
@@ -1545,6 +1548,10 @@ struct sk_buff *sock_alloc_send_pskb(struct sock *sk, unsigned long header_len,
 							(data_len >= PAGE_SIZE ?
 							 PAGE_SIZE :
 							 data_len));
+					/* 除了最后一个frags之外，其他的frags->offset = 0;
+					   frags->size = PAGE_SIZE；
+					   最后一个的frags->size = data_len % PAGE_SIZE
+					*/
 					data_len -= PAGE_SIZE;
 				}
 
@@ -2180,6 +2187,7 @@ int sock_common_recvmsg(struct kiocb *iocb, struct socket *sock,
 	int addr_len = 0;
 	int err;
 
+	/* 对于不同协议，是tcp_recvmsg，udp_recvmsg或raw_recvmsg函数 */
 	err = sk->sk_prot->recvmsg(iocb, sk, msg, size, flags & MSG_DONTWAIT,
 				   flags & ~MSG_DONTWAIT, &addr_len);
 	if (err >= 0)
@@ -2361,6 +2369,7 @@ static inline void release_proto_idx(struct proto *prot)
 /*
 L4协议注册函数
 将L4协议注册给传输层接口socket使用
+链入静态全局变量proto_list(net/core/sock.c)协议链表
 
 @prot		: L4协议实例指针，如&tcp_prot
 @alloc_slab	: 是否使用slab高速缓存分配器

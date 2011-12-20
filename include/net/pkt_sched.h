@@ -93,6 +93,10 @@ extern int sch_direct_xmit(struct sk_buff *skb, struct Qdisc *q,
 
 extern void __qdisc_run(struct Qdisc *q);
 
+/*
+qdisc_run(dev)会选择"合适"的skb
+然后传递给dev_hard_start_xmit(skb, dev)
+*/
 static inline void qdisc_run(struct Qdisc *q)
 {
 	if (qdisc_run_begin(q))

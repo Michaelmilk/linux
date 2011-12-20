@@ -53,7 +53,7 @@
  *
  *
  *	This module is effectively the top level interface to the BSD socket
- *	paradigm.
+ *	paradigm(规范).
  *
  *	Based upon Swansea University Computer Society NET3.039
  */
@@ -558,6 +558,8 @@ static inline int __sock_sendmsg_nosec(struct kiocb *iocb, struct socket *sock,
 	si->msg = msg;
 	si->size = size;
 
+	/* 对于TCP就是tcp_sendmsg，否则就是inet_sendmsg。
+	   后者调用sk->sk_prot->sendmsg，会继续分用为udp_sendmsg或raw_sendmsg函数 */
 	return sock->ops->sendmsg(iocb, sock, msg, size);
 }
 
@@ -707,6 +709,7 @@ static inline int __sock_recvmsg_nosec(struct kiocb *iocb, struct socket *sock,
 	si->size = size;
 	si->flags = flags;
 
+	/* 调用sock_common_recvmsg */
 	return sock->ops->recvmsg(iocb, sock, msg, size, flags);
 }
 
@@ -929,6 +932,10 @@ EXPORT_SYMBOL(brioctl_set);
 static DEFINE_MUTEX(vlan_ioctl_mutex);
 static int (*vlan_ioctl_hook) (struct net *, void __user *arg);
 
+/*
+应用层使用vconfig命令时，通过ioctl方式向vlan模块传递参数
+此函数用于vlan模块设置对应的处理函数
+*/
 void vlan_ioctl_set(int (*hook) (struct net *, void __user *))
 {
 	mutex_lock(&vlan_ioctl_mutex);
@@ -1253,6 +1260,11 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 	/* Now protected by module ref count */
 	rcu_read_unlock();
 
+	/* 调用对应协议族的creat函数
+	   PF_INET    => inet_create()
+	   PF_INET6   => inet6_create()
+	   PF_NETLINK => netlink_create()
+	*/
 	err = pf->create(net, sock, protocol, kern);
 	if (err < 0)
 		goto out_module_put;
@@ -1598,6 +1610,7 @@ SYSCALL_DEFINE3(connect, int, fd, struct sockaddr __user *, uservaddr,
 	if (err)
 		goto out_put;
 
+	/* 间接调用tcp_v4_connect() */
 	err = sock->ops->connect(sock, (struct sockaddr *)&address, addrlen,
 				 sock->file->f_flags);
 out_put:
@@ -2516,6 +2529,9 @@ void sock_unregister(int family)
 }
 EXPORT_SYMBOL(sock_unregister);
 
+/*
+BSD socket层
+*/
 static int __init sock_init(void)
 {
 	int err;

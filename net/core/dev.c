@@ -151,13 +151,13 @@
  *	and the routines to invoke.
  *
  *	Why 16. Because with 16 the only overlap we get on a hash of the
- *	low nibble of the protocol value is RARP/SNAP/X.25.
+ *	low nibble(半字节) of the protocol value is RARP/SNAP/X.25.
  *
  *      NOTE:  That is no longer true with the addition of VLAN tags.  Not
  *             sure which should go first, but I bet it won't make much
  *             difference if we are running VLANs.  The good news is that
  *             this protocol won't be in the list unless compiled in, so
- *             the average user (w/out VLANs) will not be adversely affected.
+ *             the average user (w/out VLANs) will not be adversely(有害的) affected.
  *             --BLG
  *
  *		0800	IP
@@ -246,6 +246,7 @@ static int list_netdevice(struct net_device *dev)
 	ASSERT_RTNL();
 
 	write_lock_bh(&dev_base_lock);
+	/* 新设备加入命名空间下的设备链表 */
 	list_add_tail_rcu(&dev->dev_list, &net->dev_base_head);
 	hlist_add_head_rcu(&dev->name_hlist, dev_name_hash(net, dev->name));
 	hlist_add_head_rcu(&dev->index_hlist,
@@ -383,12 +384,12 @@ static inline void netdev_set_addr_lockdep_class(struct net_device *dev)
 
 /*
  *	Add a protocol ID to the list. Now that the input handler is
- *	smarter we can dispense with all the messy stuff that used to be
+ *	smarter we can dispense(分发) with all the messy stuff that used to be
  *	here.
  *
  *	BEWARE!!! Protocol handlers, mangling input packets,
  *	MUST BE last in hash buckets and checking protocol handlers
- *	MUST start from promiscuous ptype_all chain in net_bh.
+ *	MUST start from promiscuous(混杂的) ptype_all chain in net_bh.
  *	It is true now, do not change it.
  *	Explanation follows: if protocol handler, mangling packet, will
  *	be the first on list, it is not able to sense, that packet
@@ -1369,7 +1370,11 @@ void dev_disable_lro(struct net_device *dev)
 EXPORT_SYMBOL(dev_disable_lro);
 
 
-/* 设备启动阶段 */
+/*
+设备启动阶段
+控制网络子系统及网络设备的加载
+在网络子系统还没有初始化完成时，其他网络设备还无法进行加载
+*/
 static int dev_boot_phase = 1;
 
 /**
@@ -1503,6 +1508,7 @@ void net_disable_timestamp(void)
 }
 EXPORT_SYMBOL(net_disable_timestamp);
 
+/* 设置收到的报文的时间戳 */
 static inline void net_timestamp_set(struct sk_buff *skb)
 {
 	if (atomic_read(&netstamp_needed))
@@ -1636,6 +1642,10 @@ EXPORT_SYMBOL_GPL(dev_forward_skb);
 /*
 调用注册的packet_type中的回调函数，向上层递送skb
 简单的内联封装
+
+执行相应packet_type里的func处理函数，
+如对于ETH_P_IP类型，由上面可以看到，它执行的就是ip_rcv了。
+至此，一个以太网帧的链路层接收过程就全部完成，再下去就是网络层的处理了。
 */
 static inline int deliver_skb(struct sk_buff *skb,
 			      struct packet_type *pt_prev,
@@ -1831,6 +1841,16 @@ void __netif_schedule(struct Qdisc *q)
 }
 EXPORT_SYMBOL(__netif_schedule);
 
+/*
+当系统运行在中断上下文中，它应该执行的时间应该越短越好，
+但如果我们需要在中断上下文中释放 SKB，这就需要比较长的时间了，
+所以在个时间段里处理内核的释放并不是一个好的选择。
+所以，网络子系统在softirq_action结构中设置了一个完成队列completion_queue，
+当内核要在中断上下文中释放skb时，它将调dev_kfree_skb_irq(skb)
+
+它并没有真正的释放skb空间，而只是将它链入完成队列completion_queue中，
+并触发软中断，由软中断来执行真正的释放操作，这就是上面提到的net_tx_action()来完成
+*/
 void dev_kfree_skb_irq(struct sk_buff *skb)
 {
 	if (atomic_dec_and_test(&skb->users)) {
@@ -2228,6 +2248,7 @@ int dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev,
 		if (dev->priv_flags & IFF_XMIT_DST_RELEASE)
 			skb_dst_drop(skb);
 
+		/* 发送数据包时，也要向注册的HOOK通告 */
 		if (!list_empty(&ptype_all))
 			dev_queue_xmit_nit(skb, dev);
 
@@ -2268,6 +2289,7 @@ int dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev,
 		}
 
 		skb_len = skb->len;
+		/* 调用驱动程序的ndo_start_xmit完成最后的发送工作 */
 		rc = ops->ndo_start_xmit(skb, dev);
 		trace_net_dev_xmit(skb, rc, dev, skb_len);
 		if (rc == NETDEV_TX_OK)
@@ -2513,7 +2535,7 @@ static DEFINE_PER_CPU(int, xmit_recursion);
  *
  *	A negative errno code is returned on a failure. A success does not
  *	guarantee the frame will be transmitted as it may be dropped due
- *	to congestion or traffic shaping.
+ *	to congestion(拥塞) or traffic shaping(修整).
  *
  * -----------------------------------------------------------------------------------
  *      I notice this method can also return errors from the queue disciplines,
@@ -2528,6 +2550,21 @@ static DEFINE_PER_CPU(int, xmit_recursion);
  *      the BH enable code must have IRQs enabled so that it will not deadlock.
  *          --BLG
  */
+/*
+该函数先会处理一些缓冲区重组、计算校验和之类的杂事，然后开始处理报文的发送。
+
+对于有队列的设备，其队列主要用于流量控制以及发送失败时的缓冲;
+对于没有队列的设备(比如lo，环回设备)，
+dev_queue_xmit函数则会直接调用dev->hard_start_xmit进行发送，如果失败报文就会被丢弃。
+
+TSO : TCP Segmentation Offload
+GSO : Generic Segmentation Offload
+
+skb->data要指向mac头
+此时对发送函数来说skb线性buffer中包含的有效数据从skb->data指针开始，
+长度为skb->len(包含线性区长度和其他分片数据长度)
+其他数据由链表和frag数组组成，长度由data_len确定
+*/
 int dev_queue_xmit(struct sk_buff *skb)
 {
 	struct net_device *dev = skb->dev;
@@ -2564,6 +2601,10 @@ int dev_queue_xmit(struct sk_buff *skb)
 	   Check this and shot the lock. It is not prone from deadlocks.
 	   Either shot noqueue qdisc, it is even simpler 8)
 	 */
+	/* 无队列设备    
+	   如:回环设备 虚拟设备   
+	   直接调用dev_hard_start_xmit() 不走qos
+	*/
 	if (dev->flags & IFF_UP) {
 		int cpu = smp_processor_id(); /* ok because BHs are off */
 
@@ -2614,9 +2655,21 @@ EXPORT_SYMBOL(dev_queue_xmit);
 			Receiver routines
   =======================================================================*/
 
+/*
+netdev_max_backlog缺省值为1000
+可通过/proc/sys/net/core/netdev_max_backlog修改
+*/
 int netdev_max_backlog __read_mostly = 1000;
 int netdev_tstamp_prequeue __read_mostly = 1;
+/*
+netdev_budget缺省值为300
+可通过/proc/sys/net/core/netdev_budget修改
+*/
 int netdev_budget __read_mostly = 300;
+/*
+weight_p缺省值为64
+可通过/proc/sys/net/core/dev_weight修改
+*/
 int weight_p __read_mostly = 64;            /* old backlog weight */
 
 /* Called with irq disabled */
@@ -2991,6 +3044,7 @@ static int enqueue_to_backlog(struct sk_buff *skb, int cpu,
 	if (skb_queue_len(&sd->input_pkt_queue) <= netdev_max_backlog) {
 		if (skb_queue_len(&sd->input_pkt_queue)) {
 enqueue:
+			/* 将这个skb加入到相应的input_pkt_queue队列中 */
 			__skb_queue_tail(&sd->input_pkt_queue, skb);
 			input_queue_tail_incr_save(sd, qtail);
 			rps_unlock(sd);
@@ -3008,6 +3062,14 @@ enqueue:
 		goto enqueue;
 	}
 
+	/* 队列满，则直接丢弃该包
+
+	   此处统计的是在softnet_data中的接收队列已满时，丢弃的skb数。
+	   此skb已经被网卡成功的接收了，只是在入队时被删除。
+
+	   ifconfig eth0查看接收包的信息，其中dropped显示的是丢包的信息，
+	   它是指网卡在不能将设备缓冲区中的数据拷贝到skb(由于申请skb不成功)，而丢弃的包。
+	*/
 	sd->dropped++;
 	rps_unlock(sd);
 
@@ -3033,6 +3095,10 @@ enqueue:
  *
  */
 
+/*
+由硬件驱动在中断处理程序中直接调用netif_rx
+最后调用软中断处理函数net_rx_action
+*/
 int netif_rx(struct sk_buff *skb)
 {
 	int ret;
@@ -3087,6 +3153,15 @@ int netif_rx_ni(struct sk_buff *skb)
 }
 EXPORT_SYMBOL(netif_rx_ni);
 
+/*
+这个函数的功能有两个
+其一是释放softirq_action中完成队列completion_queue中的skb
+其二是发送数据包
+
+1、从softdate_net的completion_queue队列中取出每一个skb，将其释放
+2、对于softdate_net的output_queue队列中的dev，
+   调用qdisc_run继续尝试发送其qdisc队列中的报文;
+*/
 static void net_tx_action(struct softirq_action *h)
 {
 	struct softnet_data *sd = &__get_cpu_var(softnet_data);
@@ -3129,6 +3204,9 @@ static void net_tx_action(struct softirq_action *h)
 				smp_mb__before_clear_bit();
 				clear_bit(__QDISC_STATE_SCHED,
 					  &q->state);
+				/* qdisc_run(dev)会选择"合适"的 skb
+				   然后传递给dev_hard_start_xmit(skb, dev)
+				*/
 				qdisc_run(q);
 				spin_unlock(root_lock);
 			} else {
@@ -3852,6 +3930,12 @@ static void net_rps_action_and_irq_enable(struct softnet_data *sd)
 		local_irq_enable();
 }
 
+/*
+process_backlog是non-NAPI方式网卡的poll函数
+
+non-NAPI的驱动会将接收的skb放在input_pkt_queue链表内
+所以process_backlog()就是处理input_pkt_queue内skb的函数
+*/
 static int process_backlog(struct napi_struct *napi, int quota)
 {
 	int work = 0;
@@ -3877,6 +3961,7 @@ static int process_backlog(struct napi_struct *napi, int quota)
 			__netif_receive_skb(skb);
 			local_irq_disable();
 			input_queue_head_incr(sd);
+			/* 如果处理的skb数目大于事先预定的最大值，则结束处理 */
 			if (++work >= quota) {
 				local_irq_enable();
 				return work;
@@ -3885,6 +3970,8 @@ static int process_backlog(struct napi_struct *napi, int quota)
 
 		rps_lock(sd);
 		qlen = skb_queue_len(&sd->input_pkt_queue);
+		/* 有skb需要处理，将输入队列中的skb转移到处理队列中
+		   减少对输入队列的并发锁控制损失 */
 		if (qlen)
 			skb_queue_splice_tail_init(&sd->input_pkt_queue,
 						   &sd->process_queue);
@@ -3927,15 +4014,23 @@ EXPORT_SYMBOL(__napi_schedule);
 
 void __napi_complete(struct napi_struct *n)
 {
+	/* 既然本函数是要清除NAPI_STATE_SCHED的bit位的
+	   如果没有置位，自然就是bug了
+	*/
 	BUG_ON(!test_bit(NAPI_STATE_SCHED, &n->state));
 	BUG_ON(n->gro_list);
 
+	/* 从per-cpu的softnet_data的poll链表中移出 */
 	list_del(&n->poll_list);
 	smp_mb__before_clear_bit();
+	/* 清除NAPI_STATE_SCHED位 */
 	clear_bit(NAPI_STATE_SCHED, &n->state);
 }
 EXPORT_SYMBOL(__napi_complete);
 
+/*
+在->poll()函数中调用
+*/
 void napi_complete(struct napi_struct *n)
 {
 	unsigned long flags;
@@ -3991,15 +4086,32 @@ void netif_napi_del(struct napi_struct *napi)
 }
 EXPORT_SYMBOL(netif_napi_del);
 
+/*
+__napi_schedule()触发中断下半部的执行，这个下半部将执行net_rx_action()
+下半部的主要工作是遍历有数据帧等待接收的napi_struct链表，
+对于每个设备，执行它相应的poll函数
+
+所有的网络接收数据包的软中断处理函数都是net_rx_action
+*/
 static void net_rx_action(struct softirq_action *h)
 {
 	struct softnet_data *sd = &__get_cpu_var(softnet_data);
 	unsigned long time_limit = jiffies + 2;
+	/* 一次中断处理的skb数目，系统定义为300 */
 	int budget = netdev_budget;
 	void *have;
 
+	/* 关闭本地硬中断
+	   因为net_rx_action()为软中断处理函数
+	   此时需要取(&sd->poll_list)，而这个队列在硬中断处理例程里会改变
+	   为了避免此时被硬中断打断而导致从硬中断处理例程中返回时值的不一致
+	   所以要关闭本地硬中断
+	*/
 	local_irq_disable();
 
+	/* 处理poll_list上关联的每一个设备
+	   检查poll_list看是否有准备等待轮询取得数据
+	*/
 	while (!list_empty(&sd->poll_list)) {
 		struct napi_struct *n;
 		int work, weight;
@@ -4008,6 +4120,15 @@ static void net_rx_action(struct softirq_action *h)
 		 * Allow this to run for 2 jiffies since which will allow
 		 * an average latency of 1.5/HZ.
 		 */
+		/* 轮询的处理时间不能超过2个jiffies，防止一次软中断处理占用太多时间
+		   同时限制了处理skb的数目，超过300时，本次软中断处理结束
+
+		   当预算用完后，如果网卡还有数据接收
+		   则网卡的poll函数还不会调用napi_complete()将其从poll_list中移出
+		   因此该网卡还在这个per-cpu的poll_list内
+		   也就是该网卡的poll函数一直都在这个核的软中断中被调用
+		   这样NAPI的网卡驱动便产生了1次硬中断，而后续的软中断都由该核处理的现象
+		*/
 		if (unlikely(budget <= 0 || time_after(jiffies, time_limit)))
 			goto softnet_break;
 
@@ -4018,6 +4139,11 @@ static void net_rx_action(struct softirq_action *h)
 		 * entries to the tail of this list, and only ->poll()
 		 * calls can remove this head entry from the list.
 		 */
+		/* 虽然这里开启了硬终端，但是这里取链表第一个节点是安全的
+		   因为中断上下文里这会在链表尾增加新的节点
+		   而在poll()函数中只会移除第一个节点
+
+		   取得等待轮询napi_struct的结构 */
 		n = list_first_entry(&sd->poll_list, struct napi_struct, poll_list);
 
 		have = netpoll_poll_lock(n);
@@ -4031,6 +4157,20 @@ static void net_rx_action(struct softirq_action *h)
 		 * accidentally calling ->poll() when NAPI is not scheduled.
 		 */
 		work = 0;
+		/* 调用设备上面的poll方法，如果设备没有注册自己的poll方法，那么系统
+		   将poll方法指定为process_backlog()函数
+
+		   如果是NAPI的网卡驱动的话，poll函数是在驱动中注册的，驱动实现的；
+		   如果是非NAPI的话，就是内核定义的process_backlog函数
+
+		   从rtl8139_rx的代码也可以看出，
+		   当数据包接收出错或者是没有更多的数据包可以接收时，
+		   work_done才不会达到budget，
+		   这时，应该让网卡重新回到中断的状态，以等待数据包的到来。
+		   另外一种情况就是work_done等于budget，很可能是因为还有数据包要接收，
+		   所以在net_rx_action函数中，
+		   只是把该网卡设备移到队列的尾部，以期待在下次循环中再次调用其poll函数。
+		*/
 		if (test_bit(NAPI_STATE_SCHED, &n->state)) {
 			work = n->poll(n, weight);
 			trace_napi_poll(n);
@@ -4040,6 +4180,11 @@ static void net_rx_action(struct softirq_action *h)
 
 		budget -= work;
 
+		/* 关闭本地硬中断
+		   以防止被硬中断打断，由于硬中断处理例程的操作而导致poll_list队列的不一致
+		   下面会调整poll_list链表
+		   回到循环判断的时候判断链表是否为空
+		*/
 		local_irq_disable();
 
 		/* Drivers must not modify the NAPI state if they
@@ -4073,6 +4218,7 @@ out:
 
 softnet_break:
 	sd->time_squeeze++;
+	/* 在这里触发下一次软中断处理 */
 	__raise_softirq_irqoff(NET_RX_SOFTIRQ);
 	goto out;
 }
@@ -5368,6 +5514,9 @@ int dev_ioctl(struct net *net, unsigned int cmd, void __user *arg)
  *	number.  The caller must hold the rtnl semaphore or the
  *	dev_base_lock to be sure it remains unique.
  */
+/*
+返回一个唯一的接口索引值
+*/
 static int dev_new_index(struct net *net)
 {
 	/* ifindex依然是个静态变量
@@ -5711,6 +5860,7 @@ int register_netdevice(struct net_device *dev)
 	might_sleep();
 
 	/* When net_device's are persistent, this will be fatal. */
+	/* 同一接口不可重复注册 */
 	BUG_ON(dev->reg_state != NETREG_UNINITIALIZED);
 	BUG_ON(!net);
 
@@ -5775,7 +5925,9 @@ int register_netdevice(struct net_device *dev)
 
 	set_bit(__LINK_STATE_PRESENT, &dev->state);
 
+	/* 接口发送队列规则初始化，看门狗定时器初始化 */
 	dev_init_scheduler(dev);
+	/* 引用计数+1 */
 	dev_hold(dev);
 	list_netdevice(dev);
 
@@ -6116,6 +6268,7 @@ struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name,
 	alloc_size = sizeof(struct net_device);
 	if (sizeof_priv) {
 		/* ensure 32-byte alignment of private area */
+		/* 参考netdev_priv()函数 */
 		alloc_size = ALIGN(alloc_size, NETDEV_ALIGN);
 		alloc_size += sizeof_priv;
 	}
@@ -6128,6 +6281,10 @@ struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name,
 		return NULL;
 	}
 
+	/* 使dev指针对齐到32字节边界
+	   即分配得到的空间指针p和最终使用的dev指针之间会有一定的间隔
+	   此间隔的值保存在padded字段
+	*/
 	dev = PTR_ALIGN(p, NETDEV_ALIGN);
 	dev->padded = (char *)dev - (char *)p;
 
@@ -6149,6 +6306,7 @@ struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name,
 	INIT_LIST_HEAD(&dev->unreg_list);
 	INIT_LIST_HEAD(&dev->link_watch_list);
 	dev->priv_flags = IFF_XMIT_DST_RELEASE;
+	/* 调用setup函数 */
 	setup(dev);
 
 	dev->num_tx_queues = txqs;
@@ -6216,6 +6374,8 @@ void free_netdev(struct net_device *dev)
 
 	/*  Compatibility with error handling in drivers */
 	if (dev->reg_state == NETREG_UNINITIALIZED) {
+		/* alloc_netdev_mqs()内为了32字节对齐，保留了一定的pad
+		   这里要将其减去 */
 		kfree((char *)dev - dev->padded);
 		return;
 	}
@@ -6420,6 +6580,10 @@ out:
 }
 EXPORT_SYMBOL_GPL(dev_change_net_namespace);
 
+/*
+cpu热插拔时通知链函数
+把被拔掉cpu的per_cpu数据取出，输入队列中的skb放到另一个cpu上接收
+*/
 static int dev_cpu_callback(struct notifier_block *nfb,
 			    unsigned long action,
 			    void *ocpu)

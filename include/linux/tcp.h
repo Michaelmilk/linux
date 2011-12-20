@@ -28,6 +28,7 @@ struct tcphdr {
 	__be32	ack_seq;
 #if defined(__LITTLE_ENDIAN_BITFIELD)
 	__u16	res1:4,
+		/* data offset数据偏移，即首部长度，4字节单位，值需要乘以4 */
 		doff:4,
 		fin:1,
 		syn:1,
@@ -217,6 +218,9 @@ static inline struct tcphdr *tcp_hdr(const struct sk_buff *skb)
 	return (struct tcphdr *)skb_transport_header(skb);
 }
 
+/*
+tcp头的长度，由doff字段计算，包括固定的20字节和可能的TCP Options
+*/
 static inline unsigned int tcp_hdrlen(const struct sk_buff *skb)
 {
 	return tcp_hdr(skb)->doff * 4;

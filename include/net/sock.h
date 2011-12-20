@@ -257,6 +257,9 @@ struct sock {
 #define sk_prot			__sk_common.skc_prot
 #define sk_net			__sk_common.skc_net
 	socket_lock_t		sk_lock;
+	/* 接收到数据包的sk_buff链表队列，
+	   如果数据包过多，造成receive_queue满，
+	   或者sock被用户程序锁定，将转入sk_backlog */
 	struct sk_buff_head	sk_receive_queue;
 	/*
 	 * The backlog queue is special, it is always used with
@@ -266,6 +269,9 @@ struct sock {
 	 * on 64bit arches, not because its logically part of
 	 * backlog.
 	 */
+	/* 当sock_owned_by_user函数返回真时候，(sk)->sk_lock.owner被锁定，
+	   使用sk_add_backlog()函数(该函数实现非常简单，
+	   只是一个为链表添加节点的动作)将SKB加入这个后备队列。 */
 	struct {
 		atomic_t	rmem_alloc;
 		int		len;
@@ -829,6 +835,8 @@ struct proto {
 
 	char			name[32];
 
+	/* 通过此节点将本结构的一个实例链入
+	   静态全局变量proto_list(net/core/sock.c)协议链表 */
 	struct list_head	node;
 #ifdef SOCK_REFCNT_DEBUG
 	atomic_t		socks;
@@ -1598,6 +1606,12 @@ static inline void skb_set_owner_w(struct sk_buff *skb, struct sock *sk)
 	atomic_add(skb->truesize, &sk->sk_wmem_alloc);
 }
 
+/*
+当我们收到一个数据包后，需要统计这个socket总共消耗的内存，
+这是通过skb_set_owner_r()来做的。
+
+最后，当释放一个SKB后，需要调用skb->destruction()来减少rmem_alloc的值。
+*/
 static inline void skb_set_owner_r(struct sk_buff *skb, struct sock *sk)
 {
 	skb_orphan(skb);

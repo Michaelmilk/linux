@@ -157,14 +157,31 @@ EXPORT_SYMBOL(eth_rebuild_header);
  */
 /*
 返回协议类型，网络字节序
+
+1 设置skb->pkt_type
+  如果不是PACKET_BROADCAST或PACKET_MULTICAST或PACKET_OTHERHOST
+  则skb->pkt_type为默认值0，即skb->pkt_type = PACKET_HOST
+2 返回链路层携带的h_proto，即设置skb->protocol
+3 设置skb->dev为@dev，即标记接收的接口
+4 移动skb->data指针到ip层，即指向了ip头部，network_header
+  如果是带vlan的帧的话，skb->data这里指向的还不是ip头
+
+    ... |  ethhdr  | ...
+                   ^
+                   |
+          input skb->data
+
 */
 __be16 eth_type_trans(struct sk_buff *skb, struct net_device *dev)
 {
 	struct ethhdr *eth;
 
 	skb->dev = dev;
+	/* 此时skb->data指向报文实际数据的第一个字节，设置skb->mac_header头指针 */
 	skb_reset_mac_header(skb);
+	/* skb->data域指向网络层 */
 	skb_pull_inline(skb, ETH_HLEN);
+	/* 以太网头 */
 	eth = eth_hdr(skb);
 
 	if (unlikely(is_multicast_ether_addr(eth->h_dest))) {
@@ -199,7 +216,9 @@ __be16 eth_type_trans(struct sk_buff *skb, struct net_device *dev)
 		return htons(ETH_P_TRAILER);
 
 	/* 根据以太网协议的定义，其值都是大于以太网可能的最大长度的
-	   据此返回帧头中的协议类型(网络字节序)，如cpu_to_be16(ETH_P_IP) */
+	   据此返回帧头中的协议类型(网络字节序)，如cpu_to_be16(ETH_P_IP)
+	   1536 = 0x0600
+	*/
 	if (ntohs(eth->h_proto) >= 1536)
 		return eth->h_proto;
 
@@ -339,14 +358,19 @@ const struct header_ops eth_header_ops ____cacheline_aligned = {
 void ether_setup(struct net_device *dev)
 {
 	dev->header_ops		= &eth_header_ops;
+	/* 以太网 */
 	dev->type		= ARPHRD_ETHER;
+	/* MAC层头长度 */
 	dev->hard_header_len 	= ETH_HLEN;
 	dev->mtu		= ETH_DATA_LEN;
+	/* MAC地址长度 */
 	dev->addr_len		= ETH_ALEN;
 	dev->tx_queue_len	= 1000;	/* Ethernet wants good queues */
+	/* 支持广播和多播 */
 	dev->flags		= IFF_BROADCAST|IFF_MULTICAST;
 	dev->priv_flags		|= IFF_TX_SKB_SHARING;
 
+	/* 广播地址FF:FF:FF:FF:FF:FF */
 	memset(dev->broadcast, 0xFF, ETH_ALEN);
 
 }
