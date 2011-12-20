@@ -6436,6 +6436,13 @@ static void __init ata_parse_force_param(void)
 	ata_force_tbl_size = idx;
 }
 
+/*
+ATA技术是一个关于IDE（Integrated Device Electronics）的技术规范族。
+最初，IDE只是一项企图把控制器与盘体集成在一起为主要意图的硬盘接口技术。 
+随着IDE/EIDE得到的日益广泛的应用，
+全球标准化协议将该接口自诞生以来使用的技术规范归纳成为全球硬盘标准，
+这样就产生了ATA（Advanced Technology Attachment）。
+*/
 static int __init ata_init(void)
 {
 	int rc;
