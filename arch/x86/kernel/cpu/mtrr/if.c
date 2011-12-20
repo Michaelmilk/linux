@@ -432,6 +432,9 @@ static int mtrr_seq_show(struct seq_file *seq, void *offset)
 	return 0;
 }
 
+/*
+mtrr : ´æ´¢Æ÷ÐÍÌ¬·¶Î§¼Ä´æÆ÷(Memory Type Range Registers)
+*/
 static int __init mtrr_if_init(void)
 {
 	struct cpuinfo_x86 *c = &boot_cpu_data;
