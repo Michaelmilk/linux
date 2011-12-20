@@ -522,6 +522,10 @@ void e1000_io_write(struct e1000_hw *hw, unsigned long port, u32 value);
 #define MAX_NUMBER_OF_DESCRIPTORS  0xFFF8
 
 /* Receive Descriptor */
+/*
+接收环中的接收描述符
+在e1000_setup_rx_resources()中分配了空间
+*/
 struct e1000_rx_desc {
 	__le64 buffer_addr;	/* Address of the descriptor's data buffer */
 	__le16 length;		/* Length of data DMAed into data buffer */
@@ -1341,13 +1345,19 @@ struct e1000_hw_stats {
 };
 
 /* Structure containing variables used by the shared code (e1000_hw.c) */
+/*
+主要保存网卡的硬件参数，其值就是通过读取pci_dev的内容获取而来的
+*/
 struct e1000_hw {
+	/* ioremap()的网卡硬件地址 */
 	u8 __iomem *hw_addr;
+	/* ioremap()的网卡flash内存地址 */
 	u8 __iomem *flash_address;
 	e1000_mac_type mac_type;
 	e1000_phy_type phy_type;
 	u32 phy_init_script;
 	e1000_media_type media_type;
+	/* 回绕指针，指向e1000_adapter */
 	void *back;
 	struct e1000_shadow_ram *eeprom_shadow_ram;
 	u32 flash_bank_size;
@@ -1401,7 +1411,9 @@ struct e1000_hw {
 	u8 forced_speed_duplex;
 	u8 wait_autoneg_complete;
 	u8 dma_fairness;
+	/* 初始值和perm_mac_addr一样 */
 	u8 mac_addr[NODE_ADDRESS_SIZE];
+	/* eeprom内读出的mac地址 */
 	u8 perm_mac_addr[NODE_ADDRESS_SIZE];
 	bool disable_polarity_correction;
 	bool speed_downgraded;

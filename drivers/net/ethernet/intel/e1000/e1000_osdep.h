@@ -51,6 +51,12 @@
 #define GBE_CONFIG_FLASH_READ(base, offset, count, data) \
 	(ioread16_rep(base + (offset << 1), data, count))
 
+/*
+e1000_hw->hw_addr保存的是ioremap后的虚拟地址
+下面这些宏通过与hw_addr相加e1000网卡上的物理地址
+来转换得到虚拟地址
+然后通过readl() writel()等进行读写操作
+*/
 #define er32(reg)							\
 	(readl(hw->hw_addr + ((hw->mac_type >= e1000_82543)		\
 			       ? E1000_##reg : E1000_82542_##reg)))

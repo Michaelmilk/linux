@@ -303,6 +303,9 @@ void __devinit e1000_check_options(struct e1000_adapter *adapter)
 		} else {
 			tx_ring->count = opt.def;
 		}
+		/* 每个发送队列的个数都一样，实际上这里只有一个发送队列
+		   这个代码为了通用性，其他类型网卡可能就不止一个队列了
+		*/
 		for (i = 0; i < adapter->num_tx_queues; i++)
 			tx_ring[i].count = tx_ring->count;
 	}

@@ -249,6 +249,9 @@ static void e1000_phy_init_script(struct e1000_hw *hw)
  * e1000_set_mac_type - Set the mac type member in the hw struct.
  * @hw: Struct containing variables accessed by shared code
  */
+/*
+根据pci配置空间里的设备id选择mac_type进行标记不同的设备类型
+*/
 s32 e1000_set_mac_type(struct e1000_hw *hw)
 {
 	e_dbg("e1000_set_mac_type");
@@ -359,6 +362,9 @@ s32 e1000_set_mac_type(struct e1000_hw *hw)
  * e1000_set_media_type - Set media type and TBI compatibility.
  * @hw: Struct containing variables accessed by shared code
  */
+/*
+根据设备id选择网卡媒体类型
+*/
 void e1000_set_media_type(struct e1000_hw *hw)
 {
 	u32 status;

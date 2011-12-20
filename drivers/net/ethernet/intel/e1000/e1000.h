@@ -70,6 +70,7 @@
 #include <linux/ethtool.h>
 #include <linux/if_vlan.h>
 
+/* BAR : base address register 基址寄存器 */
 #define BAR_0		0
 #define BAR_1		1
 #define BAR_5		5
@@ -144,52 +145,73 @@ struct e1000_adapter;
 /* wrapper around a pointer to a socket buffer,
  * so a DMA handle can be stored along with the buffer */
 struct e1000_buffer {
+	/* 环中分配的skb */
 	struct sk_buff *skb;
+	/* 内存中映射的skb->data字段指向的物理地址*/
 	dma_addr_t dma;
 	struct page *page;
 	unsigned long time_stamp;
+	/* 数据长度 */
 	u16 length;
+	/* 所有的缓冲块用next_to_match连接成一个环 */
 	u16 next_to_watch;
 	unsigned int segs;
 	unsigned int bytecount;
 	u16 mapped_as_page;
 };
 
+/*
+有几个num_tx_queues队列，就会分配几个e1000_tx_ring
+在e1000_alloc_queues()内分配
+*/
 struct e1000_tx_ring {
 	/* pointer to the descriptor ring memory */
+	/* 下面dma字段物理地址对应的虚拟地址 */
 	void *desc;
 	/* physical address of the descriptor ring */
+	/* dma的物理地址
+	   256个(struct e1000_tx_desc)空间的物理地址 */
 	dma_addr_t dma;
 	/* length of descriptor ring in bytes */
 	unsigned int size;
 	/* number of descriptors in the ring */
+	/* 在e1000_check_options()内赋值 */
 	unsigned int count;
 	/* next descriptor to associate a buffer with */
 	unsigned int next_to_use;
 	/* next descriptor to check for DD status bit */
 	unsigned int next_to_clean;
 	/* array of buffer information structs */
+	/* 256个(struct e1000_buffer)空间的虚拟地址 */
 	struct e1000_buffer *buffer_info;
 
+	/* TX Descriptor Head */
 	u16 tdh;
+	/* 全称tx_descriptor_tail */
 	u16 tdt;
 	bool last_tx_tso;
 };
 
 struct e1000_rx_ring {
 	/* pointer to the descriptor ring memory */
+	/* 下面dma字段物理地址对应的虚拟地址 */
 	void *desc;
 	/* physical address of the descriptor ring */
+	/* dma的物理地址
+	   256个(struct e1000_rx_desc)或(union e1000_rx_desc_packet_split)空间的物理地址 */
 	dma_addr_t dma;
 	/* length of descriptor ring in bytes */
 	unsigned int size;
 	/* number of descriptors in the ring */
+	/* 在e1000_check_options()内赋值 */
 	unsigned int count;
 	/* next descriptor to associate a buffer with */
 	unsigned int next_to_use;
 	/* next descriptor to check for DD status bit */
+	/* 环中接收数据的位置 */
 	unsigned int next_to_clean;
 	/* array of buffer information structs */
+	/* 256个(struct e1000_buffer)空间的虚拟地址 */
 	struct e1000_buffer *buffer_info;
 	struct sk_buff *rx_skb_top;
 
@@ -207,6 +229,7 @@ struct e1000_rx_ring {
 #define E1000_RX_DESC_EXT(R, i)						\
 	(&(((union e1000_rx_desc_extended *)((R).desc))[i]))
 #define E1000_GET_DESC(R, i, type)	(&(((struct type *)((R).desc))[i]))
+/* 取得接收描述符的虚拟地址 */
 #define E1000_RX_DESC(R, i)		E1000_GET_DESC(R, i, e1000_rx_desc)
 #define E1000_TX_DESC(R, i)		E1000_GET_DESC(R, i, e1000_tx_desc)
 #define E1000_CONTEXT_DESC(R, i)	E1000_GET_DESC(R, i, e1000_context_desc)
@@ -216,6 +239,7 @@ struct e1000_rx_ring {
 struct e1000_adapter {
 	unsigned long active_vlans[BITS_TO_LONGS(VLAN_N_VID)];
 	u16 mng_vlan_id;
+	/* board number 第1块探测到的为0，第2块为1... */
 	u32 bd_number;
 	u32 rx_buffer_len;
 	u32 wol;
@@ -259,6 +283,7 @@ struct e1000_adapter {
 	bool (*clean_rx)(struct e1000_adapter *adapter,
 			 struct e1000_rx_ring *rx_ring,
 			 int *work_done, int work_to_do);
+	/* 为接收环中的skb分配空间 */
 	void (*alloc_rx_buf)(struct e1000_adapter *adapter,
 			     struct e1000_rx_ring *rx_ring,
 			     int cleaned_count);
@@ -278,10 +303,14 @@ struct e1000_adapter {
 	u64 gorcl_old;
 
 	/* OS defined structs */
+	/* 指向e1000_probe()中分配的结构
+	   也就是描述该网卡的结构struct net_device本身 */
 	struct net_device *netdev;
+	/* 系统描述的pci设备 */
 	struct pci_dev *pdev;
 
 	/* structs defined in e1000_hw.h */
+	/* 内嵌的结构 */
 	struct e1000_hw hw;
 	struct e1000_hw_stats stats;
 	struct e1000_phy_info phy_info;

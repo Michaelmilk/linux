@@ -275,6 +275,9 @@ static void __exit e1000_exit_module(void)
 
 module_exit(e1000_exit_module);
 
+/*
+申请中断号及其相应的中断处理程序
+*/
 static int e1000_request_irq(struct e1000_adapter *adapter)
 {
 	struct net_device *netdev = adapter->netdev;
@@ -973,13 +976,16 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
 		goto err_alloc_etherdev;
 
 	err = -ENOMEM;
+	/* 申请网卡结构net_device内存空间，表示网卡设备 */
 	netdev = alloc_etherdev(sizeof(struct e1000_adapter));
 	if (!netdev)
 		goto err_alloc_etherdev;
 
 	SET_NETDEV_DEV(netdev, &pdev->dev);
 
+	/* 设置struct net_device为驱动模型device_driver的私有数据 */
 	pci_set_drvdata(pdev, netdev);
+	/* 在alloc_etherdev()中动态申请的私有数据结构指针 */
 	adapter = netdev_priv(netdev);
 	adapter->netdev = netdev;
 	adapter->pdev = pdev;
@@ -991,6 +997,7 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
 	hw->back = adapter;
 
 	err = -EIO;
+	/* 实现了网卡硬件地址与内存虚拟地址之间的映射。 */
 	hw->hw_addr = pci_ioremap_bar(pdev, BAR_0);
 	if (!hw->hw_addr)
 		goto err_ioremap;
@@ -1113,6 +1120,7 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
 		memset(hw->mac_addr, 0, netdev->addr_len);
 	} else {
 		/* copy the MAC address out of the EEPROM */
+		/* 从网卡设备的eeprom中读取MAC地址 */
 		if (e1000_read_mac_addr(hw))
 			e_err(probe, "EEPROM Read Error\n");
 	}
@@ -1210,6 +1218,7 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
 	/* reset the hardware with the new settings */
 	e1000_reset(adapter);
 
+	/* 换个名字，上面是用的pci_name(pdev) */
 	strcpy(netdev->name, "eth%d");
 	err = register_netdev(netdev);
 	if (err)
@@ -1301,6 +1310,11 @@ static void __devexit e1000_remove(struct pci_dev *pdev)
  * e1000_init_hw_struct MUST be called before this function
  **/
 
+/*
+sw : software
+初始化软件结构信息
+即将一些其他结构内的信息保存在e1000的私有数据结构struct e1000_adapter内
+*/
 static int __devinit e1000_sw_init(struct e1000_adapter *adapter)
 {
 	adapter->rx_buffer_len = MAXIMUM_ETHERNET_VLAN_SIZE;
@@ -1364,6 +1378,7 @@ static int __devinit e1000_alloc_queues(struct e1000_adapter *adapter)
 
 static int e1000_open(struct net_device *netdev)
 {
+	/* e1000_probe()时调用alloc_etherdev()分配的私有数据空间 */
 	struct e1000_adapter *adapter = netdev_priv(netdev);
 	struct e1000_hw *hw = &adapter->hw;
 	int err;
@@ -1375,6 +1390,7 @@ static int e1000_open(struct net_device *netdev)
 	netif_carrier_off(netdev);
 
 	/* allocate transmit descriptors */
+	/* 根据发送队列数建立发送缓冲区 */
 	err = e1000_setup_all_tx_resources(adapter);
 	if (err)
 		goto err_setup_tx;
@@ -1597,6 +1613,9 @@ int e1000_setup_all_tx_resources(struct e1000_adapter *adapter)
  * Configure the Tx unit of the MAC after a reset.
  **/
 
+/*
+配置网卡与发送相关的一些寄存器，dma物理地址，长度等
+*/
 static void e1000_configure_tx(struct e1000_adapter *adapter)
 {
 	u64 tdba;
@@ -1847,6 +1866,10 @@ static void e1000_setup_rctl(struct e1000_adapter *adapter)
  * Configure the Rx unit of the MAC after a reset.
  **/
 
+/*
+设置接收函数
+配置网卡与接收相关的一些寄存器，dma物理地址，长度等
+*/
 static void e1000_configure_rx(struct e1000_adapter *adapter)
 {
 	u64 rdba;
@@ -2697,6 +2720,9 @@ set_itr_now:
 #define E1000_TX_FLAGS_VLAN_MASK	0xffff0000
 #define E1000_TX_FLAGS_VLAN_SHIFT	16
 
+/*
+tcp segmentation offloading
+*/
 static int e1000_tso(struct e1000_adapter *adapter,
 		     struct e1000_tx_ring *tx_ring, struct sk_buff *skb)
 {
@@ -2710,11 +2736,13 @@ static int e1000_tso(struct e1000_adapter *adapter,
 
 	if (skb_is_gso(skb)) {
 		if (skb_header_cloned(skb)) {
+			/* 线性区被共享了，则为线性区创建新的拷贝 */
 			err = pskb_expand_head(skb, 0, 0, GFP_ATOMIC);
 			if (err)
 				return err;
 		}
 
+		/* mac + ip + tcp */
 		hdr_len = skb_transport_offset(skb) + tcp_hdrlen(skb);
 		mss = skb_shinfo(skb)->gso_size;
 		if (skb->protocol == htons(ETH_P_IP)) {
@@ -3076,7 +3104,7 @@ static int __e1000_maybe_stop_tx(struct net_device *netdev, int size)
 	if (likely(E1000_DESC_UNUSED(tx_ring) < size))
 		return -EBUSY;
 
-	/* A reprieve! */
+	/* A reprieve(暂缓)! */
 	netif_start_queue(netdev);
 	++adapter->restart_queue;
 	return 0;
@@ -3091,6 +3119,9 @@ static int e1000_maybe_stop_tx(struct net_device *netdev,
 }
 
 #define TXD_USE_COUNT(S, X) (((S) >> (X)) + 1 )
+/*
+把要发送的skb映射到物理内存，加入发送环
+*/
 static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 				    struct net_device *netdev)
 {
@@ -3523,6 +3554,9 @@ static irqreturn_t e1000_intr(int irq, void *data)
 	struct e1000_hw *hw = &adapter->hw;
 	u32 icr = er32(ICR);
 
+	/* 共享中断线
+	   检查确实是本设备的中断
+	*/
 	if (unlikely((!icr)))
 		return IRQ_NONE;  /* Not our interrupt */
 
@@ -3565,6 +3599,9 @@ static irqreturn_t e1000_intr(int irq, void *data)
  * e1000_clean - NAPI Rx polling callback
  * @adapter: board private structure
  **/
+/*
+返回实际接收处理的报文数量
+*/
 static int e1000_clean(struct napi_struct *napi, int budget)
 {
 	struct e1000_adapter *adapter = container_of(napi, struct e1000_adapter, napi);
@@ -3572,12 +3609,14 @@ static int e1000_clean(struct napi_struct *napi, int budget)
 
 	tx_clean_complete = e1000_clean_tx_irq(adapter, &adapter->tx_ring[0]);
 
+	/* 调用e1000_clean_rx_irq()或e1000_clean_jumbo_rx_irq() */
 	adapter->clean_rx(adapter, &adapter->rx_ring[0], &work_done, budget);
 
 	if (!tx_clean_complete)
 		work_done = budget;
 
 	/* If budget not fully consumed, exit the polling mode */
+	/* 如果接收报文的数量没有达到预算的数目，则退出poll模式 */
 	if (work_done < budget) {
 		if (likely(adapter->itr_setting & 3))
 			e1000_set_itr(adapter);
@@ -3593,6 +3632,9 @@ static int e1000_clean(struct napi_struct *napi, int budget)
  * e1000_clean_tx_irq - Reclaim resources after transmit completes
  * @adapter: board private structure
  **/
+/*
+skb的数据发送完成，解除映射，并释放skb
+*/
 static bool e1000_clean_tx_irq(struct e1000_adapter *adapter,
 			       struct e1000_tx_ring *tx_ring)
 {
@@ -3608,6 +3650,7 @@ static bool e1000_clean_tx_irq(struct e1000_adapter *adapter,
 	eop = tx_ring->buffer_info[i].next_to_watch;
 	eop_desc = E1000_TX_DESC(*tx_ring, eop);
 
+	/* 数据发送完成，回收资源 */
 	while ((eop_desc->upper.data & cpu_to_le32(E1000_TXD_STAT_DD)) &&
 	       (count < tx_ring->count)) {
 		bool cleaned = false;
@@ -3750,6 +3793,7 @@ static void e1000_consume_page(struct e1000_buffer *bi, struct sk_buff *skb,
 static void e1000_receive_skb(struct e1000_adapter *adapter, u8 status,
 			      __le16 vlan, struct sk_buff *skb)
 {
+	/* 取协议类型，置data指针到网络层 */
 	skb->protocol = eth_type_trans(skb, adapter->netdev);
 
 	if (status & E1000_RXD_STAT_VP) {
@@ -3964,7 +4008,9 @@ static void e1000_check_copybreak(struct net_device *netdev,
 				       (*skb)->data - NET_IP_ALIGN,
 				       length + NET_IP_ALIGN);
 	/* save the skb in buffer_info as good */
+	/* 重新入环，继续使用 */
 	buffer_info->skb = *skb;
+	/* 往协议栈传递新的小skb */
 	*skb = new_skb;
 }
 
@@ -3975,6 +4021,10 @@ static void e1000_check_copybreak(struct net_device *netdev,
  * @work_done: amount of napi work completed this call
  * @work_to_do: max amount of work allowed for this call to do
  */
+/*
+返回false，说明没有从接收环中提取skb
+返回true，说明从接收环内提取了skb
+*/
 static bool e1000_clean_rx_irq(struct e1000_adapter *adapter,
 			       struct e1000_rx_ring *rx_ring,
 			       int *work_done, int work_to_do)
@@ -3995,6 +4045,7 @@ static bool e1000_clean_rx_irq(struct e1000_adapter *adapter,
 	rx_desc = E1000_RX_DESC(*rx_ring, i);
 	buffer_info = &rx_ring->buffer_info[i];
 
+	/* 该接收描述符的数据接收已完成，即环中有数据需要接收 */
 	while (rx_desc->status & E1000_RXD_STAT_DD) {
 		struct sk_buff *skb;
 		u8 status;
@@ -4006,18 +4057,27 @@ static bool e1000_clean_rx_irq(struct e1000_adapter *adapter,
 
 		status = rx_desc->status;
 		skb = buffer_info->skb;
+		/* skb出环，下面会解映射 
+		   然后再重新为该环位置的skb分配新的空间并映射dma
+		*/
 		buffer_info->skb = NULL;
 
 		prefetch(skb->data - NET_IP_ALIGN);
 
+		/* 接收环到最后一个了，从头开始，这是一个环 */
 		if (++i == rx_ring->count) i = 0;
+		/* 环中下一个接收描述符 */
 		next_rxd = E1000_RX_DESC(*rx_ring, i);
+		/* 处理器预取 */
 		prefetch(next_rxd);
 
 		next_buffer = &rx_ring->buffer_info[i];
 
 		cleaned = true;
 		cleaned_count++;
+		/* 去掉skb的映射，这样该skb便只能由系统通过虚拟地址进行访问了
+		   skb便可以最终交给协议栈了
+		*/
 		dma_unmap_single(&pdev->dev, buffer_info->dma,
 				 buffer_info->length, DMA_FROM_DEVICE);
 		buffer_info->dma = 0;
@@ -4054,6 +4114,7 @@ static bool e1000_clean_rx_irq(struct e1000_adapter *adapter,
 				length--;
 			} else {
 				/* recycle */
+				/* 重新入环，继续使用 */
 				buffer_info->skb = skb;
 				goto next_desc;
 			}
@@ -4061,6 +4122,7 @@ static bool e1000_clean_rx_irq(struct e1000_adapter *adapter,
 
 		/* adjust length to remove Ethernet CRC, this must be
 		 * done after the TBI_ACCEPT workaround above */
+		/* 长度去掉CRC的4个字节，所以skb->len是不包括CRC的 */
 		length -= 4;
 
 		/* probably a little skewed due to removing CRC */
@@ -4069,6 +4131,7 @@ static bool e1000_clean_rx_irq(struct e1000_adapter *adapter,
 
 		e1000_check_copybreak(netdev, buffer_info, length, &skb);
 
+		/* 更新skb的tail指针和长度 */
 		skb_put(skb, length);
 
 		/* Receive Checksum Offload */
@@ -4095,6 +4158,7 @@ next_desc:
 	rx_ring->next_to_clean = i;
 
 	cleaned_count = E1000_DESC_UNUSED(rx_ring);
+	/* 根据cleaned_count数量重新为环中消耗的skb分配空间并映射dma */
 	if (cleaned_count)
 		adapter->alloc_rx_buf(adapter, rx_ring, cleaned_count);
 
@@ -4220,6 +4284,9 @@ check_page:
  * @adapter: address of board private structure
  **/
 
+/*
+为接收环中的skb分配空间
+*/
 static void e1000_alloc_rx_buffers(struct e1000_adapter *adapter,
 				   struct e1000_rx_ring *rx_ring,
 				   int cleaned_count)
