@@ -9,6 +9,9 @@ struct file_operations;
 struct inode;
 struct module;
 
+/*
+每个字符驱动由一个cdev结构来表示
+*/
 struct cdev {
 	struct kobject kobj;
 	struct module *owner;

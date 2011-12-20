@@ -49,6 +49,11 @@ static struct kobj_map *cdev_map;
 
 static DEFINE_MUTEX(chrdevs_lock);
 
+/*
+定义结构char_device_struct
+
+声明了chrdevs指针数组
+*/
 static struct char_device_struct {
 	struct char_device_struct *next;
 	unsigned int major;
@@ -106,6 +111,7 @@ __register_chrdev_region(unsigned int major, unsigned int baseminor,
 	mutex_lock(&chrdevs_lock);
 
 	/* temporary */
+	/* alloc_chrdev_region()调用__register_chrdev_region()时传0 */
 	if (major == 0) {
 		for (i = ARRAY_SIZE(chrdevs)-1; i > 0; i--) {
 			if (chrdevs[i] == NULL)
@@ -193,6 +199,9 @@ __unregister_chrdev_region(unsigned major, unsigned baseminor, int minorct)
  *
  * Return value is zero on success, a negative error code on failure.
  */
+/*
+分配指定的设备号范围
+*/
 int register_chrdev_region(dev_t from, unsigned count, const char *name)
 {
 	struct char_device_struct *cd;
@@ -229,6 +238,9 @@ fail:
  * chosen dynamically, and returned (along with the first minor number)
  * in @dev.  Returns zero or a negative error code.
  */
+/*
+动态分配设备范围
+*/
 int alloc_chrdev_region(dev_t *dev, unsigned baseminor, unsigned count,
 			const char *name)
 {
@@ -373,11 +385,13 @@ static int chrdev_open(struct inode *inode, struct file *filp)
 	int ret = 0;
 
 	spin_lock(&cdev_lock);
+	/* 得到相应的字符设备结构 */
 	p = inode->i_cdev;
 	if (!p) {
 		struct kobject *kobj;
 		int idx;
 		spin_unlock(&cdev_lock);
+		/* 如果此字符设备结构无效，则从设备对象管理中查找 */
 		kobj = kobj_lookup(cdev_map, inode->i_rdev, &idx);
 		if (!kobj)
 			return -ENXIO;
@@ -385,25 +399,40 @@ static int chrdev_open(struct inode *inode, struct file *filp)
 		spin_lock(&cdev_lock);
 		/* Check i_cdev again in case somebody beat us to it while
 		   we dropped the lock. */
+		/* 再次尝试获得正确的字符设备结构 */
 		p = inode->i_cdev;
 		if (!p) {
 			inode->i_cdev = p = new;
 			list_add(&inode->i_devices, &p->list);
 			new = NULL;
+		/* 使用 cdev_get() 函数判断相应设备结构的内核设备对象是否有效 */
 		} else if (!cdev_get(p))
 			ret = -ENXIO;
+	/* 如果有效，则调用 cdev_get() 函数继续判断相应设备结构的内核
+	   设备对象是否有效，如果无效则表明此设备仍不可用
+	*/
 	} else if (!cdev_get(p))
 		ret = -ENXIO;
 	spin_unlock(&cdev_lock);
 	cdev_put(new);
+	/* 如果到此字符设备还无效的话，则返回错误 */
 	if (ret)
 		return ret;
 
 	ret = -ENXIO;
+	/* 注意：这里使用 cdev->file_operations 函数操作集
+	   来填充的 struct file->f_op 这也是我们注册字符设备驱动时所给出的函数集
+	*/
 	filp->f_op = fops_get(p->ops);
+	/* 如果 struct file->f_op 无效，那么它所指向的函数集
+	   肯定也无效，这样的话直接返回错误。注意：这里有一
+	   种可能，那就是调用者虽注册了一个字符设备驱动，但是
+	   并没有提供相应的操作集，或许调用者认为没有必要
+	*/
 	if (!filp->f_op)
 		goto out_cdev_put;
 
+	/* 调用open函数 */
 	if (filp->f_op->open) {
 		ret = filp->f_op->open(inode,filp);
 		if (ret)
@@ -463,12 +492,15 @@ static int exact_lock(dev_t dev, void *data)
  * cdev_add() - add a char device to the system
  * @p: the cdev structure for the device
  * @dev: the first device number for which this device is responsible
- * @count: the number of consecutive minor numbers corresponding to this
+ * @count: the number of consecutive(连续不断的) minor numbers corresponding to this
  *         device
  *
  * cdev_add() adds the device represented by @p to the system, making it
  * live immediately.  A negative error code is returned on failure.
  */
+/*
+将cdev对象添加到驱动模型中,其主要是通过kobj_map()来实现
+*/
 int cdev_add(struct cdev *p, dev_t dev, unsigned count)
 {
 	p->dev = dev;
@@ -521,6 +553,9 @@ static struct kobj_type ktype_cdev_dynamic = {
  *
  * Allocates and returns a cdev structure, or NULL on failure.
  */
+/*
+申请一个cdev结构，并初始化部分字段
+*/
 struct cdev *cdev_alloc(void)
 {
 	struct cdev *p = kzalloc(sizeof(struct cdev), GFP_KERNEL);

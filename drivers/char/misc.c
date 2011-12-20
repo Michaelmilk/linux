@@ -274,8 +274,10 @@ static int __init misc_init(void)
 	int err;
 
 #ifdef CONFIG_PROC_FS
+	/* /proc/miscÎÄ¼þ */
 	proc_create("misc", 0, NULL, &misc_proc_fops);
 #endif
+	/* /sys/class/miscÄ¿Â¼ */
 	misc_class = class_create(THIS_MODULE, "misc");
 	err = PTR_ERR(misc_class);
 	if (IS_ERR(misc_class))
