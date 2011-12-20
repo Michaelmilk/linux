@@ -61,6 +61,14 @@ struct vlan_hdr {
  *	@h_vlan_TCI: priority and VLAN ID
  *	@h_vlan_encapsulated_proto: packet type ID or len
  */
+/*
+User Priority定义用户优先级，包括8个（2^3）优先级别，占3位
+CFI占1位，Canonical Format Indicator规范格式指示器
+VID(VLAN ID)是对VLAN的识别字段，为12位。
+支持4096（2^12）VLAN的识别。
+在4096可能的VID中，VID=0用于识别帧优先级。4095（FFF）作为预留值
+所以VLAN配置的最大可能值为4094
+*/
 struct vlan_ethhdr {
 	unsigned char	h_dest[ETH_ALEN];
 	unsigned char	h_source[ETH_ALEN];
@@ -118,6 +126,10 @@ extern void vlan_ioctl_set(int (*hook)(struct net *, void __user *));
 */
 #define VLAN_GROUP_ARRAY_PART_LEN     (VLAN_N_VID/VLAN_GROUP_ARRAY_SPLIT_PARTS)
 
+/*
+同一个物理接口下的vlan虚接口用vlan_group结构描述
+即每个物理接口可以对应一个vlan_group
+*/
 struct vlan_group {
 	/* 该虚拟vlan接口组所依附的接口
 	   可能是真实的物理接口，也完全有可能是另一个虚拟接口，比如bond接口 */
@@ -425,6 +437,7 @@ enum vlan_name_types {
 
 struct vlan_ioctl_args {
 	int cmd; /* Should be one of the vlan_ioctl_cmds enum above. */
+	/* 物理接口名称 */
 	char device1[24];
 
         union {

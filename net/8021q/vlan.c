@@ -64,6 +64,7 @@ static struct vlan_group *vlan_group_alloc(struct net_device *real_dev)
 {
 	struct vlan_group *grp;
 
+	/* 分配vlan_group结构 */
 	grp = kzalloc(sizeof(struct vlan_group), GFP_KERNEL);
 	if (!grp)
 		return NULL;
@@ -143,11 +144,18 @@ void unregister_vlan_dev(struct net_device *dev, struct list_head *head)
 	dev_put(real_dev);
 }
 
+/*
+检查该@vlan_id是否已经在此物理接口@real_dev上注册
+*/
 int vlan_check_real_dev(struct net_device *real_dev, u16 vlan_id)
 {
 	const char *name = real_dev->name;
 	const struct net_device_ops *ops = real_dev->netdev_ops;
 
+	/* 判断接口是否支持vlan
+	   比如bonding接口在没有绑定物理接口的时候就会设置此标志位
+	   参考bond_fix_features()函数中的注释
+	*/
 	if (real_dev->features & NETIF_F_VLAN_CHALLENGED) {
 		pr_info("VLANs not supported on %s\n", name);
 		return -EOPNOTSUPP;
@@ -165,6 +173,9 @@ int vlan_check_real_dev(struct net_device *real_dev, u16 vlan_id)
 	return 0;
 }
 
+/*
+@dev    : 带vlan的虚接口
+*/
 int register_vlan_dev(struct net_device *dev)
 {
 	struct vlan_dev_info *vlan = vlan_dev_info(dev);
@@ -522,6 +533,9 @@ static struct notifier_block vlan_notifier_block __read_mostly = {
  *	o execute requested action or pass command to the device driver
  *   arg is really a struct vlan_ioctl_args __user *.
  */
+/*
+vlan模块ioctl的处理函数
+*/
 static int vlan_ioctl_handler(struct net *net, void __user *arg)
 {
 	int err;

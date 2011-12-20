@@ -156,6 +156,7 @@ static netdev_tx_t vlan_dev_hard_start_xmit(struct sk_buff *skb,
 		skb = __vlan_hwaccel_put_tag(skb, vlan_tci);
 	}
 
+	/* 通过对应的实际物理接口发送skb */
 	skb_set_dev(skb, vlan_dev_info(dev)->real_dev);
 	len = skb->len;
 	ret = dev_queue_xmit(skb);
@@ -517,6 +518,9 @@ static const struct header_ops vlan_header_ops = {
 
 static const struct net_device_ops vlan_netdev_ops;
 
+/*
+@dev    : vlan虚接口
+*/
 static int vlan_dev_init(struct net_device *dev)
 {
 	struct net_device *real_dev = vlan_dev_info(dev)->real_dev;

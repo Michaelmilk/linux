@@ -53,6 +53,9 @@ struct vlan_pcpu_stats {
  *	@dent: proc dir entry
  *	@vlan_pcpu_stats: ptr to percpu rx stats
  */
+/*
+vlan接口的私有结构信息
+*/
 struct vlan_dev_info {
 	unsigned int				nr_ingress_mappings;
 	u32					ingress_priority_map[8];
@@ -69,11 +72,17 @@ struct vlan_dev_info {
 	struct vlan_pcpu_stats __percpu		*vlan_pcpu_stats;
 };
 
+/*
+vlan接口net_device的私有指针指向一个struct vlan_dev_info结构
+*/
 static inline struct vlan_dev_info *vlan_dev_info(const struct net_device *dev)
 {
 	return netdev_priv(dev);
 }
 
+/*
+在指定的@vg中查找对应@vlan_id的虚接口指针
+*/
 static inline struct net_device *vlan_group_get_device(struct vlan_group *vg,
 						       u16 vlan_id)
 {
@@ -82,6 +91,13 @@ static inline struct net_device *vlan_group_get_device(struct vlan_group *vg,
 	return array ? array[vlan_id % VLAN_GROUP_ARRAY_PART_LEN] : NULL;
 }
 
+/*
+把虚接口@dev加入对应的vlan_group
+
+@vg     : 对应的组
+@vlan_id:
+@dev    : 带vlan的虚接口
+*/
 static inline void vlan_group_set_device(struct vlan_group *vg,
 					 u16 vlan_id,
 					 struct net_device *dev)

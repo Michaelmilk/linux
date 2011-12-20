@@ -209,6 +209,7 @@ static rx_handler_result_t macvlan_handle_frame(struct sk_buff **pskb)
 	if (vlan == NULL)
 		return RX_HANDLER_PASS;
 
+	/* 对应vlanid的那个虚接口 */
 	dev = vlan->dev;
 	if (unlikely(!(dev->flags & IFF_UP))) {
 		kfree_skb(skb);
@@ -219,6 +220,7 @@ static rx_handler_result_t macvlan_handle_frame(struct sk_buff **pskb)
 	if (!skb)
 		goto out;
 
+	/* 报文交到带vlanid的那个虚接口上 */
 	skb->dev = dev;
 	skb->pkt_type = PACKET_HOST;
 
