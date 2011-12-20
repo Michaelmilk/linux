@@ -433,6 +433,9 @@ static inline void debug_work_deactivate(struct work_struct *work) { }
 
 /* Serializes the accesses to the list of workqueues. */
 static DEFINE_SPINLOCK(workqueue_lock);
+/*
+工作队列链表, 所有工作队列可以挂接到这个链表中
+*/
 static LIST_HEAD(workqueues);
 static bool workqueue_freezing;		/* W: have wqs started freezing? */
 

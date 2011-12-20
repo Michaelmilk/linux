@@ -115,6 +115,9 @@ struct execute_work {
 #define __WORK_INIT_LOCKDEP_MAP(n, k)
 #endif
 
+/*
+初始化一个struct work_struct结构实例
+*/
 #define __WORK_INITIALIZER(n, f) {				\
 	.data = WORK_DATA_STATIC_INIT(),			\
 	.entry	= { &(n).entry, &(n).entry },			\
@@ -132,6 +135,9 @@ struct execute_work {
 	.timer = TIMER_DEFERRED_INITIALIZER(NULL, 0, 0),	\
 	}
 
+/*
+声明一个struct work_struct结构实例并初始化
+*/
 #define DECLARE_WORK(n, f)					\
 	struct work_struct n = __WORK_INITIALIZER(n, f)
 
