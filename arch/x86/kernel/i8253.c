@@ -34,6 +34,9 @@ void __init setup_pit_timer(void)
 }
 
 #ifndef CONFIG_X86_64
+/*
+PIT : programmable interval timer 可编程间隔定时器
+*/
 static int __init init_pit_clocksource(void)
 {
 	 /*
@@ -51,3 +54,20 @@ static int __init init_pit_clocksource(void)
 }
 arch_initcall(init_pit_clocksource);
 #endif /* !CONFIG_X86_64 */
+
+/*
+intel8253是NMOS工艺制成的可编程计数器/定时器，有几种芯片型号，
+外形引脚及功能都是兼容的，只是工作的最高计数速率有所差异，例如8253（2.6MHz）,8253-5(5MHz) 
+8253内部有三个计数器，分别成为计数器0、计数器1和计数器2，他们的机构完全相同。
+每个计数器的输入和输出都决定于设置在控制寄存器中的控制字，互相之间工作完全独立。
+每个计数器通过三个引脚和外部联系，
+一个为时钟输入端CLK，一个为门控信号输入端GATE，另一个为输出端OUT。
+每个计数器内部有一个8位的控制寄存器，
+还有一个16位的计数初值寄存器CR、一个计数执行部件CE和一个输出锁存器OL。
+执行部件实际上是一个16位的减法计数器，
+它的起始值就是初值寄存器的值，而初始值寄存器的值是通过程序设置的。
+输出锁存器的值是通过程序设置的。
+输出锁存器OL用来锁存计数执行部件CE的内容，从而使CPU可以对此进行读操作。
+顺便提一下，CR、CE和OL都是16位寄存器，但是也可以作8位寄存器来用。
+*/
+
