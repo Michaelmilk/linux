@@ -222,6 +222,9 @@ int sysctl_legacy_va_layout;
 
 /* The default sysctl tables: */
 
+/*
+各procname显示在/proc/sys目录下
+*/
 static struct ctl_table root_table[] = {
 	{
 		.procname	= "kernel",
@@ -1731,13 +1734,20 @@ int sysctl_perm(struct ctl_table_root *root, struct ctl_table *table, int op)
 
 static void sysctl_set_parent(struct ctl_table *parent, struct ctl_table *table)
 {
+	/* 遍历@table表 */
 	for (; table->procname; table++) {
+		/* 设置其父目录 */
 		table->parent = parent;
+		/* 有子目录，则递归调用 */
 		if (table->child)
 			sysctl_set_parent(table, table->child);
 	}
 }
 
+/*
+设置/proc/sys目录下的目录及子目录的层次关系
+主要就是设置parent字段
+*/
 static __init int sysctl_init(void)
 {
 	sysctl_set_parent(NULL, root_table);
