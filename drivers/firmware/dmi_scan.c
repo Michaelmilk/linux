@@ -75,6 +75,9 @@ static char * __init dmi_string(const struct dmi_header *dm, u8 s)
 遍历解析@buf所指示的dmi信息
 调用@decode()函数保存信息
 根据函数调用链，即调用函数dmi_decode()
+
+根据映射的dmi物理区提取的信息
+解析dmi数据，并由dmi_decode()存入全局变量dmi_ident内
 */
 static void dmi_table(u8 *buf, int len, int num,
 		      void (*decode)(const struct dmi_header *, void *),
@@ -177,6 +180,7 @@ static void __init dmi_save_uuid(const struct dmi_header *dm, int slot, int inde
 	if (dmi_ident[slot])
 		return;
 
+	/* 判断合法性，不能只由0x00或0xFF组成 */
 	for (i = 0; i < 16 && (is_ff || is_00); i++) {
 		if(d[i] != 0x00) is_ff = 0;
 		if(d[i] != 0xFF) is_00 = 0;
@@ -185,6 +189,7 @@ static void __init dmi_save_uuid(const struct dmi_header *dm, int slot, int inde
 	if (is_ff || is_00)
 		return;
 
+	/* 16个2字节+4个减号+1个结束'\0' */
 	s = dmi_alloc(16*2+4+1);
 	if (!s)
 		return;
@@ -416,12 +421,20 @@ static void __init dmi_dump_ids(void)
 	printk(KERN_CONT "\n");
 }
 
+/*
+解析映射出的dmi虚拟地址处的数据
+*/
 static int __init dmi_present(const char __iomem *p)
 {
 	u8 buf[15];
 
 	memcpy_fromio(buf, p, 15);
 	if ((memcmp(buf, "_DMI_", 5) == 0) && dmi_checksum(buf)) {
+        /*
+                                小端序
+            0 1 2 3 4 5 | 6 7 | 8 9 10 11 | 12 13 | 14 15
+                          len     base       num
+        */
 		dmi_num = (buf[13] << 8) | buf[12];
 		dmi_len = (buf[7] << 8) | buf[6];
 		dmi_base = (buf[11] << 24) | (buf[10] << 16) |
@@ -558,8 +571,12 @@ static bool dmi_is_end_of_table(const struct dmi_system_id *dmi)
  *	each successful match. Returns the number of matches.
  */
 /*
+根据提供的acpisleep_dmi_table，检查系统设备
+以便对表中列出的设备进行参数设置
+
 检查参数@list中的dmi_system_id是否有与系统已经检测到的dmi信息一致的项
 找到匹配项则调用@list中匹配项的callback函数
+返回匹配的个数，即调用不同callback的次数
 */
 int dmi_check_system(const struct dmi_system_id *list)
 {

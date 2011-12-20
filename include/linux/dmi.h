@@ -4,6 +4,11 @@
 #include <linux/list.h>
 #include <linux/mod_devicetable.h>
 
+/*
+可以使用"mknod /dev/mem c 1 1"创建设备/dev/mem
+然后使用工具程序dmidecode查看硬件信息
+*/
+
 /* enum dmi_field is in mod_devicetable.h */
 
 enum dmi_device_type {
