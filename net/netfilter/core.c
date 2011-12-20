@@ -128,8 +128,8 @@ unsigned int nf_iterate(struct list_head *head,
 	list_for_each_continue_rcu(*i, head) {
 		struct nf_hook_ops *elem = (struct nf_hook_ops *)*i;
 
-		/* 优先级小于@hook_thresh的则跳过
-		   只执行优先级大于等于@hook_thresh的hook函数 */
+		/* 优先级数值小于@hook_thresh的则跳过
+		   只执行优先级数值大于等于@hook_thresh的hook函数 */
 		if (hook_thresh > elem->priority)
 			continue;
 

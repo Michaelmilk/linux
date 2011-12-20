@@ -16,15 +16,21 @@
 #include <linux/sysctl.h>
 
 /* Responses from hook functions. */
+/* 丢弃该数据包 */
 #define NF_DROP 0
+/* 保留该数据包，继续处理 */
 #define NF_ACCEPT 1
+/* 忘掉该数据包 stolen:偷 */
 #define NF_STOLEN 2
+/* 将该数据包插入到用户空间 */
 #define NF_QUEUE 3
+/* 再次调用该hook函数 */
 #define NF_REPEAT 4
+/* 停止该hook点下hook函数的迭代，即使链表中该函数后面还有其他函数 */
 #define NF_STOP 5
 #define NF_MAX_VERDICT NF_STOP
 
-/* we overload the higher bits for encoding auxiliary data such as the queue
+/* we overload the higher bits for encoding auxiliary(辅助的) data such as the queue
  * number or errno values. Not nice, but better than additional function
  * arguments. */
 #define NF_VERDICT_MASK 0x000000ff
@@ -103,37 +109,52 @@ struct sk_buff;
 
 typedef unsigned int nf_hookfn(unsigned int hooknum,
 			       struct sk_buff *skb,
+				/* 指向收到数据帧的实际物理接口 */
 			       const struct net_device *in,
 			       const struct net_device *out,
 			       int (*okfn)(struct sk_buff *));
 
+/* 钩子结构 */
 struct nf_hook_ops {
+	/* 组成链表 */
 	struct list_head list;
 
 	/* User fills in from here down. */
+	/* 钩子处理函数 */
 	nf_hookfn *hook;
 	struct module *owner;
 	u_int8_t pf;
+	/* hook号，5个hook点 */
 	unsigned int hooknum;
 	/* Hooks are ordered in ascending priority. */
+	/* 优先级，数值越小的越先执行 */
 	int priority;
 };
 
 struct nf_sockopt_ops {
+	/* 链表节点 */
 	struct list_head list;
 
+	/* protocal family 协议族 */
 	u_int8_t pf;
 
 	/* Non-inclusive ranges: use 0/0/NULL to never get called. */
+	/* set命令的最小和最大值
+	   最小值可以取到
+	   最大值不可以取到
+	*/
 	int set_optmin;
 	int set_optmax;
+	/* set函数 */
 	int (*set)(struct sock *sk, int optval, void __user *user, unsigned int len);
 #ifdef CONFIG_COMPAT
 	int (*compat_set)(struct sock *sk, int optval,
 			void __user *user, unsigned int len);
 #endif
+	/* get命令的最小和最大值 */
 	int get_optmin;
 	int get_optmax;
+	/* get函数 */
 	int (*get)(struct sock *sk, int optval, void __user *user, int *len);
 #ifdef CONFIG_COMPAT
 	int (*compat_get)(struct sock *sk, int optval,
@@ -173,6 +194,10 @@ int nf_hook_slow(u_int8_t pf, unsigned int hook, struct sk_buff *skb,
  *	okfn must be invoked by the caller in this case.  Any other return
  *	value indicates the packet has been consumed by the hook.
  */
+/*
+返回1，说明钩子函数允许skb继续，此时要调用okfn函数
+其他值说明skb被钩子函数消耗了，不再调用okfn函数了
+*/
 static inline int nf_hook_thresh(u_int8_t pf, unsigned int hook,
 				 struct sk_buff *skb,
 				 struct net_device *indev,
@@ -211,6 +236,9 @@ static inline int nf_hook(u_int8_t pf, unsigned int hook, struct sk_buff *skb,
    coders :)
 */
 
+/*
+只会走优先级小于或等于(数值上大于或等于)@thresh的钩子函数
+*/
 static inline int
 NF_HOOK_THRESH(uint8_t pf, unsigned int hook, struct sk_buff *skb,
 	       struct net_device *in, struct net_device *out,
@@ -223,6 +251,11 @@ NF_HOOK_THRESH(uint8_t pf, unsigned int hook, struct sk_buff *skb,
 	return ret;
 }
 
+/*
+@cond : 调用钩子函数的条件
+	如果cond为假，则直接调用okfn()函数，不会进hook点
+	cond为真时，则调用nf_hook_thresh()函数
+*/
 static inline int
 NF_HOOK_COND(uint8_t pf, unsigned int hook, struct sk_buff *skb,
 	     struct net_device *in, struct net_device *out,
@@ -357,12 +390,14 @@ static inline int nf_hook_thresh(u_int8_t pf, unsigned int hook,
 				 struct net_device *outdev,
 				 int (*okfn)(struct sk_buff *), int thresh)
 {
+	/* 没有netfilter则直接调用okfn()函数 */
 	return okfn(skb);
 }
 static inline int nf_hook(u_int8_t pf, unsigned int hook, struct sk_buff *skb,
 			  struct net_device *indev, struct net_device *outdev,
 			  int (*okfn)(struct sk_buff *))
 {
+	/* 没有netfilter则直接返回1 */
 	return 1;
 }
 struct flowi;
