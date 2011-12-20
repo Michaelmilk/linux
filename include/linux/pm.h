@@ -480,6 +480,9 @@ struct pm_subsys_data {
 #endif
 };
 
+/*
+设备电源管理信息
+*/
 struct dev_pm_info {
 	pm_message_t		power_state;
 	unsigned int		can_wakeup:1;

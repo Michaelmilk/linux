@@ -139,6 +139,10 @@ static inline int device_set_wakeup_enable(struct device *dev, bool enable)
 	return 0;
 }
 
+/*
+设置@dev->power.can_wakeup
+和@dev->power.should_wakeup字段的值为@val
+*/
 static inline int device_init_wakeup(struct device *dev, bool val)
 {
 	device_set_wakeup_capable(dev, val);
