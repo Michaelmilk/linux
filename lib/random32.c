@@ -18,7 +18,7 @@
    http://www.iro.umontreal.ca/~lecuyer/myftp/papers/tausme.ps
    ftp://ftp.iro.umontreal.ca/pub/simulation/lecuyer/papers/tausme.ps
 
-   There is an erratum in the paper "Tables of Maximally
+   There is an erratum(¿±Îó±í) in the paper "Tables of Maximally
    Equidistributed Combined LFSR Generators", Mathematics of
    Computation, 68, 225 (1999), 261--269:
    http://www.iro.umontreal.ca/~lecuyer/myftp/papers/tausme2.ps
@@ -52,6 +52,7 @@ u32 prandom32(struct rnd_state *state)
 {
 #define TAUSWORTHE(s,a,b,c,d) ((s&c)<<d) ^ (((s <<a) ^ s)>>b)
 
+	/* 2^32 = 4294967296 */
 	state->s1 = TAUSWORTHE(state->s1, 13, 19, 4294967294UL, 12);
 	state->s2 = TAUSWORTHE(state->s2, 2, 25, 4294967288UL, 4);
 	state->s3 = TAUSWORTHE(state->s3, 3, 11, 4294967280UL, 17);

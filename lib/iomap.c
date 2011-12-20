@@ -264,6 +264,9 @@ void __iomem *pci_iomap(struct pci_dev *dev, int bar, unsigned long maxlen)
 
 	if (!len || !start)
 		return NULL;
+	/* 传了参数@maxlen，并且合法，则len使用参数@maxlen的值
+	   如果传递@maxlen是0的话，则len会使用资源的最大值
+	*/
 	if (maxlen && len > maxlen)
 		len = maxlen;
 	if (flags & IORESOURCE_IO)

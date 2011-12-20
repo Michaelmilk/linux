@@ -82,10 +82,15 @@ static void knode_kill(struct klist_node *knode)
  * functions that take and release references on the embedding
  * objects.
  */
+/*
+初始化结构@k中的链表，自旋锁，函数
+*/
 void klist_init(struct klist *k, void (*get)(struct klist_node *),
 		void (*put)(struct klist_node *))
 {
+	/* 初始化list_head */
 	INIT_LIST_HEAD(&k->k_list);
+	/* 自旋锁初始化为SPIN_LOCK_UNLOCKED */
 	spin_lock_init(&k->k_lock);
 	k->get = get;
 	k->put = put;

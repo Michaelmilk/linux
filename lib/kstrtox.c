@@ -20,17 +20,26 @@
 #include <asm/uaccess.h>
 #include "kstrtox.h"
 
+/*
+radix: 基数
+*/
 const char *_parse_integer_fixup_radix(const char *s, unsigned int *base)
 {
+	/* 没指定进制，进行简单的解析 */
 	if (*base == 0) {
+		/* '0'打头，判断是8进制或16进制 */
 		if (s[0] == '0') {
+			/* 0X打头，16进制 */
 			if (_tolower(s[1]) == 'x' && isxdigit(s[2]))
 				*base = 16;
 			else
+				/* 8进制 */
 				*base = 8;
 		} else
+			/* 10进制 */
 			*base = 10;
 	}
+	/* 指明了为16进制数，跳过0X两个字符 */
 	if (*base == 16 && s[0] == '0' && _tolower(s[1]) == 'x')
 		s += 2;
 	return s;

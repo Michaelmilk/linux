@@ -39,6 +39,9 @@
  * @endp: A pointer to the end of the parsed string will be placed here
  * @base: The number base to use
  */
+/*
+@base   : 进制
+*/
 unsigned long long simple_strtoull(const char *cp, char **endp, unsigned int base)
 {
 	unsigned long long result;
@@ -49,6 +52,7 @@ unsigned long long simple_strtoull(const char *cp, char **endp, unsigned int bas
 	/* FIXME */
 	cp += (rv & ~KSTRTOX_OVERFLOW);
 
+	/* 需要的话，保存结束位置的指针 */
 	if (endp)
 		*endp = (char *)cp;
 

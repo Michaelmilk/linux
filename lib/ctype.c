@@ -7,6 +7,10 @@
 #include <linux/ctype.h>
 #include <linux/module.h>
 
+/*
+ASCII码对应的字符类型表
+以便判断某个字符是说明类型的
+*/
 const unsigned char _ctype[] = {
 _C,_C,_C,_C,_C,_C,_C,_C,				/* 0-7 */
 _C,_C|_S,_C|_S,_C|_S,_C|_S,_C|_S,_C,_C,			/* 8-15 */
