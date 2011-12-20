@@ -251,7 +251,11 @@ struct netdev_hw_addr_list {
 #define netdev_for_each_mc_addr(ha, dev) \
 	netdev_hw_addr_list_for_each(ha, &(dev)->mc)
 
+/*
+硬件头缓存元素包含输出包必须的第一跳硬件头
+*/
 struct hh_cache {
+	/* MAC层的包头长度 */
 	u16		hh_len;
 	u16		__pad;
 	seqlock_t	hh_lock;
@@ -262,6 +266,7 @@ struct hh_cache {
 	(HH_DATA_MOD - (((__len - 1) & (HH_DATA_MOD - 1)) + 1))
 #define HH_DATA_ALIGN(__len) \
 	(((__len)+(HH_DATA_MOD-1))&~(HH_DATA_MOD - 1))
+	/* 用于存放硬件头 */
 	unsigned long	hh_data[HH_DATA_ALIGN(LL_MAX_HEADER) / sizeof(long)];
 };
 
@@ -1481,6 +1486,8 @@ static inline bool netdev_uses_trailer_tags(struct net_device *dev)
  */
 static inline void *netdev_priv(const struct net_device *dev)
 {
+	/* 取私有数据起始指针，参考alloc_netdev_mqs()函数中net_device结构的分配
+	   这样节省了原来net_device结构中的priv指针字段 */
 	return (char *)dev + ALIGN(sizeof(struct net_device), NETDEV_ALIGN);
 }
 
@@ -1783,10 +1790,32 @@ static inline int unregister_gifconf(unsigned int family)
 /*
  * Incoming packets are placed on per-cpu queues
  */
+/*
+每个cpu都有这样的一个结构，这样便无需加锁，提高处理的并行性
+
+input_pkt_queue
+poll_list
+backlog
+这三个域用于接收数据，
+
+其中input_pkt_queue与backlog用于non-NAPI的NIC，
+使用了RPS机制的时候也使用input_pkt_queue队列
+
+input_pkt_queue是接收到的数据队列头，它用于netif_rx()中，并最终由虚拟的poll函数
+process_backlog()处理这个skb队列。 
+
+poll_list则是有数据包等待处理的napi_struct结构队列。
+对于non-NAPI驱动来说，它始终是backlog。
+*/
 struct softnet_data {
+	/* 网络设备发送队列的队列头，用于发送数据 */
 	struct Qdisc		*output_queue;
 	struct Qdisc		**output_queue_tailp;
+	/* POLL napi_struct队列头
+	   napi_struct的队列。其中的设备接收到了报文，需要被处理
+	*/
 	struct list_head	poll_list;
+	/* 完成发送的数据包等待释放的队列 */
 	struct sk_buff		*completion_queue;
 	struct sk_buff_head	process_queue;
 
@@ -1807,7 +1836,11 @@ struct softnet_data {
 	unsigned int		input_queue_tail;
 #endif
 	unsigned		dropped;
+	/* 接收缓冲区的sk_buff队列
+	   skb报文结构的队列，保存了已接收并需要被处理的报文
+	*/
 	struct sk_buff_head	input_pkt_queue;
+	/* 表示当前参与POLL处理的napi_struct，一个虚拟的napi_struct结构 */
 	struct napi_struct	backlog;
 };
 
