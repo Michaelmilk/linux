@@ -134,7 +134,7 @@ extern u64 timecounter_cyc2time(struct timecounter *tc,
  * @name:		ptr to clocksource name
  * @list:		list head for registration
  * @rating:		rating value for selection (higher is better)
- *			To avoid rating inflation the following
+ *			To avoid rating inflation(ÅòÕÍ) the following
  *			list should give you a guide as to how
  *			to assign your clocksource a rating
  *			1-99: Unfit for real use
@@ -221,7 +221,7 @@ struct clocksource {
  * @shift_constant:	Clocksource shift factor
  *
  * Helper functions that converts a khz counter frequency to a timsource
- * multiplier, given the clocksource shift value
+ * multiplier([µç×Ó] ±¶ÔöÆ÷), given the clocksource shift value
  */
 static inline u32 clocksource_khz2mult(u32 khz, u32 shift_constant)
 {
