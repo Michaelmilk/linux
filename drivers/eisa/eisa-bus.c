@@ -446,6 +446,9 @@ int __init eisa_root_register(struct eisa_root_device *root)
 	return err;
 }
 
+/*
+eisa : 扩展工业标准结构（Extended Industry Standard Architecture）
+*/
 static int __init eisa_init(void)
 {
 	int r;
