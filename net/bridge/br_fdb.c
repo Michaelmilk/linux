@@ -226,6 +226,7 @@ struct net_bridge_fdb_entry *__br_fdb_get(struct net_bridge *br,
 	struct hlist_node *h;
 	struct net_bridge_fdb_entry *fdb;
 
+	/* 根据目的MAC找目的出口 */
 	hlist_for_each_entry_rcu(fdb, h, &br->hash[br_mac_hash(addr)], hlist) {
 		if (!compare_ether_addr(fdb->addr.addr, addr)) {
 			if (unlikely(has_expired(br, fdb)))
@@ -424,6 +425,7 @@ void br_fdb_update(struct net_bridge *br, struct net_bridge_port *source,
 		return;
 
 	fdb = fdb_find_rcu(head, addr);
+	/* 如果找到对应的fdb，更新fdb->dst，fdb->updated */
 	if (likely(fdb)) {
 		/* attempt to update an entry for a local interface */
 		if (unlikely(fdb->is_local)) {
@@ -437,6 +439,7 @@ void br_fdb_update(struct net_bridge *br, struct net_bridge_port *source,
 			fdb->updated = jiffies;
 		}
 	} else {
+	/* 没有找到，则新建一个fdb */
 		spin_lock(&br->hash_lock);
 		if (likely(!fdb_find(head, addr)))
 			fdb_create(head, source, addr);

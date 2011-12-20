@@ -26,6 +26,10 @@ const u8 br_group_address[ETH_ALEN] = { 0x01, 0x80, 0xc2, 0x00, 0x00, 0x00 };
 br_should_route_hook_t __rcu *br_should_route_hook __read_mostly;
 EXPORT_SYMBOL(br_should_route_hook);
 
+/*
+把skb->dev改为网桥接口br
+回netif_receive_skb()上3层处理
+*/
 static int br_pass_frame_up(struct sk_buff *skb)
 {
 	struct net_device *indev, *brdev = BR_INPUT_SKB_CB(skb)->brdev;
@@ -37,9 +41,18 @@ static int br_pass_frame_up(struct sk_buff *skb)
 	brstats->rx_bytes += skb->len;
 	u64_stats_update_end(&brstats->syncp);
 
+	/* 修改接收设备为网桥接口
+	   这样在下面的NF_BR_LOCAL_IN hook后调用netif_receive_skb()时
+	   进入handle_bridge便不再进行网桥的处理了
+
+	   这样对上一层协议栈来说，它只看到网桥接口
+	*/
 	indev = skb->dev;
 	skb->dev = brdev;
 
+	/* 内核在br_netfilter.c中注册了:
+	   br_nf_local_in() NF_BR_PRI_BRNF
+	*/
 	return NF_HOOK(NFPROTO_BRIDGE, NF_BR_LOCAL_IN, skb, indev, NULL,
 		       netif_receive_skb);
 }
@@ -75,6 +88,13 @@ int br_handle_frame_finish(struct sk_buff *skb)
 	/* The packet skb2 goes to the local host (NULL to skip). */
 	skb2 = NULL;
 
+	/* 混杂模式
+	   实际上网桥接口通常都应该是混杂模式的
+
+	   如果网桥的虚拟网卡处于混杂模式
+	   那么每个接收到的数据包都需要克隆一份送到AF_PACKET协议处理
+	   (网络软中断函数net_rx_action中ptype_all链的处理)
+	*/
 	if (br->dev->flags & IFF_PROMISC)
 		skb2 = skb;
 
@@ -96,6 +116,10 @@ int br_handle_frame_finish(struct sk_buff *skb)
 			skb2 = skb;
 
 		br->dev->stats.multicast++;
+	/* 如果没找到出口，则会br_flood_forward
+	   如果找到出口，但是找到的这个接口不是本地某个接口，则br_forward
+	   如果找到出口，并且该出口是本地某个接口，则br_pass_frame_up()而不会转发出去
+	*/
 	} else if ((dst = __br_fdb_get(br, dest)) && dst->is_local) {
 		skb2 = skb;
 		/* Do not forward the packet since it's local. */
@@ -103,13 +127,17 @@ int br_handle_frame_finish(struct sk_buff *skb)
 	}
 
 	if (skb) {
+		/* 由于dst已经找到，现在知道要走br_forward()单播转发了 */
 		if (dst) {
 			dst->used = jiffies;
 			br_forward(dst->dst, skb, skb2);
+		/* CAM表中没有，只能flood了
+		   或者该帧是多播包或二层广播包 */
 		} else
 			br_flood_forward(br, skb, skb2);
 	}
 
+	/* 混杂模式或本地接口 */
 	if (skb2)
 		return br_pass_frame_up(skb2);
 
@@ -163,7 +191,7 @@ rx_handler_result_t br_handle_frame(struct sk_buff **pskb)
 	if (unlikely(skb->pkt_type == PACKET_LOOPBACK))
 		return RX_HANDLER_PASS;
 
-    /* 检测源mac合法性，源mac不可为全0、多播或广播地址
+	/* 检测源mac合法性，源mac不可为全0、多播或广播地址
 	   即源mac只能为确定的L2单播地址 */
 	if (!is_valid_ether_addr(eth_hdr(skb)->h_source))
 		goto drop;

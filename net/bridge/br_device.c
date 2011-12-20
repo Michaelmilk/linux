@@ -23,6 +23,9 @@
 #include "br_private.h"
 
 /* net device transmit always called with BH disabled */
+/*
+网桥设备的hard_start_xmit
+*/
 netdev_tx_t br_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct net_bridge *br = netdev_priv(dev);
@@ -45,12 +48,18 @@ netdev_tx_t br_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	BR_INPUT_SKB_CB(skb)->brdev = dev;
 
+	/* 在调用dev_queue_xmit()前，skb->data指向所有待发送数据头
+	   即应该是以太网头，重置mac_header指针
+	*/
 	skb_reset_mac_header(skb);
 	skb_pull(skb, ETH_HLEN);
 
+	/* 这些发送函数最终都会调用__br_deliver()函数 */
 	rcu_read_lock();
+	/* 二层广播包 */
 	if (is_broadcast_ether_addr(dest))
 		br_flood_deliver(br, skb);
+	/* 组播包 */
 	else if (is_multicast_ether_addr(dest)) {
 		if (unlikely(netpoll_tx_running(dev))) {
 			br_flood_deliver(br, skb);
@@ -66,8 +75,10 @@ netdev_tx_t br_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 			br_multicast_deliver(mdst, skb);
 		else
 			br_flood_deliver(br, skb);
+	/* 查找转发表，找到则单播发送 */
 	} else if ((dst = __br_fdb_get(br, dest)) != NULL)
 		br_deliver(dst->dst, skb);
+	/* 广播发送 */
 	else
 		br_flood_deliver(br, skb);
 

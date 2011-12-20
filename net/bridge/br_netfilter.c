@@ -44,6 +44,7 @@
 
 #define skb_origaddr(skb)	 (((struct bridge_skb_cb *) \
 				 (skb->nf_bridge->data))->daddr.ipv4)
+/* 原始目的ip保存在nf_bridge字段中 */
 #define store_orig_dstaddr(skb)	 (skb_origaddr(skb) = ip_hdr(skb)->daddr)
 #define dnat_took_place(skb)	 (skb_origaddr(skb) != ip_hdr(skb)->daddr)
 
@@ -157,6 +158,9 @@ static inline struct rtable *bridge_parent_rtable(const struct net_device *dev)
 	return port ? &port->br->fake_rtable : NULL;
 }
 
+/*
+返回接口所属的网桥接口指针，如:br0
+*/
 static inline struct net_device *bridge_parent(const struct net_device *dev)
 {
 	struct net_bridge_port *port;
@@ -192,6 +196,9 @@ static inline struct nf_bridge_info *nf_bridge_unshare(struct sk_buff *skb)
 	return nf_bridge;
 }
 
+/*
+修正network_header指针
+*/
 static inline void nf_bridge_push_encap_header(struct sk_buff *skb)
 {
 	unsigned int len = nf_bridge_encap_header_len(skb);
@@ -200,6 +207,9 @@ static inline void nf_bridge_push_encap_header(struct sk_buff *skb)
 	skb->network_header -= len;
 }
 
+/*
+修正network_header指针
+*/
 static inline void nf_bridge_pull_encap_header(struct sk_buff *skb)
 {
 	unsigned int len = nf_bridge_encap_header_len(skb);
@@ -638,6 +648,10 @@ static unsigned int br_nf_pre_routing_ipv6(unsigned int hook,
  * receiving device) to make netfilter happy, the REDIRECT
  * target in particular.  Save the original destination IP
  * address to be able to detect DNAT afterwards. */
+/*
+网桥上的netfilter
+会上3层判断ip table规则
+*/
 static unsigned int br_nf_pre_routing(unsigned int hook, struct sk_buff *skb,
 				      const struct net_device *in,
 				      const struct net_device *out,
@@ -680,9 +694,12 @@ static unsigned int br_nf_pre_routing(unsigned int hook, struct sk_buff *skb,
 	if (br_parse_ip_options(skb))
 		return NF_DROP;
 
+	/* 先释放原来的nf_bridge空间 */
 	nf_bridge_put(skb->nf_bridge);
+	/* 为nf_bridge字段分配空间 */
 	if (!nf_bridge_alloc(skb))
 		return NF_DROP;
+	/* 设置nf_bridge字段 */
 	if (!setup_pre_routing(skb))
 		return NF_DROP;
 	/* 记录原目的ip */
@@ -738,10 +755,19 @@ static int br_nf_forward_finish(struct sk_buff *skb)
 		}
 		nf_bridge_update_protocol(skb);
 	} else {
+	/* 是arp报文
+	   前面在br_nf_forward_arp中利用cb字段保存了入接口net_device指针 */
 		in = *((struct net_device **)(skb->cb));
 	}
+	/* 前移network_header指针，在br_nf_forward_arp中有后移 */
 	nf_bridge_push_encap_header(skb);
 
+	/* 继续走网桥的钩子函数
+	   这里传的@thresh为1了
+	   这样的话在__br_forward()中进入网桥hook点NF_BR_FORWARD时走过的函数
+	   br_nf_forward_ip()或br_nf_forward_arp()就不再进入了
+	   因为1比他们的优先级低(在数值上1大于-1,0)
+	*/
 	NF_HOOK_THRESH(NFPROTO_BRIDGE, NF_BR_FORWARD, skb, in,
 		       skb->dev, br_forward_finish, 1);
 	return 0;
@@ -761,6 +787,7 @@ static unsigned int br_nf_forward_ip(unsigned int hook, struct sk_buff *skb,
 	struct net_device *parent;
 	u_int8_t pf;
 
+	/* nf_bridge字段在br_nf_pre_routing()中分配 */
 	if (!skb->nf_bridge)
 		return NF_ACCEPT;
 
@@ -770,12 +797,15 @@ static unsigned int br_nf_forward_ip(unsigned int hook, struct sk_buff *skb,
 		return NF_DROP;
 
 	parent = bridge_parent(out);
+	/* 出接口不是某个网桥下接口，则丢弃 */
 	if (!parent)
 		return NF_DROP;
 
+	/* IPv4 */
 	if (skb->protocol == htons(ETH_P_IP) || IS_VLAN_IP(skb) ||
 	    IS_PPPOE_IP(skb))
 		pf = PF_INET;
+	/* IPv6 */
 	else if (skb->protocol == htons(ETH_P_IPV6) || IS_VLAN_IPV6(skb) ||
 		 IS_PPPOE_IPV6(skb))
 		pf = PF_INET6;
@@ -801,6 +831,16 @@ static unsigned int br_nf_forward_ip(unsigned int hook, struct sk_buff *skb,
 	else
 		skb->protocol = htons(ETH_P_IPV6);
 
+	/* 对ip层，看到的接口是网桥接口，所以传的indev outdev为网桥接口
+
+	   selinux_ipv4_forward() NF_IP_PRI_SELINUX_FIRST
+	   ip_vs_forward_icmp() 99
+	   ip_vs_reply4() 100
+
+	   selinux_ipv6_forward() NF_IP6_PRI_SELINUX_FIRST
+	   ip_vs_forward_icmp_v6() 99
+	   ip_vs_reply6() 100
+	*/
 	NF_HOOK(pf, NF_INET_FORWARD, skb, bridge_parent(in), parent,
 		br_nf_forward_finish);
 
@@ -824,18 +864,27 @@ static unsigned int br_nf_forward_arp(unsigned int hook, struct sk_buff *skb,
 	if (!brnf_call_arptables && !br->nf_call_arptables)
 		return NF_ACCEPT;
 
+	/* 不是arp报文 */
 	if (skb->protocol != htons(ETH_P_ARP)) {
+		/* 不是带vlan的arp报文 */
 		if (!IS_VLAN_ARP(skb))
+			/* 不是arp报文，则放过，不处理 */
 			return NF_ACCEPT;
+		/* 是带vlan的arp报文，则把network_header指针后移 */
 		nf_bridge_pull_encap_header(skb);
 	}
 
+	/* 是arp报文，判断地址长度 */
 	if (arp_hdr(skb)->ar_pln != 4) {
+		/* 是带vlan的arp报文，把network_header指针前移 */
 		if (IS_VLAN_ARP(skb))
 			nf_bridge_push_encap_header(skb);
+		/* 不是有效的arp报文，不处理 */
 		return NF_ACCEPT;
 	}
+	/* 利用cb字段保存入接口net_device指针 */
 	*d = (struct net_device *)in;
+	/* 正确合法的arp报文，则走NF_ARP_FORWARD的hook点 */
 	NF_HOOK(NFPROTO_ARP, NF_ARP_FORWARD, skb, (struct net_device *)in,
 		(struct net_device *)out, br_nf_forward_finish);
 
@@ -867,6 +916,9 @@ static int br_nf_dev_queue_xmit(struct sk_buff *skb)
 #endif
 
 /* PF_BRIDGE/POST_ROUTING ********************************************/
+/*
+网桥NF_BR_POST_ROUTING点的最后1个钩子函数
+*/
 static unsigned int br_nf_post_routing(unsigned int hook, struct sk_buff *skb,
 				       const struct net_device *in,
 				       const struct net_device *out,
@@ -876,9 +928,11 @@ static unsigned int br_nf_post_routing(unsigned int hook, struct sk_buff *skb,
 	struct net_device *realoutdev = bridge_parent(skb->dev);
 	u_int8_t pf;
 
+	/* nf_bridge字段在br_nf_pre_routing()中分配 */
 	if (!nf_bridge || !(nf_bridge->mask & BRNF_BRIDGED))
 		return NF_ACCEPT;
 
+	/* 出接口不属于网桥 */
 	if (!realoutdev)
 		return NF_DROP;
 
@@ -926,6 +980,10 @@ static unsigned int ip_sabotage_in(unsigned int hook, struct sk_buff *skb,
 				   const struct net_device *out,
 				   int (*okfn)(struct sk_buff *))
 {
+	/* 只有网桥下的接口才会进br_nf_pre_routing()
+	   在br_nf_pre_routing()中会分配nf_bridge空间
+	   并在setup_pre_routing()中为nf_bridge设置BRNF_NF_BRIDGE_PREROUTING标志
+	*/
 	if (skb->nf_bridge &&
 	    !(skb->nf_bridge->mask & BRNF_NF_BRIDGE_PREROUTING)) {
 		/* 停止hook */
