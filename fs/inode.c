@@ -1639,20 +1639,36 @@ void __init inode_init(void)
 		INIT_HLIST_HEAD(&inode_hashtable[loop]);
 }
 
+/*
+流程走到这个函数已经可以确定用户操作打开的是一个设备驱动，
+那么这里就要继续判断打开的是哪种类型设备驱动和需要赋什么样的函数操作集。
+通过下面的代码我们可以看到，系统只支持了四种设备驱动类型，
+也就是说系统注册设备驱动类型只可能是 “字符”，“块”，“FIFO”，“SOCKET” 设备，
+其中的 “FIFO”，“SOCK” 还不是真实设备，这里我们称其为“伪” 设备
+*/
 void init_special_inode(struct inode *inode, umode_t mode, dev_t rdev)
 {
 	inode->i_mode = mode;
 	if (S_ISCHR(mode)) {
+		/* 如果是字符设备，则使用 def_chr_fops 函数集
+		   只有真实设备才有会设置 inode->i_rdev 字段
+		*/
 		inode->i_fop = &def_chr_fops;
 		inode->i_rdev = rdev;
 	} else if (S_ISBLK(mode)) {
+		/* 如果是块设备，则使用 def_blk_fops 函数集
+		   只有真实设备才有会设置 inode->i_rdev 字段
+		*/
 		inode->i_fop = &def_blk_fops;
 		inode->i_rdev = rdev;
 	} else if (S_ISFIFO(mode))
+		/* 如果是 FIFO，则使用 def_fifo_fops 函数集 */
 		inode->i_fop = &def_fifo_fops;
 	else if (S_ISSOCK(mode))
+		/* 如果是 SOCKET，则使用 def_sock_fops 函数集 */
 		inode->i_fop = &bad_sock_fops;
 	else
+		/* 如果不是以上四种类型则忽略，并打印提示信息 */
 		printk(KERN_DEBUG "init_special_inode: bogus i_mode (%o) for"
 				  " inode %s:%lu\n", mode, inode->i_sb->s_id,
 				  inode->i_ino);

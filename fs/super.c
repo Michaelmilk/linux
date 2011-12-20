@@ -111,6 +111,7 @@ static int prune_super(struct shrinker *shrink, struct shrink_control *sc)
 static struct super_block *alloc_super(struct file_system_type *type)
 {
 	struct super_block *s = kzalloc(sizeof(struct super_block),  GFP_USER);
+	/* æ≤Ã¨±‰¡ø */
 	static const struct super_operations default_op;
 
 	if (s) {

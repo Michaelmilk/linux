@@ -1664,6 +1664,9 @@ static void __init biovec_init_slabs(void)
 	}
 }
 
+/*
+bio(block input output)块的输入和输出
+*/
 static int __init init_bio(void)
 {
 	bio_slab_max = 2;

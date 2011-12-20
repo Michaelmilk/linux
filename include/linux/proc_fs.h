@@ -170,6 +170,15 @@ static inline struct proc_dir_entry *proc_create(const char *name, mode_t mode,
 	return proc_create_data(name, mode, parent, proc_fops, NULL);
 }
 
+/*
+该函数用于建立一个规则的只读proc条目，
+参数name给出要建立的proc条目的名称，
+参数mode给出了建立的该proc条目的访问权限，
+参数base指定建立的proc条目所在的目录，
+参数read_proc给出读取该proc条目的操作函数，
+参数data为该proc条目的专用数据，
+它将保存在该proc条目对应的struct proc_dir_entry结构的data字段中。
+*/
 static inline struct proc_dir_entry *create_proc_read_entry(const char *name,
 	mode_t mode, struct proc_dir_entry *base, 
 	read_proc_t *read_proc, void * data)

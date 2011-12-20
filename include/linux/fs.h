@@ -2375,6 +2375,12 @@ extern void __unregister_chrdev(unsigned int major, unsigned int baseminor,
 extern void unregister_chrdev_region(dev_t, unsigned);
 extern void chrdev_show(struct seq_file *,off_t);
 
+/*
+1. 注册设备号, 通过调用 __register_chrdev_region() 来实现 
+2. 分配一个cdev, 通过调用 cdev_alloc() 来实现 
+3. 将cdev添加到驱动模型中, 这一步将设备号和驱动关联了起来. 通过调用 cdev_add() 来实现 
+4. 将第一步中创建的 struct char_device_struct 对象的 cdev 指向第二步中分配的cdev. 
+*/
 static inline int register_chrdev(unsigned int major, const char *name,
 				  const struct file_operations *fops)
 {

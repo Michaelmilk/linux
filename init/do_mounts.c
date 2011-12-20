@@ -26,7 +26,17 @@
 int __initdata rd_doload;	/* 1 = load RAM disk, 0 = don't load */
 
 int root_mountflags = MS_RDONLY | MS_SILENT;
+/*
+root_device_name会指向字符数组saved_root_name[64]的起始位置
+如:命令行传入root=/dev/ram0
+root_device_name先指向起始位置
+获取设备号后指向ram0
+*/
 static char * __initdata root_device_name;
+/*
+保存引导参数"root=/dev/ram0"
+存在字符数组中的值为"/dev/ram0"
+*/
 static char __initdata saved_root_name[64];
 static int root_wait;
 
@@ -495,16 +505,24 @@ void __init prepare_namespace(void)
 
 	if (saved_root_name[0]) {
 		root_device_name = saved_root_name;
+		/* 如果用户指定了以mtd开始的字串做为它的根文件系统。
+		   就会直接去挂载。这个文件是mtdblock的设备文件。
+		*/
 		if (!strncmp(root_device_name, "mtd", 3) ||
 		    !strncmp(root_device_name, "ubi", 3)) {
 			mount_block_root(root_device_name, root_mountflags);
 			goto out;
 		}
+		/* 将设备结点文件转换为ROOT_DEV即设备节点号 */
 		ROOT_DEV = name_to_dev_t(root_device_name);
 		if (strncmp(root_device_name, "/dev/", 5) == 0)
 			root_device_name += 5;
 	}
 
+	/* 执行initrd预处理后，再将具体的根文件系统挂载。
+	   initrd_load()在没有配置CONFIG_BLK_DEV_INITRD宏时，返回0
+	   即只有支持ramdisk时，initrd_load()才会真正进行一些处理
+	*/
 	if (initrd_load())
 		goto out;
 
@@ -526,6 +544,10 @@ void __init prepare_namespace(void)
 	mount_root();
 out:
 	devtmpfs_mount("dev");
+	/* 调用sys_mount()来移动当前文件系统挂载点到"/"目录下。
+	   然后将根目录切换到当前目录。
+	   这样，根文件系统的挂载点就成为了我们在用户空间所看到的"/"了。
+	*/
 	sys_mount(".", "/", NULL, MS_MOVE, NULL);
 	sys_chroot((const char __user __force *)".");
 }

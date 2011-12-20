@@ -2738,6 +2738,7 @@ static void __init init_mount_tree(void)
 	struct mnt_namespace *ns;
 	struct path root;
 
+	/* 创建虚拟文件系统 */
 	mnt = do_kern_mount("rootfs", 0, "rootfs", NULL);
 	if (IS_ERR(mnt))
 		panic("Can't create rootfs");
@@ -2753,6 +2754,7 @@ static void __init init_mount_tree(void)
 	root.dentry = ns->root->mnt_root;
 
 	set_fs_pwd(current->fs, &root);
+	/* 将当前的文件系统配置为根文件系统 */
 	set_fs_root(current->fs, &root);
 }
 
@@ -2788,6 +2790,7 @@ void __init mnt_init(void)
 	fs_kobj = kobject_create_and_add("fs", NULL);
 	if (!fs_kobj)
 		printk(KERN_WARNING "%s: kobj create error\n", __func__);
+	/* 创建虚拟根文件系统(注册rootfs，根文件系统) */
 	init_rootfs();
 	init_mount_tree();
 }

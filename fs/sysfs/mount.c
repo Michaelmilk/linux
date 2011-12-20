@@ -166,6 +166,7 @@ int __init sysfs_init(void)
 	if (err)
 		goto out_err;
 
+	/* 注册sysfs文件系统 */
 	err = register_filesystem(&sysfs_fs_type);
 	if (!err) {
 		sysfs_mnt = kern_mount(&sysfs_fs_type);

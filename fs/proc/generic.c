@@ -662,6 +662,12 @@ static struct proc_dir_entry *__proc_create(struct proc_dir_entry **parent,
 	return ent;
 }
 
+/*
+该函数用于建立一个proc条目的符号链接，
+参数name给出要建立的符号链接proc条目的名称，
+参数parent指定符号连接所在的目录，
+参数dest指定链接到的proc条目名称。
+*/
 struct proc_dir_entry *proc_symlink(const char *name,
 		struct proc_dir_entry *parent, const char *dest)
 {
@@ -738,6 +744,9 @@ EXPORT_SYMBOL(proc_mkdir);
 @name	: proc文件名称(目录或文件)
 @mode	: 文件模式
 @parent	: 父目录
+
+如果要在/proc下建立proc条目，parent应当为NULL。
+否则它应当为proc_mkdir返回的struct proc_dir_entry结构的指针。
 */
 struct proc_dir_entry *create_proc_entry(const char *name, mode_t mode,
 					 struct proc_dir_entry *parent)
@@ -826,6 +835,9 @@ void pde_put(struct proc_dir_entry *pde)
  */
 /*
 删除一个proc文件
+
+参数name给出要删除的proc条目的名称，
+参数parent指定建立的proc条目所在的目录。
 */
 void remove_proc_entry(const char *name, struct proc_dir_entry *parent)
 {

@@ -178,6 +178,10 @@ const struct file_operations proc_net_operations = {
 };
 
 
+/*
+该函数也用于在/proc/net下创建proc条目，
+但是它也同时指定了对该proc条目的文件操作函数。
+*/
 struct proc_dir_entry *proc_net_fops_create(struct net *net,
 	const char *name, mode_t mode, const struct file_operations *fops)
 {
@@ -185,6 +189,10 @@ struct proc_dir_entry *proc_net_fops_create(struct net *net,
 }
 EXPORT_SYMBOL_GPL(proc_net_fops_create);
 
+/*
+该函数用于删除前面两个函数在/proc/net目录下创建的proc条目。
+参数name指定要删除的proc名称。
+*/
 void proc_net_remove(struct net *net, const char *name)
 {
 	remove_proc_entry(name, net->proc_net);

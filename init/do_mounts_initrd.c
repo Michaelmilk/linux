@@ -15,8 +15,14 @@ RAMDISK的起始虚拟地址
 */
 unsigned long initrd_start, initrd_end;
 int initrd_below_start_ok;
+/*
+real_root_dev为一个全局变量，用来保存realfs的设备号。
+*/
 unsigned int real_root_dev;	/* do_proc_dointvec cannot handle kdev_t */
 static int __initdata old_fd, root_fd;
+/*
+引导参数指定"noinitrd"时为0
+*/
 static int __initdata mount_initrd = 1;
 
 static int __init no_initrd(char *str)
@@ -111,6 +117,7 @@ static void __init handle_initrd(void)
 int __init initrd_load(void)
 {
 	if (mount_initrd) {
+		/* 创建一个Root_RAM0的设备节点/dev/ram */
 		create_dev("/dev/ram", Root_RAM0);
 		/*
 		 * Load the initrd data into /dev/ram0. Execute it as initrd
@@ -118,6 +125,9 @@ int __init initrd_load(void)
 		 * in that case the ram disk is just set up here, and gets
 		 * mounted in the normal path.
 		 */
+		/* 如果根文件设备号不是ROOT_RAM0
+		   用户指定的根文件系统不是/dev/ram0就会转入到handle_initrd()
+		*/
 		if (rd_load_image("/initrd.image") && ROOT_DEV != Root_RAM0) {
 			sys_unlink("/initrd.image");
 			handle_initrd();

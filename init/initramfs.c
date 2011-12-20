@@ -411,6 +411,10 @@ static unsigned my_inptr;   /* index of next byte to be processed in inbuf */
 
 #include <linux/decompress/generic.h>
 
+/*
+解压包，并将其释放至rootfs。
+它实际上有两个功能，一个是释放包，一个是查看包，看其是否属于cpio结构的包。
+*/
 static char * __init unpack_to_rootfs(char *buf, unsigned len)
 {
 	int written, res;
@@ -574,6 +578,10 @@ static int __init populate_rootfs(void)
 	char *err = unpack_to_rootfs(__initramfs_start, __initramfs_size);
 	if (err)
 		panic(err);	/* Failed to decompress INTERNAL initramfs */
+	/* 判断是否加载了Initrd，无论对于哪种格式的Initrd，
+	   即无论是CPIO-Initrd还是Image-Initrd，U-Boot都会将其拷贝到initrd_start。
+	   当然了，如果是initramfs的情况下，该值肯定为空了
+	*/
 	if (initrd_start) {
 #ifdef CONFIG_BLK_DEV_RAM
 		int fd;
@@ -589,6 +597,7 @@ static int __init populate_rootfs(void)
 		}
 		printk(KERN_INFO "rootfs image is not initramfs (%s)"
 				"; looks like an initrd\n", err);
+		/* 对于是image-initrd的情况。将其释放到/initrd.image */
 		fd = sys_open((const char __user __force *) "/initrd.image",
 			      O_WRONLY|O_CREAT, 0700);
 		if (fd >= 0) {
