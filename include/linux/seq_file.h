@@ -14,19 +14,42 @@ struct inode;
 struct dentry;
 
 struct seq_file {
+	/* seq流的缓冲区 */
 	char *buf;
+	/* 缓冲区大小 */
 	size_t size;
+	/* 指向当前要显示的数据头位置 */
 	size_t from;
+	/* 缓冲区中已有字节数 */
 	size_t count;
+	/* 数据记录索引值 */
 	loff_t index;
 	loff_t read_pos;
+	/* 版本号，是struct file的版本号的拷贝 */
 	u64 version;
+	/* 互斥锁 */
 	struct mutex lock;
+	/* seq操作结构，定义数据显示的操作函数 */
 	const struct seq_operations *op;
 	int poll_event;
+	/* 私有数据 */
 	void *private;
 };
 
+/*
+start函数用于指定seq_file文件的读开始位置，
+返回实际读开始位置，如果指定的位置超过文件末尾，应当返回NULL，
+start函数可以有一个特殊的返回SEQ_START_TOKEN，
+它用于让show函数输出文件头，但这只能在pos为0时使用，
+
+next函数用于把seq_file文件的当前读位置移动到下一个读位置，
+返回实际的下一个读位置，如果已经到达文件末尾，返回NULL，
+
+stop函数用于在读完seq_file文件后调用，
+它类似于文件操作close，用于做一些必要的清理，如释放内存等，
+
+show函数用于格式化输出，如果成功返回0，否则返回出错码。
+*/
 struct seq_operations {
 	void * (*start) (struct seq_file *m, loff_t *pos);
 	void (*stop) (struct seq_file *m, void *v);

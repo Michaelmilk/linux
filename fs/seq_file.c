@@ -27,18 +27,25 @@
  *	returns 0 in case of success and negative number in case of error.
  *	Returning SEQ_SKIP means "discard this element and move on".
  */
+/*
+函数seq_open是seq_file提供的函数，
+它用于把struct seq_operations结构与seq_file文件关联起来。
+*/
 int seq_open(struct file *file, const struct seq_operations *op)
 {
 	struct seq_file *p = file->private_data;
 
 	if (!p) {
+		/* 分配seq_file结构，并记录在file的private_data字段 */
 		p = kmalloc(sizeof(*p), GFP_KERNEL);
 		if (!p)
 			return -ENOMEM;
 		file->private_data = p;
 	}
 	memset(p, 0, sizeof(*p));
+	/* 初始化互斥锁 */
 	mutex_init(&p->lock);
+	/* 关联seq_operations结构 */
 	p->op = op;
 
 	/*
@@ -129,6 +136,9 @@ Eoverflow:
  *
  *	Ready-made ->f_op->read()
  */
+/*
+从seq流中读数据到用户空间，其中循环调用了struct seq_file中的各个函数来读数据
+*/
 ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 {
 	struct seq_file *m = file->private_data;
@@ -138,6 +148,7 @@ ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 	void *p;
 	int err = 0;
 
+	/* 获取互斥锁 */
 	mutex_lock(&m->lock);
 
 	/* Don't assume *ppos is where we left it */
@@ -174,6 +185,9 @@ ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 			goto Enomem;
 	}
 	/* if not empty - flush it first */
+	/* count表示当时有多少数据还没有传给用户空间
+	   尽量先将这些数据传出
+	*/
 	if (m->count) {
 		n = min(m->count, size);
 		err = copy_to_user(buf, m->buf + m->from, n);
@@ -190,12 +204,18 @@ ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 			goto Done;
 	}
 	/* we need at least one record in buffer */
+	/* 数据记录的位置 */
 	pos = m->index;
+	/* 调用start函数
+	   初始化操作，返回值为对象相关指针
+	*/
 	p = m->op->start(m, &pos);
+	/* 进行主要传数据过程，缓冲区中至少要有一个记录单位的数据 */
 	while (1) {
 		err = PTR_ERR(p);
 		if (!p || IS_ERR(p))
 			break;
+		/* 调用show函数，显示数据 */
 		err = m->op->show(m, p);
 		if (err < 0)
 			break;
@@ -206,8 +226,13 @@ ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 			m->index = pos;
 			continue;
 		}
+		/* 当前缓冲区中的实际数据小于缓冲区大小，转到填数据部分 */
 		if (m->count < m->size)
 			goto Fill;
+		/* 否则说明一个记录的数据量太大，原来缓冲区大小不够
+		   先停操作，重新分配缓冲区，大小增加一倍，重新操作
+		   要保证缓冲区大小大于一个数据记录的大小
+		*/
 		m->op->stop(m, p);
 		kfree(m->buf);
 		m->buf = kmalloc(m->size <<= 1, GFP_KERNEL);
@@ -223,6 +248,7 @@ ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 	goto Done;
 Fill:
 	/* they want more? let's try to get some more */
+	/* 继续读数据到缓冲区 */
 	while (m->count < size) {
 		size_t offs = m->count;
 		loff_t next = pos;
@@ -241,6 +267,7 @@ Fill:
 	}
 	m->op->stop(m, p);
 	n = min(m->count, size);
+	/* 将数据拷贝到用户空间 */
 	err = copy_to_user(buf, m->buf, n);
 	if (err)
 		goto Efault;
@@ -278,6 +305,9 @@ EXPORT_SYMBOL(seq_read);
  *
  *	Ready-made ->f_op->llseek()
  */
+/*
+定位seq流当前指针偏移
+*/
 loff_t seq_lseek(struct file *file, loff_t offset, int origin)
 {
 	struct seq_file *m = file->private_data;
@@ -322,6 +352,9 @@ EXPORT_SYMBOL(seq_lseek);
  *	Frees the structures associated with sequential file; can be used
  *	as ->f_op->release() if you don't have private data to destroy.
  */
+/*
+释放seq流所分配的动态内存空间，即struct seq_file的buf及其本身
+*/
 int seq_release(struct inode *inode, struct file *file)
 {
 	struct seq_file *m = file->private_data;
@@ -341,6 +374,11 @@ EXPORT_SYMBOL(seq_release);
  *	@esc with usual octal escape.  Returns 0 in case of success, -1 - in
  *	case of overflow.
  */
+/*
+函数seq_escape类似于seq_puts，
+只是，它将把第一个字符串参数中出现的包含在第二个字符串参数中的字符按照八进制形式输出，
+也即对这些字符进行转义处理。
+*/
 int seq_escape(struct seq_file *m, const char *s, const char *esc)
 {
 	char *end = m->buf + m->size;
@@ -367,6 +405,10 @@ int seq_escape(struct seq_file *m, const char *s, const char *esc)
 }
 EXPORT_SYMBOL(seq_escape);
 
+/*
+函数seq_printf是最常用的输出函数，
+它用于把给定参数按照给定的格式输出到seq_file文件。
+*/
 int seq_printf(struct seq_file *m, const char *f, ...)
 {
 	va_list args;
@@ -427,6 +469,10 @@ EXPORT_SYMBOL(mangle_path);
  * return the absolute path of 'path', as represented by the
  * dentry / mnt pair in the path parameter.
  */
+/*
+函数seq_path则用于输出文件名，
+字符串参数提供需要转义的文件名字符，它主要供文件系统使用。
+*/
 int seq_path(struct seq_file *m, struct path *path, char *esc)
 {
 	char *buf;
@@ -576,6 +622,9 @@ int single_release(struct inode *inode, struct file *file)
 }
 EXPORT_SYMBOL(single_release);
 
+/*
+释放seq_file的private然后进行seq_release
+*/
 int seq_release_private(struct inode *inode, struct file *file)
 {
 	struct seq_file *seq = file->private_data;
@@ -619,6 +668,9 @@ int seq_open_private(struct file *filp, const struct seq_operations *ops,
 }
 EXPORT_SYMBOL(seq_open_private);
 
+/*
+函数seq_putc用于把一个字符输出到seq_file文件。
+*/
 int seq_putc(struct seq_file *m, char c)
 {
 	if (m->count < m->size) {
@@ -629,6 +681,9 @@ int seq_putc(struct seq_file *m, char c)
 }
 EXPORT_SYMBOL(seq_putc);
 
+/*
+函数seq_puts则用于把一个字符串输出到seq_file文件。
+*/
 int seq_puts(struct seq_file *m, const char *s)
 {
 	int len = strlen(s);
