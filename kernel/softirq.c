@@ -45,6 +45,8 @@
      it is logically serialized per device, but this serialization
      is invisible to common code.
    - Tasklets: serialized wrt itself.
+
+	wrt: with regard to 关于
  */
 
 #ifndef __ARCH_IRQ_STAT
@@ -52,6 +54,9 @@ irq_cpustat_t irq_stat[NR_CPUS] ____cacheline_aligned;
 EXPORT_SYMBOL(irq_stat);
 #endif
 
+/*
+由open_softirq()为该数组添加软中断处理函数
+*/
 static struct softirq_action softirq_vec[NR_SOFTIRQS] __cacheline_aligned_in_smp;
 
 DEFINE_PER_CPU(struct task_struct *, ksoftirqd);
@@ -171,6 +176,7 @@ static inline void _local_bh_enable_ip(unsigned long ip)
  	 */
 	sub_preempt_count(SOFTIRQ_DISABLE_OFFSET - 1);
 
+	/* 看是否有挂起的软中断 */
 	if (unlikely(!in_interrupt() && local_softirq_pending()))
 		do_softirq();
 
@@ -202,32 +208,58 @@ EXPORT_SYMBOL(local_bh_enable_ip);
  * we want to handle softirqs as soon as possible, but they
  * should not be able to lock up the box.
  */
+/* 最大软中断调用次数为10次 */
 #define MAX_SOFTIRQ_RESTART 10
 
 asmlinkage void __do_softirq(void)
 {
+	/* 软件中断处理结构，此结构中包括了ISR中注册的回调函数 */
 	struct softirq_action *h;
 	__u32 pending;
 	int max_restart = MAX_SOFTIRQ_RESTART;
 	int cpu;
 
+	/* 得到当前所有pending的软中断 */
 	pending = local_softirq_pending();
 	account_system_vtime(current);
 
+	/* 执行到这里要屏蔽其他软中断，这里也就证明了每个CPU上同时运行的软中断只能有一个 */
 	__local_bh_disable((unsigned long)__builtin_return_address(0),
 				SOFTIRQ_OFFSET);
 	lockdep_softirq_enter();
 
+	/* 针对SMP得到当前正在处理的CPU */
 	cpu = smp_processor_id();
 restart:
 	/* Reset the pending bitmask before enabling irqs */
+	/* 每次循环在允许硬件ISR抢占前，首先重置软中断的标志位 */
 	set_softirq_pending(0);
 
+	/* 到这里才开中断运行，注意：以前运行状态一直是关中断运行，
+	   这时当前处理软中断才可能被硬件中断抢占。
+	   也就是说在进入软中断时不是一开始就会被硬件中断抢占。
+	   只有在这里以后的代码才可能被硬件中断抢占。
+	*/
 	local_irq_enable();
 
+	/* 这里要注意，以下代码运行时可以被硬件中断抢占，
+	   但这个硬件ISR执行完成后，它所注册的软中断无法马上运行，
+	   别忘了，现在虽是开硬件中断执行，但前面的__local_bh_disable()函数屏蔽了软中断。
+	   所以这种环境下只能被硬件中断抢占，但这个硬中断注册的软中断回调函数无法运行。
+	   要问为什么，那是因为__local_bh_disable()函数设置了一个标志当作互斥量，
+	   而这个标志正是上面的irq_exit()和do_softirq()函数中的in_interrupt()函数判断的条件之一，
+	   也就是说 in_interrupt()函数不仅检测硬中断而且还判断了软中断。
+	   所以在这个环境下触发硬中断时注册的软中断，根本无法重新进入到这个函数中来，
+	   只能是做一个标志，等待下面的重复循环(最大MAX_SOFTIRQ_RESTART)
+	   才可能处理到这个时候触发的硬件中断所注册的软中断。
+	*/
+
+	/* 得到软中断向量表 */
 	h = softirq_vec;
 
+	/* 循环处理所有softirq软中断注册函数 */
 	do {
+		/* 如果对应的软中断设置pending标志则表明需要进一步处理它所注册的函数 */
 		if (pending & 1) {
 			unsigned int vec_nr = h - softirq_vec;
 			int prev_count = preempt_count();
@@ -248,22 +280,64 @@ restart:
 
 			rcu_bh_qs(cpu);
 		}
+		/* 继续找，直到把软中断向量表中所有pending的软中断处理完成 */
 		h++;
+		/* 从代码里可以看出按位操作，表明一次循环只处理32个软中断的回调函数 */
 		pending >>= 1;
+	/* pending是32位无符号整数
+	   对应softirq_vec的32项，softirq_vec数组大小就是32 */
 	} while (pending);
 
+	/* 关中断执行以下代码。
+	   注意：这里又关中断了，下面的代码执行过程中硬件中断无法抢占。
+	*/
 	local_irq_disable();
 
+	/* 前面提到过，在刚才开硬件中断执行环境时只能被硬件中断抢占，
+	   在这个时候是无法处理软中断的，因为刚才开中断执行过程中可能多次被硬件中断抢占，
+	   每抢占一次就有可能注册一个软中断，所以要再重新取一次所有的软中断。
+	   以便下面的代码进行处理后跳回到restart处重复执行。
+	*/
 	pending = local_softirq_pending();
+	/* 如果在上面的开中断执行环境中触发了硬件中断，且每个都注册了一个软中断的话，
+	   这个软中断会设置pending位，但在当前一直屏蔽软中断的环境下无法得到执行，
+	   前面提到过，因为irq_exit()和do_softirq()根本无法进入到这个处理过程中来。
+	   这个在上面详细的记录过了。那么在这里又有了一个执行的机会。
+	   注意:虽然当前环境一直是处于屏蔽软中断执行的环境中，
+	   但在这里又给出了一个执行刚才在开中断环境过程中触发硬件中断时所注册的软中断的机会，
+	   其实只要理解了软中断机制就会知道，
+	   无非是在一些特定环境下调用ISR注册到软中断向量表里的函数而已。
+
+	   如果刚才触发的硬件中断注册了软中断，并且重复执行次数没有到10次的话，
+	   那么则跳转到restart标志处重复以上所介绍的所有步骤:设置软中断标志位，重新开中断执行...
+	   注意:这里是要两个条件都满足的情况下才可能重复以上步骤。 
+	*/
 	if (pending && --max_restart)
 		goto restart;
 
+	/* 如果以上步骤重复了10次后还有pending的软中断的话，
+	   那么系统在一定时间内可能达到了一个峰值，为了平衡这点。
+	   系统专门建立了一个ksoftirqd线程来处理，这样避免在一定时间内负荷太大。
+	   这个ksoftirqd线程本身是一个大循环，在某些条件下为了不使负载过重，
+	   它是可以被其他进程抢占的，
+	   但注意，它是显式的调用了preempt_xxx()和schedule()才会被抢占和切换的。
+	   这么做的原因是因为在它一旦调用local_softirq_pending()函数
+	   检测到有pending的软中断需要处理的时候，则会显式的调用do_softirq()来处理软中断。
+	   也就是说，下面代码唤醒的ksoftirqd线程有可能会回到这个函数当中来，
+	   尤其是在系统需要响应很多软中断的情况下，它的调用入口是do_softirq()，
+	   这也就是为什么在do_softirq()的入口处也会用in_interrupt()函数
+	   来判断是否有软中断正在处理的原因了，目的还是为了防止重入。
+	*/
 	if (pending)
+		/* 调用wake_up_process()来唤醒ksoftirqd */
 		wakeup_softirqd();
 
 	lockdep_softirq_exit();
 
 	account_system_vtime(current);
+	/* 到最后才开软中断执行环境，允许软中断执行。
+	   注意:这里使用的不是local_bh_enable()，不会再次触发do_softirq()的调用。
+	*/
 	__local_bh_enable(SOFTIRQ_OFFSET);
 }
 
@@ -274,16 +348,25 @@ asmlinkage void do_softirq(void)
 	__u32 pending;
 	unsigned long flags;
 
+	/* 这个函数判断，如果当前有硬件中断嵌套，或者有软中断正在执行时候，则马上返回。
+	   在这个入口判断主要是为了与ksoftirqd互斥。防止重入
+	*/
 	if (in_interrupt())
 		return;
 
+	/* 将CPU的flag值先储存到flags变数里，然后将CPU的中断disable掉。
+	   这里将CPU的中断disable是指将执行这段code的CPU，并不是指全部的CPU。 
+	   也就是说它只会disable local CPU的中断。
+	*/
 	local_irq_save(flags);
 
 	pending = local_softirq_pending();
 
+	/* 判断是否有pending的软中断需要处理 */
 	if (pending)
 		__do_softirq();
 
+	/* 将flags里的值再设回CPU的flag里，开中断 */
 	local_irq_restore(flags);
 }
 
@@ -292,6 +375,10 @@ asmlinkage void do_softirq(void)
 /*
  * Enter an interrupt context.
  */
+/*
+进入硬中断上下文
+preempt_count里硬中断位+1
+*/
 void irq_enter(void)
 {
 	int cpu = smp_processor_id();
@@ -343,7 +430,12 @@ void irq_exit(void)
 {
 	account_system_vtime(current);
 	trace_hardirq_exit();
+	/* 恢复preempt_count的值 */
 	sub_preempt_count(IRQ_EXIT_OFFSET);
+	/* 判断当前是否有硬件中断嵌套，并且是否有软中断在pending状态
+	   注意:这里只有两个条件同时满足时，才有可能调用do_softirq()进入软中断
+	   也就是说确认当前所有硬件中断处理完成，且有硬件中断安装了软中断处理时理时才会进入
+	*/
 	if (!in_interrupt() && local_softirq_pending())
 		invoke_softirq();
 
@@ -738,38 +830,101 @@ void __init softirq_init(void)
 	open_softirq(HI_SOFTIRQ, tasklet_hi_action);
 }
 
+/*
+每cpu的软中断守护进程
+
+@__bind_cpu	: cpu号
+*/
 static int run_ksoftirqd(void * __bind_cpu)
 {
+	/* 设置当前进程状态为可中断的状态，这种睡眠状态可响应信号处理等。 */
 	set_current_state(TASK_INTERRUPTIBLE);
 
+	/* 下面是一个大循环，循环判断当前进程是否会停止，
+	   不会则继续判断当前是否有pending的软中断需要处理。
+	*/
 	while (!kthread_should_stop()) {
+		/* 如果可以进行处理，那么在此处理期间内禁止当前进程被抢占。 */
 		preempt_disable();
+		/* 首先判断系统当前没有需要处理的pending状态的软中断 */
 		if (!local_softirq_pending()) {
+			/* 没有的话则主动放弃CPU前先要允许抢占，
+			   因为一直是在不允许抢占状态下执行的代码。 */
 			preempt_enable_no_resched();
+			/* 显式调用此函数主动放弃CPU将当前进程放入睡眠队列，
+			   并切换新的进程执行(调度器相关不记录在此) */
 			schedule();
+			/* 注意:如果当前显式调用schedule()函数主动切换的进程再次被调度执行的话，
+			   那么将从调用这个函数的下一条语句开始执行。
+			   也就是说，在这里当前进程再次被执行的话，
+			   将会执行下面的preempt_disable()函数。
+
+			   当进程再度被调度时，在以下处理期间内禁止当前进程被抢占。
+			*/
 			preempt_disable();
 		}
 
+		/* 设置当前进程为运行状态。
+		   注意:已经设置了当前进程不可抢占在进入循环后，
+		   以上两个分支不论走哪个都会执行到这里。
+		   一是进入循环时就有pending的软中断需要执行时。
+		   二是进入循环时没有pending的软中断，当前进程再次被调度获得CPU时继续执行时。
+		*/
 		__set_current_state(TASK_RUNNING);
 
+		/* 循环判断是否有pending的软中断，
+		   如果有则调用do_softirq()来做具体处理。
+		   注意:这里又是一个do_softirq()的入口点，
+		   那么在__do_softirq()当中循环处理10次软中断的回调函数后，
+		   如果还有pending的话，会又调用到这里。
+		   那么在这里则又会有可能去调用__do_softirq()来处理软中断回调函数。
+		   在前面介绍__do_softirq()时已经提到过，
+		   处理10次还处理不完的话说明系统正处于繁忙状态。
+		   根据以上分析，我们可以试想如果在系统非常繁忙时，
+		   这个进程将会与do_softirq()相互交替执行，
+		   这时此进程占用CPU应该会很高，虽然下面的cond_resched()函数做了一些处理，
+		   它在处理完一轮软中断后当前处理进程可能会因被调度而减少CPU负荷，
+		   但是在非常繁忙时这个进程仍然有可能大量占用CPU。
+		*/
 		while (local_softirq_pending()) {
 			/* Preempt disable stops cpu going offline.
 			   If already offline, we'll be on wrong CPU:
 			   don't process */
+			/* 如果当前被关联的CPU无法继续处理则跳转到wait_to_die标记出，
+			   等待结束并退出。
+			*/
 			if (cpu_is_offline((long)__bind_cpu))
 				goto wait_to_die;
 			local_irq_disable();
+			/* 执行__do_softirq()来处理具体的软中断回调函数 */
 			if (local_softirq_pending())
 				__do_softirq();
 			local_irq_enable();
+			/* 允许当前进程被抢占 */
 			preempt_enable_no_resched();
+			/* 这个函数有可能间接的调用schedule()来切换当前进程，
+			   而且上面已经允许当前进程可被抢占。
+			   也就是说在处理完一轮软中断回调函数时，
+			   有可能会切换到其他进程。
+			   这样做的目的一是为了在某些负载超标的情况下
+			   不至于让这个进程长时间大量的占用 CPU，
+			   二是让在有很多软中断需要处理时不至于让其他进程得不到响应。
+			*/
 			cond_resched();
+			/* 禁止当前进程被抢占 */
 			preempt_disable();
 			rcu_note_context_switch((long)__bind_cpu);
+		/* 处理完所有软中断了吗?没有的话继续循环以上步骤 */
 		}
+		/* 待一切都处理完成后，允许当前进程被抢占，
+		   并设置当前进程状态为可中断状态，继续循环以上所有过程。
+		*/
 		preempt_enable();
 		set_current_state(TASK_INTERRUPTIBLE);
 	}
+	/* 如果将会停止则设置当前进程为运行状态后直接返回。
+	   调度器会根据优先级来使当前进程运行。
+	*/
 	__set_current_state(TASK_RUNNING);
 	return 0;
 
