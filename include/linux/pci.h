@@ -27,8 +27,11 @@
  *	7:3 = slot
  *	2:0 = function
  */
+/* 把设备(5bit)和功能(3bit)合并进1个字节内 */
 #define PCI_DEVFN(slot, func)	((((slot) & 0x1f) << 3) | ((func) & 0x07))
+/* 设备 */
 #define PCI_SLOT(devfn)		(((devfn) >> 3) & 0x1f)
+/* 功能 */
 #define PCI_FUNC(devfn)		((devfn) & 0x07)
 
 /* Ioctls for /proc/bus/pci/X/Y nodes. */
@@ -116,7 +119,9 @@ enum {
 
 typedef int __bitwise pci_power_t;
 
+/* D0 : Fully-On 正常工作状态 */
 #define PCI_D0		((pci_power_t __force) 0)
+/* D1 D2 : 中间电源状态，根据设备不同而有所不同 */
 #define PCI_D1		((pci_power_t __force) 1)
 #define PCI_D2		((pci_power_t __force) 2)
 #define PCI_D3hot	((pci_power_t __force) 3)
@@ -235,30 +240,103 @@ struct pci_ats;
 /*
  * The pci_dev structure is used to describe PCI devices.
  */
+/*
+PCI是一个总线标准，PCI总线上的设备就是PCI设备，
+这些设备有很多类型，当然也包括网卡设备，
+每一个PCI设备在内核中抽象为一个数据结构pci_dev,它描述了一个PCI设备的所有的特性
+
+PCI设备主要包括两类空间，
+一个是配置空间，它是操作系统或BIOS控制外设的统一格式的空间，
+CPU指令不能访问，访问这个空间要借助BIOS功能，
+事实上Linux的访问配置空间的函数是通过CPU指令驱使BIOS来完成读写访问的。
+另一类是普通的控制寄存器空间，这一部分映射完后CPU可以访问来控制设备工作。
+
+pci设备和pci驱动没有直接使用device和device_driver，
+而是将二者封装起来，加上pci特定信息构成pci_dev和pci_driver。
+
+PCI设备的发现是通过特定代码探测PCI空间来实现的。
+PCI设备由内核自动生成的。
+这样在注册pci驱动的时候PCI设备已经注册，其属性如ID的信息都已经是被初始化好了。
+*/
 struct pci_dev {
+	/* 总线设备链表元素bus_list:
+	   每一个pci_dev结构除了链接到全局设备链表中外，
+	   还会通过这个成员连接到其所属PCI总线的设备链表中。
+	   每一条PCI总线都维护一条它自己的设备链表视图，
+	   以便描述所有连接在该PCI总线上的设备，
+	   其表头由PCI总线的pci_bus结构中的 devices成员所描述。
+           不要被bus_list名称迷惑，可不是总线链表的意思，pci_dev使用此节点将自身加入到
+           其所在总线pci_bus的成员devices描述的头节点链表中
+	*/
 	struct list_head bus_list;	/* node in per-bus list */
+	/* 总线指针bus:指向这个PCI设备所在的PCI总线的pci_bus结构。
+	   因此，对于桥设备而言，bus指针将指向桥设备的主总线(primary bus)，
+	   也即指向桥设备所在的PCI总线。
+	*/
 	struct pci_bus	*bus;		/* bus this device is on */
+	/* 指针subordinate:指向这个PCI设备所桥接的下级总线。
+	   这个指针成员仅对桥设备才有意义，而对于一般的非桥PCI设备而言，
+	   该指针成员总是为NULL。
+	*/
 	struct pci_bus	*subordinate;	/* bus this device bridges to */
 
+	/* 无类型指针sysdata:指向一片特定于系统的扩展数据。 */
 	void		*sysdata;	/* hook for sys-specific extension */
+	/* 指针procent:指向该PCI设备在/proc文件系统中对应的目录项。 */
 	struct proc_dir_entry *procent;	/* device entry in /proc/bus/pci */
 	struct pci_slot	*slot;		/* Physical slot this device is in */
 
+	/* devfn:这个PCI设备的设备功能号，
+	   也成为PCI逻辑设备号(0－255)。
+	   其中bit[7-3]是物理设备号(取值范围0-31)，
+	   bit[2-0]是功能号(取值范围0-7)。
+	*/
 	unsigned int	devfn;		/* encoded device & function index */
+	/* vendor:这是一个16位无符号整数，表示PCI设备的厂商ID。 */
 	unsigned short	vendor;
+	/* device:这是一个16位无符号整数，表示PCI设备的设备ID。 */
 	unsigned short	device;
+	/* subsystem_vendor:这是一个16位无符号整数，表示PCI设备的子系统厂商ID。 */
 	unsigned short	subsystem_vendor;
+	/* subsystem_device:这是一个16位无符号整数，表示PCI设备的子系统设备ID。 */
 	unsigned short	subsystem_device;
+	/* class:32位的无符号整数，表示该PCI设备的类别，
+	   其中，bit[7-0]为编程接口，
+	   bit[15-8]为子类别代码，
+	   bit[23-16]为基类别代码，
+	   bit[31-24]无意义。
+	   显然，class成员的低3字节刚好对应与PCI配置空间中的类代码。
+	*/
 	unsigned int	class;		/* 3 bytes: (base,sub,prog-if) */
 	u8		revision;	/* PCI revision, low byte of class word */
+	/* hdr_type:8位无符号整数，表示PCI配置空间头部的类型。
+	   其中，bit[7]=1表示这是一个多功能设备，bit[7]=0表示这是一个单功能设备。
+	   Bit[6-0]则表示PCI配置空间头部的布局类型，
+	   值00h表示这是一个一般PCI设备的配置空间头部，
+	   值01h表示这是一个PCI-to-PCI桥的配置空间头部，
+	   值02h表示CardBus桥的配置空间头部。
+	*/
 	u8		hdr_type;	/* PCI header type (`multi' flag masked out) */
 	u8		pcie_cap;	/* PCI-E capability offset */
 	u8		pcie_type:4;	/* PCI-E device/port type */
 	u8		pcie_mpss:3;	/* PCI-E Max Payload Size Supported */
+	/* rom_base_reg:8位无符号整数，
+	   表示PCI配置空间中的ROM基地址寄存器在PCI配置空间中的位置。
+	   ROM基地址寄存器在不同类型的PCI配置空间头部的位置是不一样的，
+	   对于type 0的配置空间布局，ROM基地址寄存器的起始位置是30h，
+	   而对于PCI-to-PCI桥所用的type 1配置空间布局，ROM基地址寄存器的起始位置是38h。
+	*/
 	u8		rom_base_reg;	/* which config register controls the ROM */
 	u8		pin;  		/* which interrupt pin this device uses */
 
+	/* 指针driver:指向这个PCI设备所对应的驱动程序定义的pci_driver结构。
+	   每一个pci设备驱动程序都必须定义它自己的pci_driver结构来描述它自己。
+	*/
 	struct pci_driver *driver;	/* which driver has allocated this device */
+	/* dma_mask:用于DMA的总线地址掩码，一般来说，这个成员的值是0xffffffff。
+	   数据类型dma_addr_t定义在include/asm/types.h中，
+	   在x86平台上，dma_addr_t类型就是u32类型。
+	*/
 	u64		dma_mask;	/* Mask of the bits of bus address this
 					   device implements.  Normally this is
 					   0xffffffff.  You only need to change
@@ -289,6 +367,7 @@ struct pci_dev {
 #endif
 
 	pci_channel_state_t error_state;	/* current connectivity state */
+	/* 内嵌的通用设备结构，设备自身 */
 	struct	device	dev;		/* Generic device interface */
 
 	int		cfg_size;	/* Size of configuration space */
@@ -298,11 +377,21 @@ struct pci_dev {
 	 * directly, use the values stored here. They might be different!
 	 */
 	unsigned int	irq;
+	/* 资源数组resource[DEVICE_COUNT_RESOURCE]:
+	   表示该设备可能用到的资源，
+	   包括:I/O断口区域、设备内存地址区域以及扩展ROM地址区域。
+	   根据pci.h头文件中枚举的定义，DEVICE_COUNT_RESOURCE为12
+	   但是PCI设备通常仅使用这12个资源区域中的一部分。
+	   其中，resource[5-0]分别对应于配置空间中的BAR0-BAR5(注意，桥设备只有BAR0和BAR1)
+	   resource[6]对应于配置空间中的ROM基地址寄存器所描述的ROM区域，
+	   而resource[10-7]分别对应于桥设备的地址过滤窗口。
+	*/
 	struct resource resource[DEVICE_COUNT_RESOURCE]; /* I/O and memory regions + expansion ROMs */
 	resource_size_t	fw_addr[DEVICE_COUNT_RESOURCE]; /* FW-assigned addr */
 
 	/* These fields are used by common fixups */
 	unsigned int	transparent:1;	/* Transparent PCI bridge */
+	/* 多功能设备，比如USB控制器 */
 	unsigned int	multifunction:1;/* Part of multi-function device */
 	/* keep track of device state */
 	unsigned int	is_added:1;
@@ -311,6 +400,7 @@ struct pci_dev {
 	unsigned int	block_ucfg_access:1;	/* userspace config space access is blocked */
 	unsigned int	broken_parity_status:1;	/* Device generates false positive parity */
 	unsigned int	irq_reroute_variant:2;	/* device needs IRQ rerouting variant */
+	/* Message Signaled Interrupts 消息中断 */
 	unsigned int 	msi_enabled:1;
 	unsigned int	msix_enabled:1;
 	unsigned int	ari_enabled:1;	/* ARI forwarding */
@@ -411,26 +501,60 @@ struct pci_bus_resource {
 #define PCI_REGION_FLAG_MASK	0x0fU	/* These bits of resource flags tell us the PCI region flags */
 
 struct pci_bus {
+	/* 链表元素node:
+	   对于PCI根总线而言，
+	   其pci_bus结构通过node成员链接到本节一开始所述的根总线链表中，
+	   根总线链表的表头由一个list_head类型的全局变量pci_root_buses所描述。
+	   而对于非根pci总线，
+	   其pci_bus结构通过node成员链接到其父总线的子总线链表children中(见下面)。
+	*/
 	struct list_head node;		/* node in list of buses */
+	/* parent指针:指向该pci总线的父总线，即pci桥所在的那条总线。 */
 	struct pci_bus	*parent;	/* parent bus this bridge is on */
+	/* children指针:描述了这条PCI总线的子总线链表的表头。
+	   这条PCI总线的所有子总线都通过上述的node链表元素链接成一条子总线链表，
+	   而该链表的表头就由父总线的children指针所描述。
+	*/
 	struct list_head children;	/* list of child buses */
+	/* devices链表头:描述了这条PCI总线的逻辑设备链表的表头。
+	   除了链接在全局PCI设备链表中之外，
+	   每一个PCI逻辑设备也通过其pci_dev结构中的bus_list成员链入其所在PCI总线的局部设备链表中，
+	   而这个局部的总线设备链表的表头就由pci_bus结构中的devices成员所描述。
+	*/
 	struct list_head devices;	/* list of devices on this bus */
+	/* 指针self:指向引出这条PCI总线的桥设备的pci_dev结构。 */
 	struct pci_dev	*self;		/* bridge device as seen by parent */
 	struct list_head slots;		/* list of slots on this bus */
+	/* 资源指针数组resource[4]:指向应路由到这条pci总线的地址空间资源，
+	   通常是指向对应桥设备的pci_dev结构中的资源数组resource[10-7]。
+	*/
 	struct resource *resource[PCI_BRIDGE_RESOURCE_NUM];
 	struct list_head resources;	/* address space routed to this bus */
 
+	/* 指针ops:指向一个pci_ops结构，表示这条pci总线所使用的配置空间访问函数。 */
 	struct pci_ops	*ops;		/* configuration access functions */
+	/* 无类型指针sysdata:指向系统特定的扩展数据。 */
 	void		*sysdata;	/* hook for sys-specific extension */
+	/* 指针procdir:指向该PCI总线在/proc文件系统中对应的目录项。 */
 	struct proc_dir_entry *procdir;	/* directory entry in /proc/bus/pci */
 
+	/* number:这条PCI总线的总线编号(bus number)，取值范围0-255。 */
 	unsigned char	number;		/* bus number */
+	/* primary:表示引出这条PCI总线的"桥设备的主总线"
+	   (也即桥设备所在的PCI总线)编号，取值范围0-255。 */
 	unsigned char	primary;	/* number of primary bridge */
+	/* secondary:表示引出这条PCI总线的桥设备的次总线号，
+	   因此secondary成员总是等于number成员的值。取值范围0-255。 */
 	unsigned char	secondary;	/* number of secondary bridge */
+	/* subordinate:
+	   这条PCI总线的下属PCI总线(Subordinate pci bus)的总线编号最大值，
+	   它应该等于引出这条PCI总线的桥设备的subordinate值。
+	*/
 	unsigned char	subordinate;	/* max number of subordinate buses */
 	unsigned char	max_bus_speed;	/* enum pci_bus_speed */
 	unsigned char	cur_bus_speed;	/* enum pci_bus_speed */
 
+	/* name[48]:这条PCI总线的名字字符串。 */
 	char		name[48];
 
 	unsigned short  bridge_ctl;	/* manage NO_ISA/FBB/et al behaviors */
@@ -476,6 +600,9 @@ static inline bool pci_dev_msi_enabled(struct pci_dev *pci_dev) { return false; 
 
 /* Low-level architecture-dependent routines */
 
+/*
+对pci_raw_ops的一层封装
+*/
 struct pci_ops {
 	int (*read)(struct pci_bus *bus, unsigned int devfn, int where, int size, u32 *val);
 	int (*write)(struct pci_bus *bus, unsigned int devfn, int where, int size, u32 val);
@@ -548,10 +675,81 @@ struct pci_error_handlers {
 /* ---------------------------------------------------------------- */
 
 struct module;
+/*
+probe函数
+
+如果找到相关设备和我们的pci_device_id结构数组对上号了，
+说明我们找到服务对象了，则调用rtl8139_init_one
+
+1 建立net_device结构，让它在内核中代表这个网络设备
+  网卡设备既要遵循PCI规范，也要担负起其作为网卡设备的职责，
+  于是就分了两块，pci_dev用来负责网卡的PCI规范，
+  而这里要说的net_device则是负责网卡的网络设备这个职责
+
+2 开启这个设备(其实是开启了设备的寄存器映射到内存的功能)
+  pci_enable_device也是一个内核开发出来的接口，
+  主要就是把PCI配置空间的Command域的0位和1位置成了1，
+  从而达到了开启设备的目的，因为rtl8139的官方datasheet中，
+  说明了这两位的作用就是开启内存映射和I/O映射，如果不开的话，
+  那我们以上讨论的把控制寄存器空间映射到内存空间的这一功能就被屏蔽了，
+  这对我们是非常不利的，除此之外，pci_enable_device还做了些中断开启工作。
+
+3 获得各项资源
+  在硬件加电初始化时，BIOS固件统一检查了所有的PCI设备，
+  并统一为他们分配了一个和其他互不冲突的地址，
+  让他们的驱动程序可以向这些地址映射他们的寄存器，
+  这些地址被BIOS写进了各个设备的配置空间，
+  因为这个活动是一个PCI的标准的活动，
+  所以自然写到各个设备的配置空间里而不是他们风格各异的控制寄存器空间里。
+  当然只有BIOS可以访问配置空间。
+  当操作系统初始化时，他为每个PCI设备分配了pci_dev结构，
+  并且把BIOS获得的并写到了配置空间中的地址读出来写到了pci_dev中的resource字段中。
+  这样以后我们在读这些地址就不需要在访问配置空间了，直接跟pci_dev要就可以了
+  每个PCI设备有0-5共6个地址空间，我们通常只使用前两个
+
+4 把得到的地址进行映射
+  ioremap是内核提供的用来映射外设寄存器到主存的函数，
+  我们要映射的地址已经从pci_dev中读了出来(上一步)，
+  这样就水到渠成的成功映射了而不会和其他地址有冲突。
+  映射完了有什么效果呢，我举个例子，比如某个网卡有100个寄存器，
+  他们都是连在一块的，位置是固定的，假如每个寄存器占4个字节，
+  那么一共400个字节的空间被映射到内存成功后，
+  ioaddr就是这段地址的开头
+  (注意ioaddr是虚拟地址，而mmio_start是物理地址，
+  它是BIOS得到的，肯定是物理地址，而保护模式下CPU不认物理地址，只认虚拟地址)，
+  ioaddr+0就是第一个寄存器的地址，
+  ioaddr+4就是第二个寄存器地址(每个寄存器占4个字节)，
+  以此类推，我们就能够在内存中访问到所有的寄存器进而操控他们了。
+
+5 重启网卡设备
+  重启网卡设备是初始化网卡设备的一个重要部分，
+  它的原理就是向寄存器中写入命令就可以了
+  (注意这里写寄存器，而不是配置空间，因为跟PCI没有什么关系)，
+
+6 获得MAC地址，并把它存储到net_device中。
+  我们可以看到读的地址是ioaddr+0到ioaddr+5，
+  读者查看官方datasheet会发现寄存器地址空间的开头6个字节正好存的是这个网卡设备的MAC地址，
+  MAC地址是网络中标识网卡的物理地址，这个地址在今后的收发数据包时会用的上。
+
+7 向net_device中登记一些主要的函数
+  由于dev(net_device)代表着设备，
+  把这些函数注册完后，rtl8139_open就是用于打开这个设备，
+  rtl8139_start_xmit就是当应用程序要通过这个设备往外面发数据时被调用，
+  具体的其实这个函数是在网络协议层中调用的，这就涉及到Linux网络协议栈的内容，
+  不再我们讨论之列，我们只是负责实现它。
+  rtl8139_close用来关掉这个设备。
+
+pci_driver一般由模块定义并且在模块初始化函数中向内核注册
+*/
 struct pci_driver {
 	struct list_head node;
+	/* 驱动名称 */
 	const char *name;
+	/* 驱动支持的设备ID列表 */
 	const struct pci_device_id *id_table;	/* must be non-NULL for probe to be called */
+	/* 参数dev是系统探测分配的pci_dev结构指针
+	   参数id通常是pci驱动中提供的id_table的某一项指针
+	*/
 	int  (*probe)  (struct pci_dev *dev, const struct pci_device_id *id);	/* New device inserted */
 	void (*remove) (struct pci_dev *dev);	/* Device removed (NULL if not a hot-plug capable driver) */
 	int  (*suspend) (struct pci_dev *dev, pm_message_t state);	/* Device suspended */
@@ -560,6 +758,7 @@ struct pci_driver {
 	int  (*resume) (struct pci_dev *dev);	                /* Device woken up */
 	void (*shutdown) (struct pci_dev *dev);
 	struct pci_error_handlers *err_handler;
+	/* 内嵌的通用设备驱动 */
 	struct device_driver	driver;
 	struct pci_dynids dynids;
 };
@@ -735,6 +934,13 @@ static inline struct pci_dev *pci_get_bus_and_slot(unsigned int bus,
 struct pci_dev *pci_get_class(unsigned int class, struct pci_dev *from);
 int pci_dev_present(const struct pci_device_id *ids);
 
+/*
+这些函数在drivers/pci/access.c中由宏定义
+
+最后都是调用该总线内通过指针提供的底层读写函数
+函数执行成功返回0，并会将值保存在参数@val的指针内
+执行失败会返回负的错误码
+*/
 int pci_bus_read_config_byte(struct pci_bus *bus, unsigned int devfn,
 			     int where, u8 *val);
 int pci_bus_read_config_word(struct pci_bus *bus, unsigned int devfn,
@@ -937,6 +1143,22 @@ int __must_check __pci_register_driver(struct pci_driver *, struct module *,
 /*
  * pci_register_driver must be a macro so that KBUILD_MODNAME can be expanded
  */
+/*
+1 把参数@driver在内核中进行注册，内核中有一个pci设备的大链表，把参数挂载到这个大链表中
+
+2 查看总线上所有PCI设备(网卡设备属于PCI设备的一种)的配置空间，
+  如果发现标识信息与参数@driver中的id_table相同
+  那么就说明这个驱动程序就是用来驱动这个设备的，
+  于是调用参数@driver中的probe函数，
+  这个函数在驱动程序中定义，用来初始化整个设备和做一些准备工作
+  这里需要注意一下pci_device_id是内核定义的用来辨别不同PCI设备的一个结构，
+  例如在我们这里0x10ec代表的是Realtek公司，
+  我们扫描PCI设备配置空间如果发现有Realtek公司制造的设备时，两者就对上了。
+  当然对上了公司号后还得看其他的设备号什么的，都对上了才说明这个驱动是可以为这个设备服务的
+
+3 把这个rtl8139_pci_driver结构挂在这个设备的数据结构(pci_dev)上，
+  表示这个设备从此就有了自己的驱动了。而驱动也找到了它服务的对象了
+*/
 #define pci_register_driver(driver)		\
 	__pci_register_driver(driver, THIS_MODULE, KBUILD_MODNAME)
 
@@ -1317,6 +1539,9 @@ static inline int pci_domain_nr(struct pci_bus *bus)
 
 /* these helpers provide future and backwards compatibility
  * for accessing popular PCI BAR info */
+/*
+把参数1传给了bar就是使用内存映射的地址空间
+*/
 #define pci_resource_start(dev, bar)	((dev)->resource[(bar)].start)
 #define pci_resource_end(dev, bar)	((dev)->resource[(bar)].end)
 #define pci_resource_flags(dev, bar)	((dev)->resource[(bar)].flags)
@@ -1372,6 +1597,9 @@ static inline void pci_resource_to_user(const struct pci_dev *dev, int bar,
  *  fixup hooks to be called for particular buggy devices.
  */
 
+/*
+这个数据结构表示，对于厂商vendor提供的设备device，需要在何时执行@hook函数
+*/
 struct pci_fixup {
 	u16 vendor, device;	/* You can use PCI_ANY_ID here of course */
 	void (*hook)(struct pci_dev *dev);

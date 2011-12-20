@@ -174,6 +174,9 @@ extern struct bus_attribute pci_bus_attrs[];
  *
  * Returns the matching pci_device_id structure or %NULL if there is no match.
  */
+/*
+看@id是否与系统中某个pci设备@dev匹配
+*/
 static inline const struct pci_device_id *
 pci_match_one_device(const struct pci_device_id *id, const struct pci_dev *dev)
 {

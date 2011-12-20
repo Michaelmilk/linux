@@ -473,6 +473,9 @@ pci_find_parent_resource(const struct pci_dev *dev, struct resource *res)
  * Restore the BAR values for a given device, so as to make it
  * accessible by its driver.
  */
+/*
+BAR : base address register 基址寄存器
+*/
 static void
 pci_restore_bars(struct pci_dev *dev)
 {
@@ -1123,6 +1126,9 @@ static int __pci_enable_device_flags(struct pci_dev *dev,
 		dev->current_state = (pmcsr & PCI_PM_CTRL_STATE_MASK);
 	}
 
+	/* 检查该设备@dev是否已经调用过本函数__pci_enable_device_flags()
+	   也就是说每个pci设备只能调用本函数1次
+	*/
 	if (atomic_add_return(1, &dev->enable_cnt) > 1)
 		return 0;		/* already enabled */
 
@@ -1173,6 +1179,9 @@ int pci_enable_device_mem(struct pci_dev *dev)
  *  Note we don't actually enable the device many times if we call
  *  this function repeatedly (we just increment the count).
  */
+/*
+初始化设备，使I/O，memory可用，唤醒设备
+*/
 int pci_enable_device(struct pci_dev *dev)
 {
 	return __pci_enable_device_flags(dev, IORESOURCE_MEM | IORESOURCE_IO);

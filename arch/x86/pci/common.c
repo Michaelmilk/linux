@@ -33,6 +33,12 @@ int noioapicreroute = 1;
 int pcibios_last_bus = -1;
 unsigned long pirq_table_addr;
 struct pci_bus *pci_root_bus;
+/*
+pci设备配置空间的操作
+会根据不同的方式赋对应的操作指针
+
+由函数pci_direct_init()根据不同的配置类型为raw_pci_ops赋值
+*/
 const struct pci_raw_ops *__read_mostly raw_pci_ops;
 const struct pci_raw_ops *__read_mostly raw_pci_ext_ops;
 
@@ -68,6 +74,9 @@ static int pci_write(struct pci_bus *bus, unsigned int devfn, int where, int siz
 				  devfn, where, size, value);
 }
 
+/*
+对raw_pci_ops的一层封装，指定了@domain为0
+*/
 struct pci_ops pci_root_ops = {
 	.read = pci_read,
 	.write = pci_write,
@@ -160,6 +169,12 @@ static void __devinit pcibios_fixup_device_resources(struct pci_dev *dev)
  *  are examined.
  */
 
+/*
+pcibios_fixup_bus()这个函数看名字是用来修正总线的。
+芯片厂商在发布产品后，又检测到上次发布的产品有问题。
+回厂升级是不可能的了。只能提供软件修改的手段，发布一些修正包。
+Linux将很多厂商的修正集合在一起。这也就是pcibios_fixup_bus()要进行的操作。
+*/
 void __devinit pcibios_fixup_bus(struct pci_bus *b)
 {
 	struct pci_dev *dev;
@@ -615,10 +630,14 @@ int pcibios_enable_device(struct pci_dev *dev, int mask)
 {
 	int err;
 
+	/* 使能 I/O and memory resources */
 	if ((err = pci_enable_resources(dev, mask)) < 0)
 		return err;
 
 	if (!pci_dev_msi_enabled(dev))
+		/* pci_acpi_init()会为函数指针pcibios_enable_irq赋值为
+		   acpi_pci_irq_enable()
+		*/
 		return pcibios_enable_irq(dev);
 	return 0;
 }

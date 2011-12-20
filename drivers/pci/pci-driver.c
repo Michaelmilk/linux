@@ -245,6 +245,9 @@ const struct pci_device_id *pci_match_id(const struct pci_device_id *ids,
 					 struct pci_dev *dev)
 {
 	if (ids) {
+		/* 遍历pci驱动中的id_table，取设备的id进行比较，看能否支持该设备
+		   比如e1000_pci_tbl
+		*/
 		while (ids->vendor || ids->subvendor || ids->class_mask) {
 			if (pci_match_one_device(ids, dev))
 				return ids;
@@ -263,6 +266,9 @@ const struct pci_device_id *pci_match_id(const struct pci_device_id *ids,
  * system is in its list of supported devices.  Returns the matching
  * pci_device_id structure or %NULL if there is no match.
  */
+/*
+看pci驱动中提供的id_table是否有项与系统中的pci设备匹配
+*/
 static const struct pci_device_id *pci_match_device(struct pci_driver *drv,
 						    struct pci_dev *dev)
 {
@@ -303,6 +309,9 @@ static long local_pci_probe(void *_ddi)
 	pm_runtime_set_active(dev);
 	pm_runtime_enable(dev);
 
+	/* 调用pci驱动程序中的probe函数
+	   比如e1000_main.c中定义的e1000_probe()
+	*/
 	rc = ddi->drv->probe(ddi->dev, ddi->id);
 	if (rc) {
 		pm_runtime_disable(dev);
@@ -352,12 +361,16 @@ __pci_device_probe(struct pci_driver *drv, struct pci_dev *pci_dev)
 	const struct pci_device_id *id;
 	int error = 0;
 
+	/* 该pci_dev->driver字段还为空
+	   pci驱动中提供了probe方法，如e1000_main.c中的e1000_probe()
+	*/
 	if (!pci_dev->driver && drv->probe) {
 		error = -ENODEV;
 
 		id = pci_match_device(drv, pci_dev);
 		if (id)
 			error = pci_call_probe(drv, pci_dev, id);
+		/* probe成功，则设置pci驱动 */
 		if (error >= 0) {
 			pci_dev->driver = drv;
 			error = 0;
@@ -372,6 +385,10 @@ static int pci_device_probe(struct device * dev)
 	struct pci_driver *drv;
 	struct pci_dev *pci_dev;
 
+	/* 根据内嵌的结构指针获得完整结构
+	   dev->driver刚刚在really_probe()中赋值为此设备的驱动device_driver
+	   例如e1000注册pci驱动时，这里取的将会是e1000_main.c内的静态结构e1000_driver
+	*/
 	drv = to_pci_driver(dev->driver);
 	pci_dev = to_pci_dev(dev);
 	pci_dev_get(pci_dev);
@@ -1124,7 +1141,12 @@ int __pci_register_driver(struct pci_driver *drv, struct module *owner,
 	int error;
 
 	/* initialize common driver fields */
+	/* 初始化通用模型的driver字段，为struct device_driver类型
+	   该结构内嵌在struct pci_driver中
+	*/
+	/* 设置驱动名称 */
 	drv->driver.name = drv->name;
+	/* 设置驱动总线 */
 	drv->driver.bus = &pci_bus_type;
 	drv->driver.owner = owner;
 	drv->driver.mod_name = mod_name;
@@ -1133,6 +1155,9 @@ int __pci_register_driver(struct pci_driver *drv, struct module *owner,
 	INIT_LIST_HEAD(&drv->dynids.list);
 
 	/* register with core */
+	/* 通过这个函数将这个PCI驱动中的
+	   struct device_driver driver成员变量注册到系统中去。
+	*/
 	error = driver_register(&drv->driver);
 	if (error)
 		goto out;
@@ -1209,6 +1234,10 @@ pci_dev_driver(const struct pci_dev *dev)
  */
 static int pci_bus_match(struct device *dev, struct device_driver *drv)
 {
+	/* 传进来的参数是通用结构device和device_driver的指针
+	   这2个指针是内嵌在pci_dev和pci_driver结构中的
+	   通过container_of宏取得对应的完整结构以供pci_match_device()使用
+	*/
 	struct pci_dev *pci_dev = to_pci_dev(dev);
 	struct pci_driver *pci_drv = to_pci_driver(drv);
 	const struct pci_device_id *found_id;
@@ -1259,6 +1288,9 @@ int pci_uevent(struct device *dev, struct kobj_uevent_env *env)
 }
 #endif
 
+/*
+pci总线类型定义
+*/
 struct bus_type pci_bus_type = {
 	.name		= "pci",
 	.match		= pci_bus_match,
@@ -1271,6 +1303,10 @@ struct bus_type pci_bus_type = {
 	.pm		= PCI_PM_OPS_PTR,
 };
 
+/*
+初始化pci驱动模型
+将pci总线加入驱动模型
+*/
 static int __init pci_driver_init(void)
 {
 	return bus_register(&pci_bus_type);

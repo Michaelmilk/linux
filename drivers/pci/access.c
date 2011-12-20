@@ -25,6 +25,12 @@ static DEFINE_RAW_SPINLOCK(pci_lock);
 #define PCI_word_BAD (pos & 1)
 #define PCI_dword_BAD (pos & 3)
 
+/*
+@bus	: pci_dev->bus 为结构pci_dev中的字段
+@devfn	: pci_dev->devfn
+@pos	: pci_dev->hdr_type
+@value	: 保存返回值
+*/
 #define PCI_OP_READ(size,type,len) \
 int pci_bus_read_config_##size \
 	(struct pci_bus *bus, unsigned int devfn, int pos, type *value)	\
@@ -60,6 +66,10 @@ PCI_OP_WRITE(byte, u8, 1)
 PCI_OP_WRITE(word, u16, 2)
 PCI_OP_WRITE(dword, u32, 4)
 
+/*
+这些函数由上面的宏PCI_OP_READ PCI_OP_WRITE展开生成
+其中的##替换名称
+*/
 EXPORT_SYMBOL(pci_bus_read_config_byte);
 EXPORT_SYMBOL(pci_bus_read_config_word);
 EXPORT_SYMBOL(pci_bus_read_config_dword);

@@ -68,6 +68,14 @@ static int __init pcibus_class_init(void)
 }
 postcore_initcall(pcibus_class_init);
 
+/*
+找出区间长度
+即屏蔽相应位的掩码@mask后，第一个为1的位代表的大小
+
+例如:取出来的值是0xC107(参数@maxbase).
+假设是I/O端口屏蔽掉低三位(参数@mask),为0xC100.
+第一个为1的值对应的值为0x0100.即0x100
+*/
 static u64 pci_size(u64 base, u64 maxbase, u64 mask)
 {
 	u64 size = mask & maxbase;	/* Find the significant bits */
@@ -91,12 +99,14 @@ static inline unsigned long decode_bar(struct pci_dev *dev, u32 bar)
 	u32 mem_type;
 	unsigned long flags;
 
+	/* 如果最低位为1.说明该区域是I/O端口,高29位是端口地址的高29位,低3位为零 */
 	if ((bar & PCI_BASE_ADDRESS_SPACE) == PCI_BASE_ADDRESS_SPACE_IO) {
 		flags = bar & ~PCI_BASE_ADDRESS_IO_MASK;
 		flags |= IORESOURCE_IO;
 		return flags;
 	}
 
+	/* 如果最低位为0.说明该区域是存储映射区间.前28位是存储区的高28位,低四位为零 */
 	flags = bar & ~PCI_BASE_ADDRESS_MEM_MASK;
 	flags |= IORESOURCE_MEM;
 	if (flags & PCI_BASE_ADDRESS_MEM_PREFETCH)
@@ -133,6 +143,7 @@ static inline unsigned long decode_bar(struct pci_dev *dev, u32 bar)
 int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 			struct resource *res, unsigned int pos)
 {
+	/* sz : size */
 	u32 l, sz, mask;
 	u16 orig_cmd;
 
@@ -146,9 +157,13 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 
 	res->name = pci_name(dev);
 
+	/* 保存寄存器中原来的值 */
 	pci_read_config_dword(dev, pos, &l);
+	/* 写入全1，0xffffffff */
 	pci_write_config_dword(dev, pos, l | mask);
+	/* 写全1后读取出来的是长度信息 */
 	pci_read_config_dword(dev, pos, &sz);
+	/* 写入原来的值 */
 	pci_write_config_dword(dev, pos, l);
 
 	if (!dev->mmio_always_on)
@@ -247,10 +262,12 @@ static void pci_read_bases(struct pci_dev *dev, unsigned int howmany, int rom)
 
 	for (pos = 0; pos < howmany; pos++) {
 		struct resource *res = &dev->resource[pos];
+		/* 每个寄存器的地址 */
 		reg = PCI_BASE_ADDRESS_0 + (pos << 2);
 		pos += __pci_read_base(dev, pci_bar_unknown, res, reg);
 	}
 
+	/* 扩展ROM基地址，参考pci_setup_device()中3个调用pci_read_bases()点 */
 	if (rom) {
 		struct resource *res = &dev->resource[PCI_ROM_RESOURCE];
 		dev->rom_base_reg = rom;
@@ -274,6 +291,7 @@ static void __devinit pci_read_bridge_io(struct pci_bus *child)
 	base = (io_base_lo & PCI_IO_RANGE_MASK) << 8;
 	limit = (io_limit_lo & PCI_IO_RANGE_MASK) << 8;
 
+	/* 如果是32位，还要通过PCI_IO_BASE_UPPER16和PCI_IO_LIMIT_UPPER16提供高16位。 */
 	if ((io_base_lo & PCI_IO_RANGE_TYPE_MASK) == PCI_IO_RANGE_TYPE_32) {
 		u16 io_base_hi, io_limit_hi;
 		pci_read_config_word(dev, PCI_IO_BASE_UPPER16, &io_base_hi);
@@ -359,6 +377,9 @@ static void __devinit pci_read_bridge_mmio_pref(struct pci_bus *child)
 	}
 }
 
+/*
+读取pci桥的基地址信息
+*/
 void __devinit pci_read_bridge_bases(struct pci_bus *child)
 {
 	struct pci_dev *dev = child->self;
@@ -393,6 +414,9 @@ void __devinit pci_read_bridge_bases(struct pci_bus *child)
 	}
 }
 
+/*
+分配pci总线结构空间
+*/
 static struct pci_bus * pci_alloc_bus(void)
 {
 	struct pci_bus *b;
@@ -602,6 +626,7 @@ struct pci_bus *__ref pci_add_new_bus(struct pci_bus *parent, struct pci_dev *de
 	child = pci_alloc_child_bus(parent, dev, busnr);
 	if (child) {
 		down_write(&pci_bus_sem);
+		/* 链入其父总线的children链表 */
 		list_add_tail(&child->node, &parent->children);
 		up_write(&pci_bus_sem);
 	}
@@ -839,6 +864,7 @@ static void pci_read_irq(struct pci_dev *dev)
 
 	pci_read_config_byte(dev, PCI_INTERRUPT_PIN, &irq);
 	dev->pin = irq;
+	/* 如果pin为0的话，说明此设备不支持中断 */
 	if (irq)
 		pci_read_config_byte(dev, PCI_INTERRUPT_LINE, &irq);
 	dev->irq = irq;
@@ -889,6 +915,9 @@ void set_pcie_hotplug_bridge(struct pci_dev *pdev)
  * Returns 0 on success and negative if unknown type of device (not normal,
  * bridge or CardBus).
  */
+/*
+读取pci设备@dev的配置空间，用读出的参数填充@dev相关字段
+*/
 int pci_setup_device(struct pci_dev *dev)
 {
 	u32 class;
@@ -903,6 +932,7 @@ int pci_setup_device(struct pci_dev *dev)
 	dev->dev.parent = dev->bus->bridge;
 	dev->dev.bus = &pci_bus_type;
 	dev->hdr_type = hdr_type & 0x7f;
+	/* PCI_HEADER_TYPE的最高位为0,表示该设备是一个单功能设备 */
 	dev->multifunction = !!(hdr_type & 0x80);
 	dev->error_state = pci_channel_io_normal;
 	set_pcie_port_type(dev);
@@ -915,13 +945,16 @@ int pci_setup_device(struct pci_dev *dev)
 	   set this higher, assuming the system even supports it.  */
 	dev->dma_mask = 0xffffffff;
 
+	/* 域16位，总线8位，设备5位，功能3位 */
 	dev_set_name(&dev->dev, "%04x:%02x:%02x.%d", pci_domain_nr(dev->bus),
 		     dev->bus->number, PCI_SLOT(dev->devfn),
 		     PCI_FUNC(dev->devfn));
 
 	pci_read_config_dword(dev, PCI_CLASS_REVISION, &class);
+	/* 低8位 */
 	dev->revision = class & 0xff;
 	class >>= 8;				    /* upper 3 bytes */
+	/* 高24位 */
 	dev->class = class;
 	class >>= 8;
 
@@ -944,6 +977,7 @@ int pci_setup_device(struct pci_dev *dev)
 		if (class == PCI_CLASS_BRIDGE_PCI)
 			goto bad;
 		pci_read_irq(dev);
+		/* 对于常规设备，有6个基地址存储空间和1个ROM */
 		pci_read_bases(dev, 6, PCI_ROM_ADDRESS);
 		pci_read_config_word(dev, PCI_SUBSYSTEM_VENDOR_ID, &dev->subsystem_vendor);
 		pci_read_config_word(dev, PCI_SUBSYSTEM_ID, &dev->subsystem_device);
@@ -984,6 +1018,7 @@ int pci_setup_device(struct pci_dev *dev)
 		   interface code of 0x01. */ 
 		pci_read_irq(dev);
 		dev->transparent = ((dev->class & 0xff) == 1);
+		/* 对于pci桥，有2个基地址存储空间和1个ROM */
 		pci_read_bases(dev, 2, PCI_ROM_ADDRESS1);
 		set_pcie_hotplug_bridge(dev);
 		pos = pci_find_capability(dev, PCI_CAP_ID_SSVID);
@@ -997,6 +1032,7 @@ int pci_setup_device(struct pci_dev *dev)
 		if (class != PCI_CLASS_BRIDGE_CARDBUS)
 			goto bad;
 		pci_read_irq(dev);
+		/* CardBus只有1个基地址存储空间，没有ROM */
 		pci_read_bases(dev, 1, 0);
 		pci_read_config_word(dev, PCI_CB_SUBSYSTEM_VENDOR_ID, &dev->subsystem_vendor);
 		pci_read_config_word(dev, PCI_CB_SUBSYSTEM_ID, &dev->subsystem_device);
@@ -1123,6 +1159,7 @@ static struct pci_dev *pci_scan_device(struct pci_bus *bus, int devfn)
 	u32 l;
 	int delay = 1;
 
+	/* 读厂商ID出错，可能是这个slot下没有设备或者配置非法 */
 	if (pci_bus_read_config_dword(bus, devfn, PCI_VENDOR_ID, &l))
 		return NULL;
 
@@ -1132,7 +1169,9 @@ static struct pci_dev *pci_scan_device(struct pci_bus *bus, int devfn)
 		return NULL;
 
 	/* Configuration request Retry Status */
+	/* 如果读取出来的厂商ID是0xffff0001，则需要重新读取 */
 	while (l == 0xffff0001) {
+		/* 1+2+4+8+16+32+64+128+256+512+1024+2048+4096+8192+16384+32768 = 65535 */
 		msleep(delay);
 		delay *= 2;
 		if (pci_bus_read_config_dword(bus, devfn, PCI_VENDOR_ID, &l))
@@ -1147,10 +1186,12 @@ static struct pci_dev *pci_scan_device(struct pci_bus *bus, int devfn)
 		}
 	}
 
+	/* 分配pci_dev结构空间 */
 	dev = alloc_pci_dev();
 	if (!dev)
 		return NULL;
 
+	/* 初始化pci_dev中的一些字段 */
 	dev->bus = bus;
 	dev->devfn = devfn;
 	dev->vendor = l & 0xffff;
@@ -1218,10 +1259,14 @@ void pci_device_add(struct pci_dev *dev, struct pci_bus *bus)
 	 * and the bus list for fixup functions, etc.
 	 */
 	down_write(&pci_bus_sem);
+	/* 把pci设备链入其所在的总线设备链表 */
 	list_add_tail(&dev->bus_list, &bus->devices);
 	up_write(&pci_bus_sem);
 }
 
+/*
+扫描pci总线下的32个设备
+*/
 struct pci_dev *__ref pci_scan_single_device(struct pci_bus *bus, int devfn)
 {
 	struct pci_dev *dev;
@@ -1301,6 +1346,9 @@ int pci_scan_slot(struct pci_bus *bus, int devfn)
 	if (only_one_child(bus) && (devfn > 0))
 		return 0; /* Already scanned the entire slot */
 
+        /* 从pci_scan_child_bus() => pci_scan_slot()再到这里
+	   如果不break的话，最多会调用pci_scan_single_device()256次(实际上不可能)
+        */
 	dev = pci_scan_single_device(bus, devfn);
 	if (!dev)
 		return 0;
@@ -1487,6 +1535,9 @@ unsigned int __devinit pci_scan_child_bus(struct pci_bus *bus)
 	dev_dbg(&bus->dev, "scanning bus\n");
 
 	/* Go find them, Rover! */
+	/* 设备占5位，故每个总线上支持32个设备
+	   遍历该总线@bus下的32个设备
+	*/
 	for (devfn = 0; devfn < 0x100; devfn += 8)
 		pci_scan_slot(bus, devfn);
 
@@ -1504,6 +1555,17 @@ unsigned int __devinit pci_scan_child_bus(struct pci_bus *bus)
 			bus->is_added = 1;
 	}
 
+	/* 在x86上，系统启动的时候,bios会枚举一次pci设备。
+	   所以有些pci bridge是经过bios处理过的。
+	   而有些是bios可能没有枚举到的。这就需要分两次处理。
+	   一次来处理那里已经由bios处理过的pci bridge.
+	   一次是处理全新的pci bridge.
+	   这样做是因为,每次枚举总线后，要为其分配一个总线号，
+	   而bios处理后的pci bridge的总线号全部都由bios分配好了，
+	   要为新的pci bridge分配总线号。
+	   而必须要处理完旧的pci bridge才会知道可用的总线号是多少。
+	   参考pci_scan_bridge()的注释
+	*/
 	for (pass=0; pass < 2; pass++)
 		list_for_each_entry(dev, &bus->devices, bus_list) {
 			if (dev->hdr_type == PCI_HEADER_TYPE_BRIDGE ||
@@ -1522,6 +1584,9 @@ unsigned int __devinit pci_scan_child_bus(struct pci_bus *bus)
 	return max;
 }
 
+/*
+创建描述该总线的pci_bus结构
+*/
 struct pci_bus * pci_create_bus(struct device *parent,
 		int bus, struct pci_ops *ops, void *sysdata)
 {
@@ -1529,6 +1594,7 @@ struct pci_bus * pci_create_bus(struct device *parent,
 	struct pci_bus *b, *b2;
 	struct device *dev;
 
+	/* 动态分配pci_bus结构空间 */
 	b = pci_alloc_bus();
 	if (!b)
 		return NULL;
@@ -1540,6 +1606,7 @@ struct pci_bus * pci_create_bus(struct device *parent,
 	}
 
 	b->sysdata = sysdata;
+	/* 配置空间底层访问函数 */
 	b->ops = ops;
 
 	b2 = pci_find_bus(pci_domain_nr(b), bus);
@@ -1550,6 +1617,7 @@ struct pci_bus * pci_create_bus(struct device *parent,
 	}
 
 	down_write(&pci_bus_sem);
+	/* 将该pci总线加入pci_root_buses总线链表 */
 	list_add_tail(&b->node, &pci_root_buses);
 	up_write(&pci_bus_sem);
 

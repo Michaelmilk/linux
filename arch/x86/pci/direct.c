@@ -22,6 +22,10 @@ static int pci_conf1_read(unsigned int seg, unsigned int bus,
 {
 	unsigned long flags;
 
+	/* 每个域最多256条总线
+	   设备和功能占8位，最大255
+	   配置空间4096字节，寄存器地址范围0~4095
+	*/
 	if (seg || (bus > 255) || (devfn > 255) || (reg > 4095)) {
 		*value = -1;
 		return -EINVAL;
@@ -29,8 +33,10 @@ static int pci_conf1_read(unsigned int seg, unsigned int bus,
 
 	raw_spin_lock_irqsave(&pci_config_lock, flags);
 
+	/* 往cpu寄存器地址0xCF8写pci命令字 */
 	outl(PCI_CONF1_ADDRESS(bus, devfn, reg), 0xCF8);
 
+	/* 从cpu寄存器地址0xCFC读出结果 */
 	switch (len) {
 	case 1:
 		*value = inb(0xCFC + (reg & 3));
@@ -196,6 +202,7 @@ static int __init pci_sanity_check(const struct pci_raw_ops *o)
 	u32 x = 0;
 	int year, devfn;
 
+	/* 无需检查的标志，则直接返回1，认为可用 */
 	if (pci_probe & PCI_NO_CHECKS)
 		return 1;
 	/* Assume Type 1 works for newer systems.
@@ -204,6 +211,9 @@ static int __init pci_sanity_check(const struct pci_raw_ops *o)
 	if (year >= 2001)
 		return 1;
 
+	/* 遍历32个设备*8个功能号
+	   能读取出一个正确的值，则认为参数@o的读写方法有效
+	*/
 	for (devfn = 0; devfn < 0x100; devfn++) {
 		if (o->read(0, 0, devfn, PCI_CLASS_DEVICE, 2, &x))
 			continue;
@@ -228,10 +238,14 @@ static int __init pci_check_type1(void)
 
 	local_irq_save(flags);
 
+	/* 写入最低的1个bit */
 	outb(0x01, 0xCFB);
+	/* 读值 */
 	tmp = inl(0xCF8);
+	/* 写入最高的1个bit */
 	outl(0x80000000, 0xCF8);
 	if (inl(0xCF8) == 0x80000000 && pci_sanity_check(&pci_direct_conf1)) {
+		/* 读写方法有效 */
 		works = 1;
 	}
 	outl(tmp, 0xCF8);
@@ -260,6 +274,9 @@ static int __init pci_check_type2(void)
 	return works;
 }
 
+/*
+根据@type置pci的底层读写函数
+*/
 void __init pci_direct_init(int type)
 {
 	if (type == 0)

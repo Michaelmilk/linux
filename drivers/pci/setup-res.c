@@ -326,6 +326,10 @@ void pdev_sort_resources(struct pci_dev *dev, struct resource_list *head)
 	}
 }
 
+/*
+在命令寄存器中增加PCI_COMMAND_IO或PCI_COMMAND_MEMORY
+使设备能响应I/O space or Memory space
+*/
 int pci_enable_resources(struct pci_dev *dev, int mask)
 {
 	u16 cmd, old_cmd;
@@ -341,8 +345,10 @@ int pci_enable_resources(struct pci_dev *dev, int mask)
 
 		r = &dev->resource[i];
 
+		/* 只处理I/O and memory resources */
 		if (!(r->flags & (IORESOURCE_IO | IORESOURCE_MEM)))
 			continue;
+		/* resource[6]对应于配置空间中的ROM基地址寄存器所描述的ROM区域 */
 		if ((i == PCI_ROM_RESOURCE) &&
 				(!(r->flags & IORESOURCE_ROM_ENABLE)))
 			continue;
