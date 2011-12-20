@@ -49,6 +49,9 @@
 #define EFI_DEBUG	1
 #define PFX 		"EFI: "
 
+/*
+efi : 可扩展固件接口 Extensible Firmware Interface
+*/
 int efi_enabled;
 EXPORT_SYMBOL(efi_enabled);
 
