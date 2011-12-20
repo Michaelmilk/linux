@@ -19,6 +19,9 @@
  * so we can get rid of it transparently in the future -- glommer
  */
 /* 8 byte segment descriptor */
+/*
+8×Ö½ÚµÄ¶ÎÃèÊö·û
+*/
 struct desc_struct {
 	union {
 		struct {

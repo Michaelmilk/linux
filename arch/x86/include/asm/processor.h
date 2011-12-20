@@ -58,6 +58,12 @@ static inline void *current_text_addr(void)
  *  before touching them. [mj]
  */
 
+/*
+80486是80X86家族中继80386之后的又一种32位微处理器。
+80486分为80486DX和80486SX两款。
+80486DX是在80386的基础上集成了浮点处理部件和超高速缓存。
+而80486SX则不包含浮点处理部件。
+*/
 struct cpuinfo_x86 {
 	__u8			x86;		/* CPU family */
 	__u8			x86_vendor;	/* CPU vendor */
@@ -113,6 +119,9 @@ struct cpuinfo_x86 {
 #endif
 	u32			microcode;
 } __attribute__((__aligned__(SMP_CACHE_BYTES)));
+/*
+cpuinfo_x86{}要按SMP_CACHE_BYTES字节来对齐，以便能一次性读入高速cache中。
+*/
 
 #define X86_VENDOR_INTEL	0
 #define X86_VENDOR_CYRIX	1
@@ -896,7 +905,13 @@ static inline void spin_lock_prefetch(const void *x)
 
 extern unsigned long thread_saved_pc(struct task_struct *tsk);
 
+/*
+把内核栈8KB转换为long型的个数，即2048
+*/
 #define THREAD_SIZE_LONGS      (THREAD_SIZE/sizeof(unsigned long))
+/*
+取得栈顶的指针，注意数组下标(对于数组来说是越界了)，实际上已经指向最末尾了
+*/
 #define KSTK_TOP(info)                                                 \
 ({                                                                     \
        unsigned long *__ptr = (unsigned long *)(info);                 \
@@ -913,6 +928,24 @@ extern unsigned long thread_saved_pc(struct task_struct *tsk);
  * "struct pt_regs" is possible, but they may contain the
  * completely wrong values.
  */
+/*
+	8KB的内核栈
+
+8KB	--------			<- KSTK_TOP
+	8 bytes
+	+ sizeof(struct pt_regs)
+	--------			<- task_pt_regs
+
+4KB	--------
+
+
+
+
+0	--------
+
+
+宏的最后__regs__又减了1，不过减的可是一个结构struct pt_regs占的字节数
+*/
 #define task_pt_regs(task)                                             \
 ({                                                                     \
        struct pt_regs *__regs__;                                       \

@@ -6,6 +6,9 @@
 /*
  * Handling of different ABIs (personalities).
  */
+/*
+ABI : Application Binary Interface
+*/
 
 struct exec_domain;
 struct pt_regs;

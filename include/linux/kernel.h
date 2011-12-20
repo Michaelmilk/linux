@@ -4,6 +4,9 @@
 /*
  * 'kernel.h' contains some often-used function prototypes etc
  */
+/*
+该文件包含内核中常用的一些函数原型和宏等
+*/
 #define __ALIGN_KERNEL(x, a)		__ALIGN_KERNEL_MASK(x, (typeof(x))(a) - 1)
 #define __ALIGN_KERNEL_MASK(x, mask)	(((x) + (mask)) & ~(mask))
 
@@ -25,8 +28,11 @@
 #define USHRT_MAX	((u16)(~0U))
 #define SHRT_MAX	((s16)(USHRT_MAX>>1))
 #define SHRT_MIN	((s16)(-SHRT_MAX - 1))
+/* 2147483647 */
 #define INT_MAX		((int)(~0U>>1))
+/* -2147483648 */
 #define INT_MIN		(-INT_MAX - 1)
+/* 4294967295 */
 #define UINT_MAX	(~0U)
 #define LONG_MAX	((long)(~0UL>>1))
 #define LONG_MIN	(-LONG_MAX - 1)
@@ -100,6 +106,9 @@
 #define _RET_IP_		(unsigned long)__builtin_return_address(0)
 #define _THIS_IP_  ({ __label__ __here; __here: (unsigned long)&&__here; })
 
+/*
+配置文件中配置支持2TB+的大块设备和文件 large block devices and files
+*/
 #ifdef CONFIG_LBDAF
 # include <asm/div64.h>
 # define sector_div(a, b) do_div(a, b)
@@ -545,6 +554,16 @@ static inline void ftrace_dump(enum ftrace_dump_mode oops_dump_mode) { }
  * strict type-checking.. See the
  * "unnecessary" pointer comparison.
  */
+/*
+(void) (&_min1 == &_min2)这句话本身对执行程序来讲完全是一句废话，
+它的作用在于，本身我们无法做这样的操作typeof(_min1)==typeof(_min2)，
+所以故意判断他们2个的地址指针是否相等，显然是不可能相等，
+但是如果_min1和_min2的类型不一样，其指针类型也会不一样，
+2个不一样的指针类型进行比较操作，会抛出一个编译警告。
+也就是说char *p; int *q; 然后p==q;，
+这个判断因为一个是char*一个是int*，会在编译时产生一个warning。
+巧妙就巧妙在这里。
+*/
 #define min(x, y) ({				\
 	typeof(x) _min1 = (x);			\
 	typeof(y) _min2 = (y);			\

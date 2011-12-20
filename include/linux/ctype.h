@@ -17,11 +17,15 @@
 
 extern const unsigned char _ctype[];
 
+/*
+根据_ctype表中写好的数据，判断某个字符是什么类型的
+*/
 #define __ismask(x) (_ctype[(int)(unsigned char)(x)])
 
 #define isalnum(c)	((__ismask(c)&(_U|_L|_D)) != 0)
 #define isalpha(c)	((__ismask(c)&(_U|_L)) != 0)
 #define iscntrl(c)	((__ismask(c)&(_C)) != 0)
+/* 10进制数字字符 */
 #define isdigit(c)	((__ismask(c)&(_D)) != 0)
 #define isgraph(c)	((__ismask(c)&(_P|_U|_L|_D)) != 0)
 #define islower(c)	((__ismask(c)&(_L)) != 0)
@@ -30,6 +34,7 @@ extern const unsigned char _ctype[];
 /* Note: isspace() must return false for %NUL-terminator */
 #define isspace(c)	((__ismask(c)&(_S)) != 0)
 #define isupper(c)	((__ismask(c)&(_U)) != 0)
+/* 16进制数字字符 */
 #define isxdigit(c)	((__ismask(c)&(_D|_X)) != 0)
 
 #define isascii(c) (((unsigned char)(c))<=0x7f)
