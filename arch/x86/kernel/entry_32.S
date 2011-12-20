@@ -192,6 +192,8 @@
 
 #endif	/* CONFIG_X86_32_LAZY_GS */
 
+/* 保存现场的宏 */
+
 .macro SAVE_ALL
 	cld
 	PUSH_GS
@@ -298,6 +300,8 @@
 	CFI_OFFSET ebx, PT_EBX-PT_OLDESP
 .endm
 
+/* vfork（）、fork（）和 clone（）执行完毕后 跳到这里 */
+
 ENTRY(ret_from_fork)
 	CFI_STARTPROC
 	pushl_cfi %eax
@@ -324,16 +328,30 @@ END(ret_from_fork)
 	# userspace resumption stub bypassing syscall exit tracing
 	ALIGN
 	RING0_PTREGS_FRAME
+
+/* 从异常返回 */
+
 ret_from_exception:
+	/* 相当于cli,从中断返回时,在handle_IRQ_event已经关中断,不需要这步 */
 	preempt_stop(CLBR_ANY)
+
+/* 中断执行完毕后，从硬中断返回 */
+
 ret_from_intr:
+	/* 将当前进程的thread_info结构体的指针存入ebp帧寄存器中 */
 	GET_THREAD_INFO(%ebp)
 check_userspace:
 	movl PT_EFLAGS(%esp), %eax	# mix EFLAGS and CS
 	movb PT_CS(%esp), %al
+	/* 是否运行在VM86模式或者用户态 */
 	andl $(X86_EFLAGS_VM | SEGMENT_RPL_MASK), %eax
 	cmpl $USER_RPL, %eax
+	/* 从中断返回时，有两种情况，一是返回内核态，二是返回用户态。
+	   中断或异常发生时,处于内核空间,则返回内核空间;否则返回用户空间
+	*/
 	jb resume_kernel		# not returning to v8086 or userspace
+
+/* 返回用户空间 */
 
 ENTRY(resume_userspace)
 	LOCKDEP_SYS_EXIT
@@ -344,20 +362,31 @@ ENTRY(resume_userspace)
 	movl TI_flags(%ebp), %ecx
 	andl $_TIF_WORK_MASK, %ecx	# is there any work to be done on
 					# int/exception return?
+	/* 还有其它工作要做，如信号处理 */
 	jne work_pending
+	/* 所有工作都做完，则恢复处理器状态 */
 	jmp restore_all
 END(ret_from_exception)
 
 #ifdef CONFIG_PREEMPT
+
+/* 返回内核空间,先检查preempt_count,再检查need_resched */
+
 ENTRY(resume_kernel)
 	DISABLE_INTERRUPTS(CLBR_ANY)
+	/* 是否可以抢占,即preempt_count是否为0 */
 	cmpl $0,TI_preempt_count(%ebp)	# non-zero preempt_count ?
+	/* 不能抢占,则恢复被中断时处理器状态 */
 	jnz restore_all
+/* 可以抢占 */
 need_resched:
 	movl TI_flags(%ebp), %ecx	# need_resched set ?
+	/* 是否需要重新调度 */
 	testb $_TIF_NEED_RESCHED, %cl
+	/* 不需要重新调度 */
 	jz restore_all
 	testl $X86_EFLAGS_IF,PT_EFLAGS(%esp)	# interrupts off (exception path) ?
+	/* 发生异常则不调度 */
 	jz restore_all
 	call preempt_schedule_irq
 	jmp need_resched
@@ -496,6 +525,9 @@ ENDPROC(ia32_sysenter_target)
  */
 	.pushsection .kprobes.text, "ax"
 	# system call handler stub
+
+/* 系统调用入口 */
+
 ENTRY(system_call)
 	RING0_INT_FRAME			# can''t unwind into user space anyway
 	pushl_cfi %eax			# save orig_eax
@@ -507,8 +539,11 @@ ENTRY(system_call)
 	cmpl $(nr_syscalls), %eax
 	jae syscall_badsys
 syscall_call:
+	/* 调用相应系统调用号的函数 */
 	call *sys_call_table(,%eax,4)
+	/* 系统调用的返回值保存到eax */
 	movl %eax,PT_EAX(%esp)		# store the return value
+/* 系统调用返回 */
 syscall_exit:
 	LOCKDEP_SYS_EXIT
 	DISABLE_INTERRUPTS(CLBR_ANY)	# make sure we don''t miss an interrupt
@@ -516,8 +551,11 @@ syscall_exit:
 					# between sampling and the iret
 	TRACE_IRQS_OFF
 	movl TI_flags(%ebp), %ecx
+	/* 检查是否还有其它工作要完成 */
 	testl $_TIF_ALLWORK_MASK, %ecx	# current->work
 	jne syscall_exit_work
+
+/* 恢复处理器状态 */
 
 restore_all:
 	TRACE_IRQS_IRET
@@ -535,6 +573,7 @@ restore_all_notrace:
 restore_nocheck:
 	RESTORE_REGS 4			# skip orig_eax/error_code
 irq_return:
+	/* 系统堆栈又恢复到刚进入中断门时的状态，而 iret 则使 CPU 从中断返回 */
 	INTERRUPT_RETURN
 .section .fixup,"ax"
 ENTRY(iret_exc)
@@ -602,9 +641,12 @@ ENDPROC(system_call)
 	ALIGN
 	RING0_PTREGS_FRAME		# can''t unwind into user space anyway
 work_pending:
+	/* 检查是否需要重新调度 */
 	testb $_TIF_NEED_RESCHED, %cl
+	/* 不需要重新调度 */
 	jz work_notifysig
 work_resched:
+	/* 调度进程 */
 	call schedule
 	LOCKDEP_SYS_EXIT
 	DISABLE_INTERRUPTS(CLBR_ANY)	# make sure we don''t miss an interrupt
@@ -626,6 +668,7 @@ work_notifysig:				# deal with pending signals and
 	jne work_notifysig_v86		# returning to kernel-space or
 					# vm86-space
 	xorl %edx, %edx
+	/* 进行信号处理 */
 	call do_notify_resume
 	jmp resume_userspace_sig
 
@@ -639,6 +682,7 @@ work_notifysig_v86:
 	movl %esp, %eax
 #endif
 	xorl %edx, %edx
+	/* 进行信号处理 */
 	call do_notify_resume
 	jmp resume_userspace_sig
 END(work_pending)
@@ -659,12 +703,15 @@ END(syscall_trace_entry)
 	ALIGN
 syscall_exit_work:
 	testl $_TIF_WORK_SYSCALL_EXIT, %ecx
+	/* 跳到work_pending(进行调度,信号处理) */
 	jz work_pending
 	TRACE_IRQS_ON
 	ENABLE_INTERRUPTS(CLBR_ANY)	# could let syscall_trace_leave() call
 					# schedule() instead
 	movl %esp, %eax
+	/* 系统调用跟踪 */
 	call syscall_trace_leave
+	/* 返回用户空间 */
 	jmp resume_userspace
 END(syscall_exit_work)
 	CFI_ENDPROC
@@ -790,6 +837,9 @@ ENDPROC(ptregs_clone)
  * single cache line on all modern x86 implementations.
  */
 .section .init.rodata,"a"
+
+/* 设置标号 interrupt */
+
 ENTRY(interrupt)
 .section .entry.text, "ax"
 	.p2align 5
@@ -797,6 +847,7 @@ ENTRY(interrupt)
 ENTRY(irq_entries_start)
 	RING0_INT_FRAME
 vector=FIRST_EXTERNAL_VECTOR
+/* 循环设置NR_IRQS 个 interrupt */
 .rept (NR_VECTORS-FIRST_EXTERNAL_VECTOR+6)/7
 	.balign 32
   .rept	7
@@ -809,6 +860,7 @@ vector=FIRST_EXTERNAL_VECTOR
 	jmp 2f
       .endif
       .previous
+      /* 为了使一个interrupt 能占满 4 个字节，所以在此处加了一个.long 1b */
 	.long 1b
       .section .entry.text, "ax"
 vector=vector+1
@@ -928,6 +980,7 @@ END(bounds)
 
 ENTRY(invalid_op)
 	RING0_INT_FRAME
+	/* 将 0 压入堆栈中与出错码相应的地方 */
 	pushl_cfi $0
 	pushl_cfi $do_invalid_op
 	jmp error_code
@@ -1260,6 +1313,7 @@ error_code:
 	movl %ecx, %es
 	TRACE_IRQS_OFF
 	movl %esp,%eax			# pt_regs pointer
+	/* 调用异常处理程序 */
 	call *%edi
 	jmp ret_from_exception
 	CFI_ENDPROC
