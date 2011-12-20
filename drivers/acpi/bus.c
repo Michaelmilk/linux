@@ -999,6 +999,7 @@ static int __init acpi_bus_init(void)
 	/*
 	 * Create the top ACPI proc directory
 	 */
+	/* /proc/acpiÄ¿Â¼ */
 	acpi_root_dir = proc_mkdir(ACPI_BUS_FILE_ROOT, NULL);
 
 	return 0;
@@ -1020,6 +1021,7 @@ static int __init acpi_init(void)
 		return -ENODEV;
 	}
 
+	/* °Ñacpi_subsys×¢²á½øsysfs */
 	acpi_kobj = kobject_create_and_add("acpi", firmware_kobj);
 	if (!acpi_kobj) {
 		printk(KERN_WARNING "%s: kset create error\n", __func__);

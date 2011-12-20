@@ -171,6 +171,9 @@ struct acpi_hardware_id {
 	char *id;
 };
 
+/*
+pnp : plug and play º¥≤Âº¥”√
+*/
 struct acpi_device_pnp {
 	acpi_bus_id bus_id;	/* Object name */
 	acpi_bus_address bus_address;	/* _ADR */

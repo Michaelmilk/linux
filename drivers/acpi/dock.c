@@ -1048,6 +1048,10 @@ static int __init dock_init(void)
 		return 0;
 
 	/* look for a dock station */
+	/* 扩展坞早年IBM就针对600系列设计了相应的扩展坞（Dock Station）和PDB，
+	   但是因为600系列随后即被T2系列出现所替代，
+	   U2K设备的大面积推广和持续沿用至今，导致IBM重新设计了对应的2631和PDB2000。
+	*/
 	acpi_walk_namespace(ACPI_TYPE_DEVICE, ACPI_ROOT_OBJECT,
 			    ACPI_UINT32_MAX, find_dock, NULL, NULL, NULL);
 

@@ -25,12 +25,16 @@
 static LIST_HEAD(bus_type_list);
 static DECLARE_RWSEM(bus_type_sem);
 
+/*
+成功加入bus_type_list链表，返回0
+*/
 int register_acpi_bus_type(struct acpi_bus_type *type)
 {
 	if (acpi_disabled)
 		return -ENODEV;
 	if (type && type->bus && type->find_device) {
 		down_write(&bus_type_sem);
+		/* 加入bus_type_list链表 */
 		list_add_tail(&type->list, &bus_type_list);
 		up_write(&bus_type_sem);
 		printk(KERN_INFO PREFIX "bus type %s registered\n",

@@ -716,6 +716,17 @@ static int acpi_pci_link_add(struct acpi_device *device)
 	/* query and set link->irq.active */
 	acpi_pci_link_get_current(link);
 
+	/*
+	АэИз:
+	ACPI: PCI Interrupt Link [LNKA] (IRQs 3 4 6 *7 10 11 12 14 15)
+	ACPI: PCI Interrupt Link [LNKB] (IRQs *5)
+	ACPI: PCI Interrupt Link [LNKC] (IRQs 3 4 *6 7 10 11 12 14 15)
+	ACPI: PCI Interrupt Link [LNKD] (IRQs 3 4 6 *7 10 11 12 14 15)
+	ACPI: PCI Interrupt Link [LNKE] (IRQs 3 4 6 7 10 11 12 14 15) *0, disabled.
+	ACPI: PCI Interrupt Link [LNKF] (IRQs 3 4 6 *7 10 11 12 14 15)
+	ACPI: PCI Interrupt Link [LNKG] (IRQs 3 4 6 7 10 11 12 14 15) *0, disabled.
+	ACPI: PCI Interrupt Link [LNKH] (IRQs 3 4 6 *7 10 11 12 14 15)
+	*/
 	printk(KERN_INFO PREFIX "%s [%s] (IRQs", acpi_device_name(device),
 	       acpi_device_bid(device));
 	for (i = 0; i < link->irq.possible_count; i++) {

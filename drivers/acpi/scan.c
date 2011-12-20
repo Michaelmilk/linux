@@ -607,13 +607,18 @@ static int acpi_start_single_object(struct acpi_device *device)
  * devices that match the driver's criteria and binds.  Returns zero for
  * success or a negative error status for failure.
  */
+/*
+在acpi总线上注册驱动
+*/
 int acpi_bus_register_driver(struct acpi_driver *driver)
 {
 	int ret;
 
 	if (acpi_disabled)
 		return -ENODEV;
+	/* 注册到驱动模型 */
 	driver->drv.name = driver->name;
+	/* acpi总线类型 */
 	driver->drv.bus = &acpi_bus_type;
 	driver->drv.owner = driver->owner;
 
@@ -1583,6 +1588,9 @@ int __init acpi_scan_init(void)
 	ops.acpi_op_add = 1;
 	ops.acpi_op_start = 1;
 
+	/* 向核心注册acpi总线类型
+	   就象在pci_driver_init()中注册PCI总线一样:bus_register(&pci_bus_type)
+	*/
 	result = bus_register(&acpi_bus_type);
 	if (result) {
 		/* We don't want to quit even if we failed to add suspend/resume */

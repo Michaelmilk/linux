@@ -476,6 +476,7 @@ static struct dmi_system_id __initdata acpisleep_dmi_table[] = {
 		DMI_MATCH(DMI_PRODUCT_NAME, "VGN-FW520F"),
 		},
 	},
+	/* 结束标记，判断数组结束的惯用方法 */
 	{},
 };
 #endif /* CONFIG_SUSPEND */
@@ -778,6 +779,14 @@ static void __init acpi_gts_bfs_check(void)
 	}
 }
 
+/*
+DMI(Desktop Management Interface)信息。
+这些信息包括了硬件以及BIOS，既可以得到当前的配置，
+也可以得到系统支持的最大配置，比如说支持的最大内存数等。
+
+DMI有人也叫SMBIOS(System Management BIOS)，
+这两个标准都由DMTF(Desktop Management Task Force)开发。
+*/
 int __init acpi_sleep_init(void)
 {
 	acpi_status status;
