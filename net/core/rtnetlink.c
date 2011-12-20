@@ -100,6 +100,10 @@ int lockdep_rtnl_is_held(void)
 EXPORT_SYMBOL(lockdep_rtnl_is_held);
 #endif /* #ifdef CONFIG_PROVE_LOCKING */
 
+/*
+指针数组
+协议族中的每个协议对应一项，PF_UNSPEC PF_INET等
+*/
 static struct rtnl_link *rtnl_msg_handlers[RTNL_FAMILY_MAX + 1];
 
 static inline int rtm_msgindex(int msgtype)
@@ -2068,6 +2072,9 @@ static struct pernet_operations rtnetlink_net_ops = {
 	.exit = rtnetlink_net_exit,
 };
 
+/*
+由initcalls中的netlink_proto_init()函数调用
+*/
 void __init rtnetlink_init(void)
 {
 	int i;

@@ -4,6 +4,12 @@
 #include <linux/socket.h> /* for __kernel_sa_family_t */
 #include <linux/types.h>
 
+/*
+协议族PF_NETLINK的子协议
+对应理解为全局变量nl_table的下标
+
+如果按照PF_INET协议来理解，这里的子协议相当于IPPROTO_TCP IPPROTO_UDP
+*/
 #define NETLINK_ROUTE		0	/* Routing/device hook				*/
 #define NETLINK_UNUSED		1	/* Unused number				*/
 #define NETLINK_USERSOCK	2	/* Reserved for user mode socket protocols 	*/
@@ -36,6 +42,10 @@ struct sockaddr_nl {
        	__u32		nl_groups;	/* multicast groups mask */
 };
 
+/*
+每一个发送给内核或者从内核接收的报文都有一个相同的报文头，
+这个报文头的结构如下定义
+*/
 struct nlmsghdr {
 	__u32		nlmsg_len;	/* Length of message including header */
 	__u16		nlmsg_type;	/* Message content */
@@ -78,6 +88,7 @@ struct nlmsghdr {
 #define NLMSG_HDRLEN	 ((int) NLMSG_ALIGN(sizeof(struct nlmsghdr)))
 #define NLMSG_LENGTH(len) ((len)+NLMSG_ALIGN(NLMSG_HDRLEN))
 #define NLMSG_SPACE(len) NLMSG_ALIGN(NLMSG_LENGTH(len))
+/* netlink消息体的payload指针 */
 #define NLMSG_DATA(nlh)  ((void*)(((char*)nlh) + NLMSG_LENGTH(0)))
 #define NLMSG_NEXT(nlh,len)	 ((len) -= NLMSG_ALIGN((nlh)->nlmsg_len), \
 				  (struct nlmsghdr*)(((char*)(nlh)) + NLMSG_ALIGN((nlh)->nlmsg_len)))
