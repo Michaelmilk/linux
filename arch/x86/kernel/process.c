@@ -311,7 +311,7 @@ int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 	regs.flags = X86_EFLAGS_IF | 0x2;
 
 	/* Ok, create the new process.. */
-    /* 创建新的内核线程 */
+	/* 创建新的内核线程 */
 	return do_fork(flags | CLONE_VM | CLONE_UNTRACED, 0, &regs, 0, NULL, NULL);
 }
 EXPORT_SYMBOL(kernel_thread);

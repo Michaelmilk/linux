@@ -205,16 +205,29 @@ int copy_thread(unsigned long clone_flags, unsigned long sp,
 	struct task_struct *tsk;
 	int err;
 
+	/* 取pt_regs指针 */
 	childregs = task_pt_regs(p);
+	/* 为pt_regs指针指向的地方赋值 */
 	*childregs = *regs;
+	/* 将ax设0，作为系统调用结束时的返回值 */
 	childregs->ax = 0;
+	/* 指出进程在用户态的堆栈地址，该值在fork()中为传递进去的regs.sp */
 	childregs->sp = sp;
 
+	/* P指向的task_struct结构中有一个thread指针，指向一个thread_struct结构，
+	   里面记录着进程切换时的堆栈指针，在子进程中也需要进行调整
+	   指向子进程的pt_regs结构起始地址
+	*/
 	p->thread.sp = (unsigned long) childregs;
+	/* 指向子进程的系统空间栈顶，当进程被调度运行时，
+	   内核会将这个值写入sp0字段，标志该进程在ring0运行时的堆栈地址。
+	*/
 	p->thread.sp0 = (unsigned long) (childregs+1);
 
+	/* 指向当进程下一次被切换运行时的入口处ret_from_fork */
 	p->thread.ip = (unsigned long) ret_from_fork;
 
+	/* 把当前gs段寄存器内的值保存在p->thread.gs内 */
 	task_user_gs(p) = get_user_gs(regs);
 
 	p->thread.io_bitmap_ptr = NULL;
