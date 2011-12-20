@@ -69,7 +69,9 @@ struct ipq {
 	struct inet_frag_queue q;
 
 	/* 同属该ipq下skb的5个关键字
-	   该5个字段全部相等说明属于同一个大报文的各个分片 */
+	   该5个字段全部相等说明属于同一个大报文的各个分片
+	   user字段参见enum ip_defrag_users
+	*/
 	u32		user;
 	__be32		saddr;
 	__be32		daddr;

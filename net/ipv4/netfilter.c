@@ -161,6 +161,7 @@ __sum16 nf_ip_checksum(struct sk_buff *skb, unsigned int hook,
 
 	switch (skb->ip_summed) {
 	case CHECKSUM_COMPLETE:
+		/* 只处理NF_IP_PRE_ROUTING和NF_IP_LOCAL_IN点 */
 		if (hook != NF_INET_PRE_ROUTING && hook != NF_INET_LOCAL_IN)
 			break;
 		if ((protocol == 0 && !csum_fold(skb->csum)) ||

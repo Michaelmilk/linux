@@ -42,15 +42,18 @@ static void send_reset(struct sk_buff *oldskb, int hook)
 	struct tcphdr _otcph, *tcph;
 
 	/* IP header checks: fragment. */
+	/* 判断是否是分片包 */
 	if (ip_hdr(oldskb)->frag_off & htons(IP_OFFSET))
 		return;
 
+	/* 取tcp头 */
 	oth = skb_header_pointer(oldskb, ip_hdrlen(oldskb),
 				 sizeof(_otcph), &_otcph);
 	if (oth == NULL)
 		return;
 
 	/* No RST for RST. */
+	/* 当前收到的包就是RST包，就不用再发送RST包了*/
 	if (oth->rst)
 		return;
 
@@ -58,6 +61,7 @@ static void send_reset(struct sk_buff *oldskb, int hook)
 		return;
 
 	/* Check checksum */
+	/* 检查数据包的校验和是否正确 */
 	if (nf_ip_checksum(oldskb, hook, ip_hdrlen(oldskb), IPPROTO_TCP))
 		return;
 	oiph = ip_hdr(oldskb);
@@ -75,28 +79,45 @@ static void send_reset(struct sk_buff *oldskb, int hook)
 	niph->ihl	= sizeof(struct iphdr) / 4;
 	niph->tos	= 0;
 	niph->id	= 0;
+	/* 禁止分片 */
 	niph->frag_off	= htons(IP_DF);
 	niph->protocol	= IPPROTO_TCP;
 	niph->check	= 0;
+	/* 交换源IP和目的IP */
 	niph->saddr	= oiph->daddr;
 	niph->daddr	= oiph->saddr;
 
+	/* 获取nskb的tcp header */
 	tcph = (struct tcphdr *)skb_put(nskb, sizeof(struct tcphdr));
 	memset(tcph, 0, sizeof(*tcph));
+	/* 交换源端口和目的端口 */
 	tcph->source	= oth->dest;
 	tcph->dest	= oth->source;
+	/* 重置TCP头部的长度，并修改IP头部中记录的数据包的总长度。
+	   因为这里是发送RST报文，只需要有TCP的头部，不需要TCP的数据部分
+	*/
 	tcph->doff	= sizeof(struct tcphdr) / 4;
 
+	/* 重新设置 seq, ack_seq，分两种情况（TCP/IP详解有描述） */
+	/* 原始数据包中ACK标记位置位的情况 */
 	if (oth->ack)
+		/* 原始数据包的ack_seq作为nskb的seq */
 		tcph->seq = oth->ack_seq;
+	/* 原始数据包中ACK标记位没有置位的情况，初始连接SYN或者结束连接FIN等 */
 	else {
+		/* 这种情况应该是SYN或者FIN包，由于SYN和FIN包都占用1个字节的长度。
+		   因此ack_seq应该等于旧包的seq+1即可。
+		   这里之所以这样表示，可能是还存在其他情况的数据包。
+		*/
 		tcph->ack_seq = htonl(ntohl(oth->seq) + oth->syn + oth->fin +
 				      oldskb->len - ip_hdrlen(oldskb) -
 				      (oth->doff << 2));
 		tcph->ack = 1;
 	}
 
+	/* RST标记位置1 */
 	tcph->rst	= 1;
+	/* 重新计算TCP校验和 */
 	tcph->check = ~tcp_v4_check(sizeof(struct tcphdr), niph->saddr,
 				    niph->daddr, 0);
 	nskb->ip_summed = CHECKSUM_PARTIAL;
@@ -110,6 +131,7 @@ static void send_reset(struct sk_buff *oldskb, int hook)
 	if (ip_route_me_harder(nskb, RTN_UNSPEC))
 		goto free_nskb;
 
+	/* 调整IP包的TTL */
 	niph->ttl	= ip4_dst_hoplimit(skb_dst(nskb));
 
 	/* "Never happens" */
@@ -118,6 +140,10 @@ static void send_reset(struct sk_buff *oldskb, int hook)
 
 	nf_ct_attach(nskb, oldskb);
 
+	/* 这里就是最终发送数据包的方式，
+	   具体方法就是让新数据包经过LOACLOUT的hook点，
+	   然后查路由，最后经由POSTROUTING点，将数据包发送出去。
+	*/
 	ip_local_out(nskb);
 	return;
 

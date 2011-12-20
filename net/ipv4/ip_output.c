@@ -177,8 +177,14 @@ int ip_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
 }
 EXPORT_SYMBOL_GPL(ip_build_and_send_pkt);
 
+/*
+根据neighbour，调用dst->neighbour->output.
+到这为止，数据包会经过dev_queue_xmit放入dev的qdisc中。
+之后就是流控出队列。
+*/
 static inline int ip_finish_output2(struct sk_buff *skb)
 {
+	/* 取IP包的路由结构 */
 	struct dst_entry *dst = skb_dst(skb);
 	struct rtable *rt = (struct rtable *)dst;
 	struct net_device *dev = dst->dev;
@@ -229,6 +235,11 @@ static inline int ip_skb_dst_mtu(struct sk_buff *skb)
 	       skb_dst(skb)->dev->mtu : dst_mtu(skb_dst(skb));
 }
 
+/*
+检查一下数据包是否需要分片，
+如果需要分片，则进行ip_fragement()，
+之后调用ip_finish_output2().
+*/
 static int ip_finish_output(struct sk_buff *skb)
 {
 #if defined(CONFIG_NETFILTER) && defined(CONFIG_XFRM)
@@ -305,6 +316,11 @@ int ip_mc_output(struct sk_buff *skb)
 			    !(IPCB(skb)->flags & IPSKB_REROUTED));
 }
 
+/*
+设置skb的dev为发包的dev,同时设置skb->protocol,
+会转入netfilter的NF_IP_POST_ROUTING的hook点，调用所有在该点注册的hook函数。
+之后会调用ip_finish_output().
+*/
 int ip_output(struct sk_buff *skb)
 {
 	struct net_device *dev = skb_dst(skb)->dev;
@@ -443,6 +459,11 @@ static void ip_copy_metadata(struct sk_buff *to, struct sk_buff *from)
  *	single device frame, and queue such a frame for sending.
  */
 
+/*
+@skb长度比设备的mtu大，则进行分片发送
+
+@putput : br_dev_queue_push_xmit() ip_finish_output2()
+*/
 int ip_fragment(struct sk_buff *skb, int (*output)(struct sk_buff *))
 {
 	struct iphdr *iph;
