@@ -3,6 +3,10 @@
 
 #ifdef __KERNEL__
 
+/*
+内核可以接受的参数个数没有限制，
+但是整个命令行的总长度(参数/值/空格全部包含在内)却是有限制的
+*/
 #define COMMAND_LINE_SIZE 2048
 
 #ifdef __i386__
@@ -16,6 +20,9 @@ MAXMEM所在的页框号
 简单的认为是896MB对应的页框号
 */
 #define MAXMEM_PFN	PFN_DOWN(MAXMEM)
+/*
+没有启用PAE的时候，最大的页帧号，对应于4GB
+*/
 #define MAX_NONPAE_PFN	(1 << 20)
 
 #endif /* __i386__ */

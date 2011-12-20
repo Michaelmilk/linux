@@ -637,24 +637,34 @@ static void __init reserve_crashkernel(void)
 #endif
 
 static struct resource standard_io_resources[] = {
+	/* 0 -- 31B */
 	{ .name = "dma1", .start = 0x00, .end = 0x1f,
 		.flags = IORESOURCE_BUSY | IORESOURCE_IO },
+	/* 32B -- 33B */
 	{ .name = "pic1", .start = 0x20, .end = 0x21,
 		.flags = IORESOURCE_BUSY | IORESOURCE_IO },
+	/* 64B -- 65B */
 	{ .name = "timer0", .start = 0x40, .end = 0x43,
 		.flags = IORESOURCE_BUSY | IORESOURCE_IO },
+	/* 80B -- 83B */
 	{ .name = "timer1", .start = 0x50, .end = 0x53,
 		.flags = IORESOURCE_BUSY | IORESOURCE_IO },
+	/* 96B */
 	{ .name = "keyboard", .start = 0x60, .end = 0x60,
 		.flags = IORESOURCE_BUSY | IORESOURCE_IO },
+	/* 100B */
 	{ .name = "keyboard", .start = 0x64, .end = 0x64,
 		.flags = IORESOURCE_BUSY | IORESOURCE_IO },
+	/* 128B -- 143B */
 	{ .name = "dma page reg", .start = 0x80, .end = 0x8f,
 		.flags = IORESOURCE_BUSY | IORESOURCE_IO },
+	/* 160B -- 161B */
 	{ .name = "pic2", .start = 0xa0, .end = 0xa1,
 		.flags = IORESOURCE_BUSY | IORESOURCE_IO },
+	/* 192B -- 223B */
 	{ .name = "dma2", .start = 0xc0, .end = 0xdf,
 		.flags = IORESOURCE_BUSY | IORESOURCE_IO },
+	/* 240B -- 255B */
 	{ .name = "fpu", .start = 0xf0, .end = 0xff,
 		.flags = IORESOURCE_BUSY | IORESOURCE_IO }
 };
@@ -1143,7 +1153,9 @@ void __init setup_arch(char **cmdline_p)
 
 static struct resource video_ram_resource = {
 	.name	= "Video RAM area",
+	/* 640KB */
 	.start	= 0xa0000,
+	/* 768KB-1 */
 	.end	= 0xbffff,
 	.flags	= IORESOURCE_BUSY | IORESOURCE_MEM
 };
