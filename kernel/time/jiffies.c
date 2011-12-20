@@ -94,6 +94,10 @@ EXPORT_SYMBOL(get_jiffies_64);
 
 EXPORT_SYMBOL(jiffies);
 
+/*
+将时钟源全局变量clocksource_jiffies加入clocksource_list链表
+更新3个静态全局变量curr_clocksource next_clocksource clocksource_override
+*/
 static int __init init_jiffies_clocksource(void)
 {
 	return clocksource_register(&clocksource_jiffies);
