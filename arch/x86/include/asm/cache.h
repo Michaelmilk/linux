@@ -4,9 +4,12 @@
 #include <linux/linkage.h>
 
 /* L1 cache line size */
+/* 配置的L1缓存线大小，2的幂次 */
 #define L1_CACHE_SHIFT	(CONFIG_X86_L1_CACHE_SHIFT)
+/* L1缓存的字节数，例如64字节 */
 #define L1_CACHE_BYTES	(1 << L1_CACHE_SHIFT)
 
+/* read_mostly节 */
 #define __read_mostly __attribute__((__section__(".data..read_mostly")))
 
 #define INTERNODE_CACHE_SHIFT CONFIG_X86_INTERNODE_CACHE_SHIFT

@@ -2,8 +2,10 @@
 #define __LINUX_CACHE_H
 
 #include <linux/kernel.h>
+/* 包含架构相关的cache.h头文件 */
 #include <asm/cache.h>
 
+/* 按照一级缓存线对齐 */
 #ifndef L1_CACHE_ALIGN
 #define L1_CACHE_ALIGN(x) ALIGN(x, L1_CACHE_BYTES)
 #endif
@@ -11,6 +13,10 @@
 #ifndef SMP_CACHE_BYTES
 #define SMP_CACHE_BYTES L1_CACHE_BYTES
 #endif
+
+/*
+如果架构相关的头文件中未定义下列宏的话，则进行补充定义
+*/
 
 #ifndef __read_mostly
 #define __read_mostly
