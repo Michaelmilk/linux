@@ -219,6 +219,13 @@ static void driver_remove_groups(struct device_driver *drv,
  * since most of the things we have to do deal with the bus
  * structures.
  */
+/*
+对设备驱动程序进行注册和初始化是两件不同的事情。
+设备驱动程序应当尽快被注册，以便用户应用程序通过相应的设备文件使用它。
+相反，设备驱动程序在最后可能的时刻才被初始化。
+事实上，初始化驱动程序意味着分配系统宝贵的资源，
+这些资源因此就对其他驱动程序不能用。
+*/
 int driver_register(struct device_driver *drv)
 {
 	int ret;
@@ -240,6 +247,7 @@ int driver_register(struct device_driver *drv)
 		return -EBUSY;
 	}
 
+	/* 将驱动加到其所在的总线驱动链表上 */
 	ret = bus_add_driver(drv);
 	if (ret)
 		return ret;

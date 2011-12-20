@@ -282,6 +282,11 @@ static struct device *next_device(struct klist_iter *i)
  * to retain this data, it should do so, and increment the reference
  * count in the supplied callback.
  */
+/*
+@data   : 驱动程序结构struct device_driver
+
+为总线@bus上的每一个设备调用@fn(dev, @data)函数
+*/
 int bus_for_each_dev(struct bus_type *bus, struct device *start,
 		     void *data, int (*fn)(struct device *, void *))
 {
@@ -391,6 +396,11 @@ static struct device_driver *next_driver(struct klist_iter *i)
  * in the callback. It must also be sure to increment the refcount
  * so it doesn't disappear before returning to the caller.
  */
+/*
+@data   : 设备结构struct device
+
+为bus下的每一个驱动程序调用@fn(drv, @data)函数
+*/
 int bus_for_each_drv(struct bus_type *bus, struct device_driver *start,
 		     void *data, int (*fn)(struct device_driver *, void *))
 {
@@ -580,6 +590,9 @@ static BUS_ATTR(drivers_probe, S_IWUSR, NULL, store_drivers_probe);
 static BUS_ATTR(drivers_autoprobe, S_IWUSR | S_IRUGO,
 		show_drivers_autoprobe, store_drivers_autoprobe);
 
+/*
+增加drivers_probe drivers_autoprobe两个属性
+*/
 static int add_probe_files(struct bus_type *bus)
 {
 	int retval;
@@ -628,6 +641,9 @@ int bus_add_driver(struct device_driver *drv)
 	struct driver_private *priv;
 	int error = 0;
 
+	/* 对pci驱动，这里应该是指向全局变量pci_bus_type
+	   在__pci_register_driver()中赋的值
+	*/
 	bus = bus_get(drv->bus);
 	if (!bus)
 		return -EINVAL;
@@ -649,10 +665,12 @@ int bus_add_driver(struct device_driver *drv)
 		goto out_unregister;
 
 	if (drv->bus->p->drivers_autoprobe) {
+		/* 调用driver_attach()为该驱动匹配设备 */
 		error = driver_attach(drv);
 		if (error)
 			goto out_unregister;
 	}
+	/* 驱动信息保存到总线结构链表 */
 	klist_add_tail(&priv->knode_bus, &bus->p->klist_drivers);
 	module_add_driver(drv->owner, drv);
 
@@ -671,7 +689,7 @@ int bus_add_driver(struct device_driver *drv)
 	if (!drv->suppress_bind_attrs) {
 		error = add_bind_files(drv);
 		if (error) {
-			/* Ditto */
+			/* Ditto(同上) */
 			printk(KERN_ERR "%s: add_bind_files(%s) failed\n",
 				__func__, drv->name);
 		}
@@ -854,6 +872,9 @@ static BUS_ATTR(uevent, S_IWUSR, NULL, bus_uevent_store);
  * infrastructure, then register the children subsystems it has:
  * the devices and drivers that belong to the bus.
  */
+/*
+对应目录/sys/bus/XXX
+*/
 int bus_register(struct bus_type *bus)
 {
 	int retval;
@@ -868,6 +889,7 @@ int bus_register(struct bus_type *bus)
 
 	BLOCKING_INIT_NOTIFIER_HEAD(&priv->bus_notifier);
 
+	/* 设置对象模型中的名称，例如:对于pci总线对应/sys/bus/pci目录 */
 	retval = kobject_set_name(&priv->subsys.kobj, "%s", bus->name);
 	if (retval)
 		goto out;
@@ -884,6 +906,7 @@ int bus_register(struct bus_type *bus)
 	if (retval)
 		goto bus_uevent_fail;
 
+	/* 对应目录/sys/bus/XXX/devices */
 	priv->devices_kset = kset_create_and_add("devices", NULL,
 						 &priv->subsys.kobj);
 	if (!priv->devices_kset) {
@@ -891,6 +914,7 @@ int bus_register(struct bus_type *bus)
 		goto bus_devices_fail;
 	}
 
+	/* 对应目录/sys/bus/XXX/drivers */
 	priv->drivers_kset = kset_create_and_add("drivers", NULL,
 						 &priv->subsys.kobj);
 	if (!priv->drivers_kset) {
@@ -1028,6 +1052,10 @@ void bus_sort_breadthfirst(struct bus_type *bus,
 }
 EXPORT_SYMBOL_GPL(bus_sort_breadthfirst);
 
+/*
+初始化总线子系统
+对应目录/sys/bus
+*/
 int __init buses_init(void)
 {
 	bus_kset = kset_create_and_add("bus", &bus_uevent_ops, NULL);

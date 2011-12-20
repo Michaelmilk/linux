@@ -41,7 +41,7 @@ match(): Attaching Drivers to Devices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The format of device ID structures and the semantics for comparing
-them are inherently bus-specific. Drivers typically declare an array
+them are inherently(固有地) bus-specific. Drivers typically declare an array
 of device IDs of devices they support that reside in a bus-specific
 driver structure. 
 
@@ -74,7 +74,7 @@ int bus_for_each_dev(struct bus_type * bus, struct device * start, void * data,
 int bus_for_each_drv(struct bus_type * bus, struct device_driver * start, 
 		     void * data, int (*fn)(struct device_driver *, void *));
 
-These helpers iterate over the respective list, and call the callback
+These helpers iterate over the respective(分别的) list, and call the callback
 for each device or driver in the list. All list accesses are
 synchronized by taking the bus's lock (read currently). The reference
 count on each object in the list is incremented before the callback is

@@ -25,10 +25,15 @@ struct kobj_map {
 		kobj_probe_t *get;
 		int (*lock)(dev_t, void *);
 		void *data;
+	/* 指针数组 */
 	} *probes[255];
 	struct mutex *lock;
 };
 
+/*
+@domain : 全局变量bdev_map cdev_map
+
+*/
 int kobj_map(struct kobj_map *domain, dev_t dev, unsigned long range,
 	     struct module *module, kobj_probe_t *probe,
 	     int (*lock)(dev_t, void *), void *data)
@@ -93,6 +98,13 @@ void kobj_unmap(struct kobj_map *domain, dev_t dev, unsigned long range)
 	kfree(found);
 }
 
+/*
+@domain : 全局变量bdev_map cdev_map
+
+
+根据设备号,在cdev_map中查找其cdev对象内嵌的kobject. 
+(probe->data->kobj),返回的是cdev的kobject 
+*/
 struct kobject *kobj_lookup(struct kobj_map *domain, dev_t dev, int *index)
 {
 	struct kobject *kobj;
@@ -102,6 +114,7 @@ struct kobject *kobj_lookup(struct kobj_map *domain, dev_t dev, int *index)
 retry:
 	mutex_lock(domain->lock);
 	for (p = domain->probes[MAJOR(dev) % 255]; p; p = p->next) {
+	/* 局部变量函数指针，与kobj_probe_t函数指针声明一致 */
 		struct kobject *(*probe)(dev_t, int *, void *);
 		struct module *owner;
 		void *data;
@@ -122,6 +135,9 @@ retry:
 			continue;
 		}
 		mutex_unlock(domain->lock);
+		/* 调用kobj_map结构内的结构probe的get函数指针
+		   由kobj_map时保存的函数指针，如:exact_match() loop_probe()等
+		*/
 		kobj = probe(dev, index, data);
 		/* Currently ->owner protects _only_ ->probe() itself. */
 		module_put(owner);
@@ -133,6 +149,11 @@ retry:
 	return NULL;
 }
 
+/*
+初始化了两个全局变量
+chrdev_init()调用时初始化cdev_map
+genhd_device_init()调用时初始化bdev_map
+*/
 struct kobj_map *kobj_map_init(kobj_probe_t *base_probe, struct mutex *lock)
 {
 	struct kobj_map *p = kmalloc(sizeof(struct kobj_map), GFP_KERNEL);
@@ -148,6 +169,7 @@ struct kobj_map *kobj_map_init(kobj_probe_t *base_probe, struct mutex *lock)
 	base->dev = 1;
 	base->range = ~0;
 	base->get = base_probe;
+	/* 指针数组中的每一项都初始化指向这里分配的base */
 	for (i = 0; i < 255; i++)
 		p->probes[i] = base;
 	p->lock = lock;

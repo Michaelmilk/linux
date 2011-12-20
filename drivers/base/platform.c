@@ -955,9 +955,11 @@ int __init platform_bus_init(void)
 
 	early_platform_cleanup();
 
+	/* /sys/devices/platform */
 	error = device_register(&platform_bus);
 	if (error)
 		return error;
+	/* /sys/bus/platform */
 	error =  bus_register(&platform_bus_type);
 	if (error)
 		device_unregister(&platform_bus);

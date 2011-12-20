@@ -29,6 +29,10 @@
 #include "power/power.h"
 
 
+/*
+device_bind_driver() =>
+really_probe() =>
+*/
 static void driver_bound(struct device *dev)
 {
 	if (klist_node_attached(&dev->p->knode_driver)) {
@@ -114,6 +118,11 @@ static int really_probe(struct device *dev, struct device_driver *drv)
 		 drv->bus->name, __func__, drv->name, dev_name(dev));
 	WARN_ON(!list_empty(&dev->devres_head));
 
+	/* 置设备的驱动程序指针字段，表示该设备有驱动了
+	   注意:这里的driver字段是通用结构struct dev内的
+	   对于pci设备的pci_dev中的driver字段还是空
+	   虽然其内嵌的struct dev的driver字段已有驱动
+	*/
 	dev->driver = drv;
 	if (driver_sysfs_add(dev)) {
 		printk(KERN_ERR "%s: driver_sysfs_add(%s) failed\n",
@@ -121,6 +130,10 @@ static int really_probe(struct device *dev, struct device_driver *drv)
 		goto probe_failed;
 	}
 
+	/* 优先调用总线的probe方法
+
+	   对于pci总线上的设备来说即调用pci_bus_type内的pci_device_probe()函数
+	*/
 	if (dev->bus->probe) {
 		ret = dev->bus->probe(dev);
 		if (ret)
@@ -200,10 +213,14 @@ EXPORT_SYMBOL_GPL(wait_for_device_probe);
  * This function must be called with @dev lock held.  When called for a
  * USB interface, @dev->parent lock must be held as well.
  */
+/*
+看该驱动程序@drv是否可以驱动该没有驱动的设备@dev
+*/
 int driver_probe_device(struct device_driver *drv, struct device *dev)
 {
 	int ret = 0;
 
+	/* 确保是在总线中注册的设备 */
 	if (!device_is_registered(dev))
 		return -ENODEV;
 
@@ -218,6 +235,9 @@ int driver_probe_device(struct device_driver *drv, struct device *dev)
 	return ret;
 }
 
+/*
+添加设备时，为该设备寻找驱动
+*/
 static int __device_attach(struct device_driver *drv, void *data)
 {
 	struct device *dev = data;
@@ -247,6 +267,7 @@ int device_attach(struct device *dev)
 	int ret = 0;
 
 	device_lock(dev);
+	/* 如果设备已经有驱动，则进行绑定 */
 	if (dev->driver) {
 		if (klist_node_attached(&dev->p->knode_driver)) {
 			ret = 1;
@@ -259,6 +280,7 @@ int device_attach(struct device *dev)
 			dev->driver = NULL;
 			ret = 0;
 		}
+	/* 设备没有驱动，则遍历总线，寻找驱动 */
 	} else {
 		pm_runtime_get_noresume(dev);
 		ret = bus_for_each_drv(dev->bus, NULL, dev, __device_attach);
@@ -270,6 +292,13 @@ out_unlock:
 }
 EXPORT_SYMBOL_GPL(device_attach);
 
+/*
+@dev    : 总线下的设备
+@data   : 驱动程序结构struct device_driver
+
+为驱动程序@data找设备device
+bus_for_each_dev遍历时@dev变化
+*/
 static int __driver_attach(struct device *dev, void *data)
 {
 	struct device_driver *drv = data;
@@ -290,6 +319,7 @@ static int __driver_attach(struct device *dev, void *data)
 	if (dev->parent)	/* Needed for USB */
 		device_lock(dev->parent);
 	device_lock(dev);
+	/* 总线上的这个设备还没有驱动，则探测，看该@drv驱动程序能否驱动@dev */
 	if (!dev->driver)
 		driver_probe_device(drv, dev);
 	device_unlock(dev);
@@ -310,6 +340,12 @@ static int __driver_attach(struct device *dev, void *data)
  */
 int driver_attach(struct device_driver *drv)
 {
+	/* 对于pci设备，在调用pci_register_driver()时
+	   为pci_driver->device_driver->bus_type赋值为全局变量pci_bus_type
+
+	   即遍历pci总线上所有的device，并调用__driver_attach(device, @drv)
+	   有可能一次遍历为多个设备安装了驱动
+	*/
 	return bus_for_each_dev(drv->bus, NULL, drv, __driver_attach);
 }
 EXPORT_SYMBOL_GPL(driver_attach);
@@ -335,6 +371,9 @@ static void __device_release_driver(struct device *dev)
 
 		pm_runtime_put_sync(dev);
 
+		/* 调用bus_type或device_driver中定义的remove()方法
+		   (先调用bus_type中的方法，如果未定义，则去调用device_driver中的方法)
+		*/
 		if (dev->bus && dev->bus->remove)
 			dev->bus->remove(dev);
 		else if (drv->remove)

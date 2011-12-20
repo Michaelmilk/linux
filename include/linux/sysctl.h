@@ -1035,10 +1035,12 @@ void proc_sys_poll_notify(struct ctl_table_poll *poll);
 /* A sysctl table is an array of struct ctl_table: */
 struct ctl_table 
 {
+	/* 字符串，在目录/proc/sys目录下及子目录下 */
 	const char *procname;		/* Text ID for /proc/sys, or zero */
 	void *data;
 	int maxlen;
 	mode_t mode;
+	/* procname目录的子目录 */
 	struct ctl_table *child;
 	struct ctl_table *parent;	/* Automatically set */
 	proc_handler *proc_handler;	/* Callback for text formatting */

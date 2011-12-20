@@ -331,6 +331,9 @@ void sysdev_unregister(struct sys_device *sysdev)
 EXPORT_SYMBOL_GPL(sysdev_register);
 EXPORT_SYMBOL_GPL(sysdev_unregister);
 
+/*
+/sys/devices/system
+*/
 int __init system_bus_init(void)
 {
 	system_kset = kset_create_and_add("system", NULL, &devices_kset->kobj);

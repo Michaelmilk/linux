@@ -40,6 +40,9 @@ static __init int sysfs_deprecated_setup(char *arg)
 early_param("sysfs.deprecated", sysfs_deprecated_setup);
 #endif
 
+/*
+由init_acpi_device_notify()赋值初始化
+*/
 int (*platform_notify)(struct device *dev) = NULL;
 int (*platform_notify_remove)(struct device *dev) = NULL;
 static struct kobject *dev_kobj;
@@ -585,6 +588,10 @@ static void klist_children_put(struct klist_node *n)
  * NOTE: Use put_device() to give up your reference instead of freeing
  * @dev directly once you have called this function.
  */
+/*
+初始化@dev的kobject设备模型字段
+初始化@dev的链表和锁
+*/
 void device_initialize(struct device *dev)
 {
 	dev->kobj.kset = devices_kset;
@@ -888,6 +895,9 @@ int device_private_init(struct device *dev)
  * if it returned an error! Always use put_device() to give up your
  * reference instead.
  */
+/*
+将@dev加入设备模型，在/sys/devices下创建一个对应的目录
+*/
 int device_add(struct device *dev)
 {
 	struct device *parent = NULL;
@@ -938,10 +948,12 @@ int device_add(struct device *dev)
 	if (platform_notify)
 		platform_notify(dev);
 
+	/* 在sysfs中创建相关属性(uevent、dev_t等) */
 	error = device_create_file(dev, &uevent_attr);
 	if (error)
 		goto attrError;
 
+	/* 建立显示设备号的sysfs入口，即当前设备入口下的"dev"文件显示设备主从设备号 */
 	if (MAJOR(dev->devt)) {
 		error = device_create_file(dev, &devt_attr);
 		if (error)
@@ -960,6 +972,7 @@ int device_add(struct device *dev)
 	error = device_add_attrs(dev);
 	if (error)
 		goto AttrsError;
+	/* 添加一些bus相关的sysfs符号连接 */
 	error = bus_add_device(dev);
 	if (error)
 		goto BusError;
@@ -975,12 +988,19 @@ int device_add(struct device *dev)
 		blocking_notifier_call_chain(&dev->bus->p->bus_notifier,
 					     BUS_NOTIFY_ADD_DEVICE, dev);
 
+	/* 调用 kobject_uevent()产生KOBJ_ADD uevent
+	   设置环境变量，然后调用call_usermodehelper(argv[0], argv, envp, 0); 
+	   引起热拔插事件用户空间脚本执行
+	*/
 	kobject_uevent(&dev->kobj, KOBJ_ADD);
+	/* 如果device有总线(bus_type),调用bus_probe_device()把设备添加到总线中 */
 	bus_probe_device(dev);
+	/* 如果device有parent，将它加入parent的子设备链表中 */
 	if (parent)
 		klist_add_tail(&dev->p->knode_parent,
 			       &parent->p->klist_children);
 
+	/* 如果device有类(class)，将它添加到class中 */
 	if (dev->class) {
 		mutex_lock(&dev->class->p->class_mutex);
 		/* tie the class to the device */
@@ -988,6 +1008,10 @@ int device_add(struct device *dev)
 			       &dev->class->p->klist_devices);
 
 		/* notify any interfaces that the device is here */
+		/* 遍历在class中注册的所有class_interface，
+		   调用class_interface中的add_dev(dev,intf)方法
+		   (这里dev表示要添加的设备，intf表示一个class_interface)
+		*/
 		list_for_each_entry(class_intf,
 				    &dev->class->p->class_interfaces, node)
 			if (class_intf->add_dev)
@@ -1041,6 +1065,9 @@ name_error:
  * if it returned an error! Always use put_device() to give up the
  * reference initialized in this function instead.
  */
+/*
+对应目录/sys/devices/XXX
+*/
 int device_register(struct device *dev)
 {
 	device_initialize(dev);
@@ -1097,18 +1124,25 @@ void device_del(struct device *dev)
 					     BUS_NOTIFY_DEL_DEVICE, dev);
 	device_pm_remove(dev);
 	dpm_sysfs_remove(dev);
+	/* 如果device有parent，将它从parent的子设备链表中删除 */
 	if (parent)
 		klist_del(&dev->p->knode_parent);
+	/* 删除sysfs中的相关属性(uevent、dev_t等) */
 	if (MAJOR(dev->devt)) {
 		devtmpfs_delete_node(dev);
 		device_remove_sys_dev_entry(dev);
 		device_remove_file(dev, &devt_attr);
 	}
+	/* 如果device有类(class)，将它从class中删除 */
 	if (dev->class) {
 		device_remove_class_symlinks(dev);
 
 		mutex_lock(&dev->class->p->class_mutex);
 		/* notify any interfaces that the device is now gone */
+		/* 遍历在class中注册的所有class_interface， 
+		   调用class_interface中的remove_dev(dev,intf)方法
+		   (这里dev表示要删除的设备，intf表示一个class_interface) 
+		*/
 		list_for_each_entry(class_intf,
 				    &dev->class->p->class_interfaces, node)
 			if (class_intf->remove_dev)
@@ -1119,6 +1153,7 @@ void device_del(struct device *dev)
 	}
 	device_remove_file(dev, &uevent_attr);
 	device_remove_attrs(dev);
+	/* 如果device有总线(bus_type),调用bus_remove_device()把它从总线中删除 */
 	bus_remove_device(dev);
 
 	/*
@@ -1133,9 +1168,12 @@ void device_del(struct device *dev)
 	 */
 	if (platform_notify_remove)
 		platform_notify_remove(dev);
+	/* 调用kobject_uevent()产生KOBJ_REMOVE uevent */
 	kobject_uevent(&dev->kobj, KOBJ_REMOVE);
 	cleanup_device_parent(dev);
+	/* 把device内嵌的kobject结构从设备驱动模型中删除 */
 	kobject_del(&dev->kobj);
+	/* 解除和parent之间的联系 */
 	put_device(parent);
 }
 
@@ -1452,6 +1490,7 @@ struct device *device_create_vargs(struct class *class, struct device *parent,
 	if (class == NULL || IS_ERR(class))
 		goto error;
 
+	/* 动态分配device结构 */
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	if (!dev) {
 		retval = -ENOMEM;
