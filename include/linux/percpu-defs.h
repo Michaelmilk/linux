@@ -105,6 +105,15 @@
 /*
 定义一个percpu变量
 放在(.data..percpu)节
+
+在arch/x86/kernel/vmlinux.lds.S中
+__per_cpu_start和__per_cpu_end标识.data.percpu这个section的开头和结尾
+并且，整个.data..percpu这个section都在__init_begin和__init_end之间，
+也就是说，该section所占内存会在系统启动后释放(free)掉
+
+在.data..percpu这个section中定义一个变量name
+事实上，这里所谓的变量name，其实就是一个偏移量，标识该变量的地址。
+
 */
 #define DEFINE_PER_CPU(type, name)					\
 	DEFINE_PER_CPU_SECTION(type, name, "")
