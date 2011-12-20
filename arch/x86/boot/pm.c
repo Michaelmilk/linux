@@ -26,6 +26,9 @@
 */
 static void realmode_switch_hook(void)
 {
+	/* 进入保护模式前，调用hdr中的realmode_swtch指向的hook函数
+	   boot loader可以利用realmode_swtch在实模式下执行某些代码的最后机会
+	*/
 	if (boot_params.hdr.realmode_swtch) {
 		/* 长调用16位地址
 		   %0取输入值realmode_swtch
@@ -38,6 +41,11 @@ static void realmode_switch_hook(void)
 		   将IF位置0(关中断) */
 		asm volatile("cli");
 		/* NMI: NonMaskable Interrupt 不可屏蔽中断请求
+		   无论状态寄存器中 IF 位的状态如何,CPU收到有效的NMI必须进行响应;
+		   NMI是上升沿有效;中断类型号固定为2;它在被响应时无中断响应周期.
+		   不可屏蔽中断通常用于故障处理
+		   (如:协处理器运算出错,存储器校验出错,I/O通道校验出错等). 
+
 		   将0x70端口的bit7置1，即Disable NMI */
 		outb(0x80, 0x70); /* Disable NMI */
 		io_delay();

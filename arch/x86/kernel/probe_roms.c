@@ -73,7 +73,9 @@ static struct resource adapter_rom_resources[] = { {
 
 static struct resource video_rom_resource = {
 	.name 	= "Video ROM",
+	/* 768KB */
 	.start	= 0xc0000,
+	/* 800KB-1 */
 	.end	= 0xc7fff,
 	.flags	= IORESOURCE_BUSY | IORESOURCE_READONLY | IORESOURCE_MEM
 };
@@ -212,6 +214,9 @@ void __init probe_roms(void)
 	/* video rom */
 	upper = adapter_rom_resources[0].start;
 	for (start = video_rom_resource.start; start < upper; start += 2048) {
+		/* phys_to_virt()
+		   把物理地址转换为内核空间的虚拟地址
+		*/
 		rom = isa_bus_to_virt(start);
 		if (!romsignature(rom))
 			continue;
