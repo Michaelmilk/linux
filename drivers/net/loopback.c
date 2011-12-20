@@ -70,14 +70,22 @@ struct pcpu_lstats {
  * The higher levels take care of making this non-reentrant (it's
  * called with bh's disabled).
  */
+/*
+首先调用skb_orphan把skb孤立，使它跟发送socket和协议栈不再有任何联系，
+也即对本机来说，这个skb的数据内容已经发送出去了，而skb相当于已经被释放掉了。
+对于环回设备接口来说，数据的发送工作至此已经全部完成，
+接下来，只要把这个实际上还未被释放的skb传回给协议栈的接收函数即可。
+*/
 static netdev_tx_t loopback_xmit(struct sk_buff *skb,
 				 struct net_device *dev)
 {
 	struct pcpu_lstats *lb_stats;
 	int len;
 
+	/* 相当于发送过程 */
 	skb_orphan(skb);
 
+	/* 相当于接收过程 */
 	skb->protocol = eth_type_trans(skb, dev);
 
 	/* it's OK to use per_cpu_ptr() because BHs are off */
