@@ -32,11 +32,25 @@
 #include <linux/dma-mapping.h>
 
 /* Don't change this without changing skb_csum_unnecessary! */
+/*
+表示完全由软件来执行校验和
+对于新分配的一个skb，总是默认由软件来执行校验和
+*/
 #define CHECKSUM_NONE 0
+/* 表示没有必要执行校验和 */
 #define CHECKSUM_UNNECESSARY 1
+/* 针对进来的包，由硬件来完成 */
 #define CHECKSUM_COMPLETE 2
+/* 针对出去的包，这个工作应该由硬件来完成 */
 #define CHECKSUM_PARTIAL 3
 
+/*
+X86下一级缓存字节大小对齐
+SMP_CACHE_BYTES => L1_CACHE_BYTES => (1 << L1_CACHE_SHIFT) =>
+L1_CACHE_SHIFT => CONFIG_X86_L1_CACHE_SHIFT
+在.config文件中定义CONFIG_X86_L1_CACHE_SHIFT为6
+即64字节对齐
+*/
 #define SKB_DATA_ALIGN(X)	(((X) + (SMP_CACHE_BYTES - 1)) & \
 				 ~(SMP_CACHE_BYTES - 1))
 #define SKB_WITH_OVERHEAD(X)	\
@@ -50,6 +64,16 @@
 #define SKB_TRUESIZE(X) ((X) +						\
 			 SKB_DATA_ALIGN(sizeof(struct sk_buff)) +	\
 			 SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
+
+/*
+CHECKSUM_NONE		：代表网卡不算checksum
+CHECKSUM_HW		：代表网卡支持硬件计算checksum（对L4 head + payload 的校验），
+			  并且已经将计算结果复制给skb->csum，
+			  软件需要计算“伪头(pseudo header)”的校验和，
+			  与skb->csum相加得到L4 的结果
+CHECKSUM_UNNECESSARY	：网卡已经计算并校验过整个包的校验，包括伪头，
+			  软件无需再次计算，一般用于 loopback device
+*/
 
 /* A. Checksumming of received packets by device.
  *
@@ -141,6 +165,16 @@ struct sk_buff;
 
 typedef struct skb_frag_struct skb_frag_t;
 
+/*
+某些情况下，希望能将保存在文件中的数据，通过socket直接发送出去，
+这样，避免了把数据先从文件拷贝到缓冲区，从而提高了效率。
+Linux采用一种"paged data"的技术，来提供这种支持。
+这种技术将文件中的数据直接被映射为多个page。
+Linux用struct skb_frag_strut来管理这种page
+并在shared info中，用数组frags[]来管理这些结构。
+如此一来，sk_buffer就不仅管理着一个线性buffer空间的数据了，
+它还可能通过share info结构管理一组保存在page中的数据。
+*/
 struct skb_frag_struct {
 	struct {
 		struct page *p;
@@ -245,9 +279,9 @@ struct ubuf_info {
 struct skb_shared_info {
 	/* 下面数组frags中的计数 */
 	unsigned short	nr_frags;
-    /* “gso_size”，“gso_segs”，“gso_type”
-        由“GSO”（Generic  Segmentation  Offload，或
-        叫“TSO”，即 TCP Segmentation Offload）功能使用 */
+	/* “gso_size”，“gso_segs”，“gso_type”
+	   由“GSO”（Generic  Segmentation  Offload，或
+	   叫“TSO”，即 TCP Segmentation Offload）功能使用 */
 	unsigned short	gso_size;
 	/* Warning: this field is not always filled in (UFO)! */
 	unsigned short	gso_segs;
@@ -262,7 +296,7 @@ struct skb_shared_info {
 	 * Warning : all fields before dataref are cleared in __alloc_skb()
 	 */
 	/* skb 的data 区域(线性buffer)引用计数，
-       即有多少个sk_buff结构指向这块data区域(skb_clone时++) */
+	   即有多少个sk_buff结构指向这块data区域(skb_clone时++) */
 	atomic_t	dataref;
 
 	/* Intermediate layers must ensure that destructor_arg
@@ -271,9 +305,9 @@ struct skb_shared_info {
 
 	/* must be last field, see pskb_expand_head() */
 	/* 用来记录paged_data实际位置，
-       包含 page 指针，在page 中的offset，以及占用的size 。
-       (可以有不同的 skb 指向同一个page 中的不同offset和 size，
-       也可以指向相同的，由page里头的_count来代表引用计数) */
+	   包含 page 指针，在page 中的offset，以及占用的size 。
+	   (可以有不同的 skb 指向同一个page 中的不同offset和 size，
+	   也可以指向相同的，由page里头的_count来代表引用计数) */
 	skb_frag_t	frags[MAX_SKB_FRAGS];
 };
 
@@ -1136,12 +1170,22 @@ static inline void skb_queue_splice_tail(const struct sk_buff_head *list,
  *	Each of the lists is a queue.
  *	The list at @list is reinitialised
  */
+/*
+splice: 拼接
+
+把链表头@list下的skb节点转移到链表头@head下面去
+链表头@list会被重新初始化
+*/
 static inline void skb_queue_splice_tail_init(struct sk_buff_head *list,
 					      struct sk_buff_head *head)
 {
+	/* @list链表非空 */
 	if (!skb_queue_empty(list)) {
+		/* 转移链表下的节点 */
 		__skb_queue_splice(list, head->prev, (struct sk_buff *) head);
+		/* 记录节点数目 */
 		head->qlen += list->qlen;
+		/* 初始化链表头@list */
 		__skb_queue_head_init(list);
 	}
 }

@@ -211,7 +211,7 @@ struct sk_buff *__alloc_skb(unsigned int size, gfp_t gfp_mask,
 	 * actually initialise below. Hence, don't put any more fields after
 	 * the tail pointer in struct sk_buff!
 	 */
-    /* 清0只到tail的前面，tail字段后面的指针指向线性区，当然不能清0了 */
+	/* 清0只到tail的前面，tail字段后面的指针指向线性区，当然不能清0了 */
 	memset(skb, 0, offsetof(struct sk_buff, tail));
 	/* 并不包含struct skb_shared_info */
 	/* Account for allocated memory : skb + skb->head */
