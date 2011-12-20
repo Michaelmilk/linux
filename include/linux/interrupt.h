@@ -62,8 +62,13 @@
  * IRQF_EARLY_RESUME - Resume IRQ early during syscore instead of at device
  *                resume time.
  */
+/* 当该位被设置时，表明这是一个快速的中断处理程序。
+在本地处理器上，快速中断处理程序在禁止所有中断的情况下运行。
+除了时钟中断外，绝大多数中断都不使用该标志。 */
 #define IRQF_DISABLED		0x00000020
+/* 该位指出产生的中断能对/dev/random 设备和/dev/urandom 设备使用的熵池有贡献 */
 #define IRQF_SAMPLE_RANDOM	0x00000040
+/* 该位表示中断可以在设备之间共享 */
 #define IRQF_SHARED		0x00000080
 #define IRQF_PROBE_SHARED	0x00000100
 #define __IRQF_TIMER		0x00000200
@@ -108,16 +113,26 @@ typedef irqreturn_t (*irq_handler_t)(int, void *);
  * @thread_mask:	bitmask for keeping track of @thread activity
  */
 struct irqaction {
+	/* 指向设备的中断响应函数，它在系统初始化时被置入
+	   当中断发生时，系统将自动调用该函数 */
 	irq_handler_t		handler;
+	/* 指明中断类型，如正常中断、快速中断等 */
 	unsigned long		flags;
+	/* 与设备相关的数据类型
+	   中断响应函数可以根据需要将它转化成所需的数据结构
+	   从而达到访问系统数据的功能
+	   用于共享中断线
+	   如果无需共享中断线，那么将该参数赋值为空值(NULL)就可以了 */
 	void			*dev_id;
 	void __percpu		*percpu_dev_id;
+	/* 指向下一个irqaction */
 	struct irqaction	*next;
 	int			irq;
 	irq_handler_t		thread_fn;
 	struct task_struct	*thread;
 	unsigned long		thread_flags;
 	unsigned long		thread_mask;
+	/* 设备名 */
 	const char		*name;
 	struct proc_dir_entry	*dir;
 } ____cacheline_internodealigned_in_smp;
@@ -515,9 +530,15 @@ extern void __send_remote_softirq(struct call_single_data *cp, int cpu,
 struct tasklet_struct
 {
 	struct tasklet_struct *next;
+	/* tasklet的状态，按位操作，目前定义了两个位的含义:
+	   TASKLET_STATE_SCHED(第0位)或TASKLET_STATE_RUN(第1位)
+	   用于CPU间同步 */
 	unsigned long state;
+	/* 引用计数，通常用1表示disabled */
 	atomic_t count;
+	/* 函数指针 */
 	void (*func)(unsigned long);
+	/* 函数func的参数 */
 	unsigned long data;
 };
 

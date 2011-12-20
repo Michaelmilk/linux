@@ -119,6 +119,13 @@ handle_irq_event_percpu(struct irq_desc *desc, struct irqaction *action)
 	irqreturn_t retval = IRQ_NONE;
 	unsigned int random = 0, irq = desc->irq_data.irq;
 
+	/* 依次调用action队列中所有的中断服务子程序。其实这个过程并不需要很长的时间。
+	   因为每个具体的中断服务程序中都会一开始检查各自的中断源，
+	   一般是读相应设备的中断状态寄存器，看是否有来自该设备的中断请求，
+	   如果没有则马上退出，这个过程一般只需要几个指令；
+	   其次，每个action队列的中断服务程序的数量一般也不会很大。
+	   所以，不会有显著的影响。
+	*/
 	do {
 		irqreturn_t res;
 
