@@ -3451,6 +3451,7 @@ context_switch(struct rq *rq, struct task_struct *prev,
 		atomic_inc(&oldmm->mm_count);
 		enter_lazy_tlb(oldmm, next);
 	} else
+		/* switch_mm()将虚拟内存映射到新的进程 */
 		switch_mm(oldmm, mm, next);
 
 	if (!prev->mm) {
@@ -3468,6 +3469,10 @@ context_switch(struct rq *rq, struct task_struct *prev,
 #endif
 
 	/* Here we just switch the register state and the stack. */
+	/* switch_to完成最终的进程切换，它保存原进程的所有寄存器信息，
+	   恢复新进程的所有寄存器信息，并执行新的进程。
+	   无论何时，内核想要进行任务切换，都通过调用schedule()完成任务切换。
+	*/
 	switch_to(prev, next, prev);
 
 	barrier();
@@ -4654,6 +4659,13 @@ static inline void sched_submit_work(struct task_struct *tsk)
 		blk_schedule_flush_plug(tsk);
 }
 
+/*
+当内核即将返回用户空间时，内核会检查need_resched是否设置，
+如果设置，则调用schedule()，此时，发生用户抢占。
+一般来说，用户抢占发生以下情况：
+(1)从系统调用返回用户空间；
+(2)从中断(异常)处理程序返回用户空间。
+*/
 asmlinkage void __sched schedule(void)
 {
 	struct task_struct *tsk = current;
@@ -4722,6 +4734,7 @@ asmlinkage void __sched notrace preempt_schedule(void)
 	 * If there is a non-zero preempt_count or interrupts are disabled,
 	 * we do not want to preempt the current task. Just return..
 	 */
+	/* 检查是否允许抢占,本地中断关闭,或者抢占计数器值不为0时不允许抢占 */
 	if (likely(ti->preempt_count || irqs_disabled()))
 		return;
 
