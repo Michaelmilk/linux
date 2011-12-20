@@ -30,8 +30,18 @@ struct pglist_data __refdata contig_page_data = {
 EXPORT_SYMBOL(contig_page_data);
 #endif
 
+/*
+pfn	:page frame number 页帧号
+
+这个是编号，从数字1开始，不是下标
+例如:对于512MB的内存来说，max_pfn会是131072
+*/
+
+/* 系统低内存的结束物理页框号 */
 unsigned long max_low_pfn;
+/* 系统低内存的起始物理页框号 */
 unsigned long min_low_pfn;
+/* 系统内存中最大的物理页框号 */
 unsigned long max_pfn;
 
 bootmem_data_t bootmem_node_data[MAX_NUMNODES] __initdata;
@@ -108,6 +118,7 @@ static unsigned long __init init_bootmem_core(bootmem_data_t *bdata,
 	 * register free RAM areas explicitly.
 	 */
 	mapsize = bootmap_bytes(end - start);
+	/* 全部置为占用状态1 */
 	memset(bdata->node_bootmem_map, 0xff, mapsize);
 
 	bdebug("nid=%td start=%lx map=%lx end=%lx mapsize=%lx\n",

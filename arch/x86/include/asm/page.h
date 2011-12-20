@@ -33,6 +33,11 @@ static inline void copy_user_page(void *to, void *from, unsigned long vaddr,
 	alloc_page_vma(GFP_HIGHUSER | __GFP_ZERO | movableflags, vma, vaddr)
 #define __HAVE_ARCH_ALLOC_ZEROED_USER_HIGHPAGE
 
+/*
+pa:physical address
+把固定映射区的一个虚拟地址转换为物理地址
+物理地址的0~896M映射为虚拟地址的3GB+0M~3GB+896M
+*/
 #define __pa(x)		__phys_addr((unsigned long)(x))
 #define __pa_nodebug(x)	__phys_addr_nodebug((unsigned long)(x))
 /* __pa_symbol should be used for C visible symbols.
@@ -46,6 +51,11 @@ static inline void copy_user_page(void *to, void *from, unsigned long vaddr,
  */
 #define __pa_symbol(x)	__pa(__phys_reloc_hide((unsigned long)(x)))
 
+/*
+va:virtual address
+返回物理地址对应的虚拟地址
+对于内核地址空间来说，就是直接加上3GB偏移
+*/
 #define __va(x)			((void *)((unsigned long)(x)+PAGE_OFFSET))
 
 #define __boot_va(x)		__va(x)

@@ -1316,6 +1316,7 @@ static struct vm_struct *__get_vm_area_node(unsigned long size,
 	/*
 	 * We always allocate a guard page.
 	 */
+	/* 总是留出一页的空洞 */
 	size += PAGE_SIZE;
 
 	va = alloc_vmap_area(size, align, start, end, node, gfp_mask);
@@ -1700,6 +1701,16 @@ static inline void *__vmalloc_node_flags(unsigned long size,
  *	For tight control over page level allocator and protection flags
  *	use __vmalloc() instead.
  */
+/*
+vmalloc()函数的工作方式类似于kmalloc()，
+只不过前者分配的内存虚拟地址是连续的，
+而物理地址则无须连续。
+很多内核代码都用kmalloc()来获取内存，而不是vmalloc()，这主要出于性能的考虑。
+后者仅在不得已时才会使用——一般是在为了获得大块内存时，
+例如，当模块被动态的插入到内核中时，就把模块装载到由vmalloc()分配的内存上。
+
+该函数返回一个指针，指向逻辑上连续的一块内存区，大小至少为size。
+*/
 void *vmalloc(unsigned long size)
 {
 	return __vmalloc_node_flags(size, -1, GFP_KERNEL | __GFP_HIGHMEM);

@@ -15,6 +15,7 @@
 #define PAGE_SIZE	(_AC(1,UL) << PAGE_SHIFT)
 /*
 ¸ß20Î»ÖÃ1µÄÑÚÂë
+0xfffff000
 */
 #define PAGE_MASK	(~(PAGE_SIZE-1))
 

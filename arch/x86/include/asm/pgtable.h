@@ -132,6 +132,10 @@ static inline int pte_special(pte_t pte)
 	return pte_flags(pte) & _PAGE_SPECIAL;
 }
 
+/*
+x是页表项值，右移12位后得到其对应的物理页框号
+最后通过pfn_to_page得到对应的物理页描述符
+*/
 static inline unsigned long pte_pfn(pte_t pte)
 {
 	return (pte_val(pte) & PTE_PFN_MASK) >> PAGE_SHIFT;
@@ -304,12 +308,18 @@ static inline pgprotval_t massage_pgprot(pgprot_t pgprot)
 	return protval;
 }
 
+/*
+根据页框号和页表项的属性值合并成一个页表项值
+*/
 static inline pte_t pfn_pte(unsigned long page_nr, pgprot_t pgprot)
 {
 	return __pte(((phys_addr_t)page_nr << PAGE_SHIFT) |
 		     massage_pgprot(pgprot));
 }
 
+/*
+根据页框号和页表项的属性值合并成一个中间表项值
+*/
 static inline pmd_t pfn_pmd(unsigned long page_nr, pgprot_t pgprot)
 {
 	return __pmd(((phys_addr_t)page_nr << PAGE_SHIFT) |
@@ -392,6 +402,9 @@ pte_t *populate_extra_pte(unsigned long vaddr);
 #ifndef __ASSEMBLY__
 #include <linux/mm_types.h>
 
+/*
+如果对应的表项值为0，返回1
+*/
 static inline int pte_none(pte_t pte)
 {
 	return !pte.pte;
@@ -428,6 +441,10 @@ static inline int pmd_none(pmd_t pmd)
 	return (unsigned long)native_pmd_val(pmd) == 0;
 }
 
+/*
+取得页目录项对应的线性地址
+即将低12位置0后得到的物理地址，再加上3G转换为线性地址
+*/
 static inline unsigned long pmd_page_vaddr(pmd_t pmd)
 {
 	return (unsigned long)__va(pmd_val(pmd) & PTE_PFN_MASK);
@@ -457,6 +474,9 @@ static inline unsigned long pmd_index(unsigned long address)
  * (Currently stuck as a macro because of indirect forward reference
  * to linux/mm.h:page_to_nid())
  */
+/*
+根据页描述符和属性得到一个页表项值
+*/
 #define mk_pte(page, pgprot)   pfn_pte(page_to_pfn(page), (pgprot))
 
 /*
@@ -477,6 +497,12 @@ static inline unsigned long pte_index(unsigned long address)
 	return (address >> PAGE_SHIFT) & (PTRS_PER_PTE - 1);
 }
 
+/*
+@pmd	: 页目录项对应的物理地址
+@address: 页表项对应的线性地址
+
+取得某页表项的线性地址
+*/
 static inline pte_t *pte_offset_kernel(pmd_t *pmd, unsigned long address)
 {
 	return (pte_t *)pmd_page_vaddr(*pmd) + pte_index(address);

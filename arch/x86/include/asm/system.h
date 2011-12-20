@@ -257,6 +257,19 @@ static inline unsigned long native_read_cr3(void)
 	return val;
 }
 
+/*
+将@val值写入cr3寄存器
+
+CR3 用于保存页目录表页面的物理地址，因此被称为PDBR。
+由于目录是页对齐的，所以仅高20位有效，低12 位保留供更加高级的处理器使用。
+向CR3中装入一个新值时，低12位必须为0；但从 CR3中取值时，低12位被忽略。
+每当用MOV指令重置CR3的值时，会导致分页机制高速缓冲区的内容无效，
+用此方法，可以在启用分页机制之前，即把PG 位置1之前，预先刷新分页机制的高速缓存。
+CR3寄存器即使在CR0寄存器的PG位或PE位为0时也可装入，
+如在实模式下也可设置CR3，以便进行分页机制的初始化。
+在任务切换时，CR3要被改变，但是如果新任务中CR3的值与原任务中CR3的值相同，
+那么处理器不刷新分页高速缓存，以便当任务共享页表时有较快的执行速度。
+*/
 static inline void native_write_cr3(unsigned long val)
 {
 	asm volatile("mov %0,%%cr3": : "r" (val), "m" (__force_order));
@@ -424,6 +437,24 @@ void stop_this_cpu(void *dummy);
  * Some non-Intel clones support out of order store. wmb() ceases to be a
  * nop for these.
  */
+/*
+内存屏障主要解决的问题是编译器的优化和CPU的乱序执行。
+编译器在优化的时候，生成的汇编指令可能和c语言程序的执行顺序不一样，
+在需要程序严格按照c语言顺序执行时，需要显式的告诉编译不需要优化，
+这在linux下是通过barrier()宏完成的，它依靠volidate关键字和memory关键字，
+前者告诉编译barrier()周围的指令不要被优化，
+后者作用是告诉编译器汇编代码会使内存里面的值更改，编译器应使用内存里的新值而非寄存器里保存的老值。
+同样，CPU执行会通过乱序以提高性能。
+汇编里的指令不一定是按照我们看到的顺序执行的。
+linux中通过mb()系列宏来保证执行的顺序。
+具体做法是通过mfence/lfence指令（它们是奔4后引进的，早期x86没有）
+以及x86指令中带有串行特性的指令（这样的指令很多，
+例如linux中实现时用到的
+lock指令，I/O指令，操作控制寄存器、系统寄存器、调试寄存器的指令、iret指令等等）。
+简单的说，如果在程序某处插入了mb()/rmb()/wmb()宏，
+则宏之前的程序保证比宏之后的程序先执行，从而实现串行化。
+wmb的实现和barrier()类似，是因为在x86平台上，写内存的操作不会被乱序执行。
+*/
 #define mb() alternative("lock; addl $0,0(%%esp)", "mfence", X86_FEATURE_XMM2)
 #define rmb() alternative("lock; addl $0,0(%%esp)", "lfence", X86_FEATURE_XMM2)
 #define wmb() alternative("lock; addl $0,0(%%esp)", "sfence", X86_FEATURE_XMM)

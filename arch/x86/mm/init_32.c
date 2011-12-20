@@ -78,6 +78,10 @@ static __init void *alloc_low_page(void)
  * given global directory entry. This only returns the gd entry
  * in non-PAE compilation mode, since the middle layer is folded.
  */
+/*
+如果内核不启用PAE选项，函数将通过 pmd_offset返回pgd的地址。
+因为linux的二级映射模型，本来就是忽略pmd中间目录表的。
+*/
 static pmd_t * __init one_md_table_init(pgd_t *pgd)
 {
 	pud_t *pud;
@@ -112,6 +116,7 @@ static pte_t * __init one_page_table_init(pmd_t *pmd)
 	if (!(pmd_val(*pmd) & _PAGE_PRESENT)) {
 		pte_t *page_table = NULL;
 
+		/* 分配一个4K大小的物理页面 */
 		if (after_bootmem) {
 #if defined(CONFIG_DEBUG_PAGEALLOC) || defined(CONFIG_KMEMCHECK)
 			page_table = (pte_t *) alloc_bootmem_pages(PAGE_SIZE);
@@ -123,10 +128,20 @@ static pte_t * __init one_page_table_init(pmd_t *pmd)
 			page_table = (pte_t *)alloc_low_page();
 
 		paravirt_alloc_pte(&init_mm, __pa(page_table) >> PAGE_SHIFT);
+		/* page_table显然属于线性地址，先通过__pa宏转化为物理地址
+		   再或上_PAGE_TABLE宏，此时它们还是无符号整数，
+		   再通过__pmd把无符号整数转化为pmd类型，
+		   经过这些转换，就得到了一个具有属性的表项，
+		   然后通过set_pmd宏设置pmd表项
+		*/
 		set_pmd(pmd, __pmd(__pa(page_table) | _PAGE_TABLE));
+		/* 确保刚建立的页表项所指示的线性地址
+		   与上面分配的页对应的线性地址一致
+		*/
 		BUG_ON(page_table != pte_offset_kernel(pmd, 0));
 	}
 
+	/* 返回该页表的线性地址 */
 	return pte_offset_kernel(pmd, 0);
 }
 
@@ -225,6 +240,11 @@ page_table_range_init(unsigned long start, unsigned long end, pgd_t *pgd_base)
 	}
 }
 
+/*
+判断线性地址是否小于了内核代码段
+
+__init_end是个内核符号，在内核链接的时候生成的，表示内核代码段的终止地址
+*/
 static inline int is_kernel_text(unsigned long addr)
 {
 	if (addr >= (unsigned long)_text && addr <= (unsigned long)__init_end)
@@ -252,6 +272,7 @@ kernel_physical_mapping_init(unsigned long start,
 	unsigned long start_pfn, end_pfn;
 	pgd_t *pgd_base = swapper_pg_dir;
 	int pgd_idx, pmd_idx, pte_ofs;
+	/* pfn是页框号，被初始为0 */
 	unsigned long pfn;
 	pgd_t *pgd;
 	pmd_t *pmd;
@@ -284,12 +305,32 @@ kernel_physical_mapping_init(unsigned long start,
 repeat:
 	pages_2m = pages_4k = 0;
 	pfn = start_pfn;
+	/*
+	   取得虚拟地址PAGE_OFFSET对应的页目录索引
+	   对于PAGE_OFFSET为3G的情况，即0xc0000000
+	   index值为0x300=768
+	   pgd_idx根据pgd_index宏计算结果为768，
+	   也是内核要从目录表中第768个表项开始进行设置。
+	   从768到1024这个256个表项被linux内核设置成内核目录项，
+	   低768个目录项被用户空间使用. 
+	   pgd = pgd_base + pgd_idx; pgd便指向了第768个表项。
+	*/
 	pgd_idx = pgd_index((pfn<<PAGE_SHIFT) + PAGE_OFFSET);
 	pgd = pgd_base + pgd_idx;
-	/* 遍历页目录表 */
+	/* 遍历页目录表
+	   PTRS_PER_PGD表示页目录表中有多少项，对于2级页表来说，这里为1024
+	   循环填充从768到1024这256个目录项的内容。
+	*/
 	for (; pgd_idx < PTRS_PER_PGD; pgd++, pgd_idx++) {
 		pmd = one_md_table_init(pgd);
 
+		/* 保证只映射end_pfn个页面
+		   这个很关键，end_pfn代表着整个物理内存一共有多少页框。
+		   当pfn大于end_pfn的时候，
+		   表明内核已经把整个物理内存都映射到了系统空间中，
+		   所以剩下有没被填充的表项就直接忽略了。
+		   因为内核已经可以映射整个物理空间了，没必要继续填充剩下的表项。
+		*/
 		if (pfn >= end_pfn)
 			continue;
 #ifdef CONFIG_X86_PAE
@@ -299,9 +340,15 @@ repeat:
 		pmd_idx = 0;
 #endif
 		/* 遍历页中间目录表
-		   对应2级页表，则PTRS_PER_PMD为1 */
+		   对应2级页表，则PTRS_PER_PMD为1
+		   在linux的3级映射模型中，是要设置pmd表的，
+		   但在2级映射中忽略，只循环一次，直接进行页表pte的设置。
+		*/
 		for (; pmd_idx < PTRS_PER_PMD && pfn < end_pfn;
 		     pmd++, pmd_idx++) {
+			/* 从虚拟地址PAGE_OFFSET开始映射，即3G开始
+			   也就是从内核空间开始
+			*/
 			unsigned int addr = pfn * PAGE_SIZE + PAGE_OFFSET;
 
 			/*
@@ -342,6 +389,10 @@ repeat:
 			/* 遍历页表项 */
 			for (; pte_ofs < PTRS_PER_PTE && pfn < end_pfn;
 			     pte++, pfn++, pte_ofs++, addr += PAGE_SIZE) {
+				/* 如果address属于内核代码段，
+				   那么在设置页表项的时候就要加个PAGE_KERNEL_EXEC属性，
+				   如果不是，则加个PAGE_KERNEL属性
+				*/
 				pgprot_t prot = PAGE_KERNEL;
 				/*
 				 * first pass will use the same initial
@@ -785,7 +836,18 @@ void __init paging_init(void)
 {
 	pagetable_init();
 
-	/* 刷新TLB缓存 */
+	/* 刷新TLB缓存
+
+	   将控制swapper_pg_dir送入控制寄存器cr3. 
+	   每当重新设置cr3时，CPU就会将页面映射目录所在的页面装入CPU内部高速缓存中的TLB部分. 
+	   现在内存中(实际上是高速缓存中)的映射目录变了，就要再让CPU装入一次。
+	   由于页面映射机制本来就是开启着的，
+	   所以从这条指令以后就扩大了系统空间中有映射区域的大小, 
+	   使整个映射覆盖到整个物理内存(高端内存)除外. 
+	   实际上此时swapper_pg_dir中已经改变的目录项很可能还在高速缓存中，
+	   所以还要通过__flush_tlb_all()将高速缓存中的内容冲刷到内存中，
+	   这样才能保证内存中映射目录内容的一致性。
+	*/
 	__flush_tlb_all();
 
 	kmap_init();

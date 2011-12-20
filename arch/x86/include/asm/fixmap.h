@@ -70,6 +70,21 @@ extern unsigned long __FIXADDR_TOP;
  * TLB entries of such buffers will not be flushed across
  * task switches.
  */
+/*
+    虚拟地址
+    ------------------------ <- 0xffffffff
+    4KB
+    ------------------------ <- FIX_HOLE = FIXADDR_TOP(0xfffff000)
+    4KB * FIX_VDSO
+    ------------------------ <- FIX_VDSO
+    4KB * FIX_DBGP_BASE
+    ------------------------ <- FIX_DBGP_BASE
+    4KB *
+    ------------------------ <- FIX_EARLYCON_MEM_BASE
+    4KB * ...
+    ------------------------ <- ...
+
+*/
 enum fixed_addresses {
 #ifdef CONFIG_X86_32
 	FIX_HOLE,
@@ -218,6 +233,9 @@ extern void __this_fixmap_does_not_exist(void);
  * directly without translation, we catch the bug with a NULL-deference
  * kernel oops. Illegal ranges of incoming indices are caught too.
  */
+/*
+根据枚举值fixed_addresses取得其专用页面映射区的地址
+*/
 static __always_inline unsigned long fix_to_virt(const unsigned int idx)
 {
 	/*
@@ -229,6 +247,13 @@ static __always_inline unsigned long fix_to_virt(const unsigned int idx)
 	 * If it doesn't get removed, the linker will complain
 	 * loudly with a reasonably clear error message..
 	 */
+	/* 没有实现的函数，走到这里就出错
+	   因为idx和__end_of_fixed_addresses都是编译时常量
+	   idx正确的时候，判断总是为假的
+	   因此__this_fixmap_does_not_exist()在编译时会被优化掉
+	   如果idx不合法，则连接的时候找不到__this_fixmap_does_not_exist()
+	   编译器便会报错
+	*/
 	if (idx >= __end_of_fixed_addresses)
 		__this_fixmap_does_not_exist();
 

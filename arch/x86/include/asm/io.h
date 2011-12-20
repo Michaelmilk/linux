@@ -126,6 +126,11 @@ static inline phys_addr_t virt_to_phys(volatile void *address)
  *	this function
  */
 
+/*
+物理地址到虚拟空间地址的映射
+对于小于896MB的内存来说
+就是加上一个3GB的偏移
+*/
 static inline void *phys_to_virt(phys_addr_t address)
 {
 	return __va(address);
@@ -179,6 +184,9 @@ extern void __iomem *ioremap_prot(resource_size_t offset, unsigned long size,
 /*
  * The default ioremap() behavior is non-cached:
  */
+/*
+实现了硬件物理地址与内存虚拟地址之间的映射
+*/
 static inline void __iomem *ioremap(resource_size_t offset, unsigned long size)
 {
 	return ioremap_nocache(offset, size);
@@ -343,6 +351,7 @@ extern bool xen_biovec_phys_mergeable(const struct bio_vec *vec1,
 	 (!xen_domain() || xen_biovec_phys_mergeable(vec1, vec2)))
 #endif	/* CONFIG_XEN */
 
+/* 64KB-1 */
 #define IO_SPACE_LIMIT 0xffff
 
 #endif /* _ASM_X86_IO_H */

@@ -43,6 +43,14 @@ unsigned long __must_check __copy_from_user_ll_nocache_nozero
 static __always_inline unsigned long __must_check
 __copy_to_user_inatomic(void __user *to, const void *from, unsigned long n)
 {
+	/* 其中__builtin_constant_p(n)为gcc的内建函数，
+	   __builtin_constant_p用于判断一个值是否为编译时常数，
+	   如果参数n的值为常数，函数返回1，否则返回0。
+	   很多计算或操作在参数为常数时有更优化的实现，
+	   在GNU C中用上面的方法可以根据参数是否为常数，
+	   只编译常数版本或非常数版本，这样既不失通用性，
+	   又能在参数是常数时编译出最优化的代码。
+	*/
 	if (__builtin_constant_p(n)) {
 		unsigned long ret;
 

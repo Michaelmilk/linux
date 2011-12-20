@@ -23,7 +23,13 @@
 
 #define MAKE_MM_SEG(s)	((mm_segment_t) { (s) })
 
+/*
+内核空间虚拟地址上限
+*/
 #define KERNEL_DS	MAKE_MM_SEG(-1UL)
+/*
+用户空间虚拟地址上限
+*/
 #define USER_DS 	MAKE_MM_SEG(TASK_SIZE_MAX)
 
 #define get_ds()	(KERNEL_DS)
@@ -76,6 +82,10 @@
  * checks that the pointer is in the user space range - after calling
  * this function, memory access functions may still return -EFAULT.
  */
+/*
+检查@addr~(@addr+@size)之间的地址是否在用户地址空间
+是则返回true，不是则返回false
+*/
 #define access_ok(type, addr, size) (likely(__range_not_ok(addr, size) == 0))
 
 /*
@@ -350,6 +360,11 @@ do {									\
 	 __get_user_asm_ex(x, ptr, "q", "", "=r")
 #endif
 
+/*
+@x      : 保存用户空间地址@ptr处取到的值
+@ptr    : 用户空间地址
+@size   : 要取的@ptr处值占的字节数
+*/
 #define __get_user_size(x, ptr, size, retval, errret)			\
 do {									\
 	retval = 0;							\
@@ -418,6 +433,11 @@ do {									\
 	__pu_err;						\
 })
 
+/*
+@x      : 保存用户空间地址@ptr处取到的值
+@ptr    : 用户空间地址
+@size   : 要取的@ptr处值占的字节数
+*/
 #define __get_user_nocheck(x, ptr, size)				\
 ({									\
 	int __gu_err;							\
@@ -487,6 +507,10 @@ struct __large_struct { unsigned long buf[100]; };
  * On error, the variable @x is set to zero.
  */
 
+/*
+@x      : 保存用户空间地址@ptr处取到的值
+@ptr    : 用户空间地址
+*/
 #define __get_user(x, ptr)						\
 	__get_user_nocheck((x), (ptr), sizeof(*(ptr)))
 

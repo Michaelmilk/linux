@@ -2315,6 +2315,9 @@ EXPORT_SYMBOL(__alloc_pages_nodemask);
 /*
  * Common helper functions.
  */
+/*
+返回请求到的页面的内核空间虚拟地址
+*/
 unsigned long __get_free_pages(gfp_t gfp_mask, unsigned int order)
 {
 	struct page *page;
@@ -2332,6 +2335,7 @@ unsigned long __get_free_pages(gfp_t gfp_mask, unsigned int order)
 }
 EXPORT_SYMBOL(__get_free_pages);
 
+/* 获得填充为0的页 */
 unsigned long get_zeroed_page(gfp_t gfp_mask)
 {
 	return __get_free_pages(gfp_mask | __GFP_ZERO, 0);
