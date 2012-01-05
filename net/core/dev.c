@@ -5525,6 +5525,8 @@ static int dev_new_index(struct net *net)
 	for (;;) {
 		if (++ifindex <= 0)
 			ifindex = 1;
+		/* 这里只判断了命名空间@net下是否有重复，当ifindex回绕后
+		   全局便不再唯一了 */
 		if (!__dev_get_by_index(net, ifindex))
 			return ifindex;
 	}
