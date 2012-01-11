@@ -91,6 +91,12 @@ extern void __xadd_wrong_size(void)
  * store NEW in MEM.  Return the initial value in MEM.  Success is
  * indicated by comparing RETURN with OLD.
  */
+/*
+原子的比较与交换
+把@old值与内存中的值比较，如果一样，则将@new值保存到内存中
+返回原来内存中的值
+将返回值与@old值进行比较，可以知道是否交换成功
+*/
 #define __raw_cmpxchg(ptr, old, new, size, lock)			\
 ({									\
 	__typeof__(*(ptr)) __ret;					\
