@@ -137,16 +137,22 @@ struct sock_common {
 		unsigned int	skc_hash;
 		__u16		skc_u16hashes[2];
 	};
+	/* 协议族 */
 	unsigned short		skc_family;
+	/* 连接状态 */
 	volatile unsigned char	skc_state;
+	/* 是否复用 */
 	unsigned char		skc_reuse;
+	/* 绑定的设备id */
 	int			skc_bound_dev_if;
 	union {
 		struct hlist_node	skc_bind_node;
 		struct hlist_nulls_node skc_portaddr_node;
 	};
+	/* 协议函数指针表，例如tcp_prot udp_prot */
 	struct proto		*skc_prot;
 #ifdef CONFIG_NET_NS
+	/* 所属的网络命名空间 */
 	struct net	 	*skc_net;
 #endif
 	/*
@@ -160,7 +166,9 @@ struct sock_common {
 		struct hlist_node	skc_node;
 		struct hlist_nulls_node skc_nulls_node;
 	};
+	/* 发送队列映射 */
 	int			skc_tx_queue_mapping;
+	/* 引用计数 */
 	atomic_t		skc_refcnt;
 	/* private: */
 	int                     skc_dontcopy_end[0];
@@ -240,6 +248,9 @@ struct sock {
 	 * Now struct inet_timewait_sock also uses sock_common, so please just
 	 * don't add nothing before this first member (__sk_common) --acme
 	 */
+	/* 结构inet_timewait_sock也使用第一项内嵌的结构sock_common
+	   所以不能在__sk_common前加其他成员
+	*/
 	struct sock_common	__sk_common;
 #define sk_node			__sk_common.skc_node
 #define sk_nulls_node		__sk_common.skc_nulls_node
@@ -275,7 +286,9 @@ struct sock {
 	struct {
 		atomic_t	rmem_alloc;
 		int		len;
+		/* 指向链表的头节点 */
 		struct sk_buff	*head;
+		/* 指向链表的尾节点 */
 		struct sk_buff	*tail;
 	} sk_backlog;
 #define sk_rmem_alloc sk_backlog.rmem_alloc
@@ -284,6 +297,7 @@ struct sock {
 	__u32			sk_rxhash;
 #endif
 	atomic_t		sk_drops;
+	/* 接收缓冲的大小，字节单位 */
 	int			sk_rcvbuf;
 
 	struct sk_filter __rcu	*sk_filter;
@@ -297,17 +311,24 @@ struct sock {
 	struct xfrm_policy	*sk_policy[2];
 #endif
 	unsigned long 		sk_flags;
+	/* 路由项缓存 */
 	struct dst_entry	*sk_dst_cache;
+	/* 路由项缓存锁 */
 	spinlock_t		sk_dst_lock;
+	/* 发送队列大小，字节单位 */
 	atomic_t		sk_wmem_alloc;
+	/* 可选内存大小，option memory block，字节单位 */
 	atomic_t		sk_omem_alloc;
+	/* 发送缓冲大小，字节单位 */
 	int			sk_sndbuf;
 	struct sk_buff_head	sk_write_queue;
 	kmemcheck_bitfield_begin(flags);
 	unsigned int		sk_shutdown  : 2,
 				sk_no_check  : 2,
 				sk_userlocks : 4,
+				/* 协议族中的协议，例如AF_INET族中的IPPROTO_TCP */
 				sk_protocol  : 8,
+				/* socket类型，例如SOCK_STREAM等 */
 				sk_type      : 16;
 	kmemcheck_bitfield_end(flags);
 	int			sk_wmem_queued;
@@ -323,21 +344,28 @@ struct sock {
 	rwlock_t		sk_callback_lock;
 	int			sk_err,
 				sk_err_soft;
+	/* 当前监听的数目 */
 	unsigned short		sk_ack_backlog;
+	/* 通过listen()函数设置的最大监听数量，比如inet_listen()函数中进行设置 */
 	unsigned short		sk_max_ack_backlog;
 	__u32			sk_priority;
 	struct pid		*sk_peer_pid;
 	const struct cred	*sk_peer_cred;
+	/* setsockopt使用SO_RCVTIMEO设置接收超时时间 */
 	long			sk_rcvtimeo;
+	/* SO_SNDTIMEO设置发送超时时间 */
 	long			sk_sndtimeo;
 	void			*sk_protinfo;
+	/* sock刷新定时器 */
 	struct timer_list	sk_timer;
+	/* 最后接收数据包的时间戳 */
 	ktime_t			sk_stamp;
 	struct socket		*sk_socket;
 	void			*sk_user_data;
 	struct page		*sk_sndmsg_page;
 	struct sk_buff		*sk_send_head;
 	__u32			sk_sndmsg_off;
+	/* 等待发送的报文数量 */
 	int			sk_write_pending;
 #ifdef CONFIG_SECURITY
 	void			*sk_security;
@@ -816,6 +844,7 @@ struct proto {
 	int			max_header;
 	bool			no_autobind;
 
+	/* slab缓存，在函数proto_register()中建立 */
 	struct kmem_cache	*slab;
 	unsigned int		obj_size;
 	int			slab_flags;
@@ -933,8 +962,13 @@ static inline struct kiocb *siocb_to_kiocb(struct sock_iocb *si)
 	return si->kiocb;
 }
 
+/*
+封装socket结构和文件系统的inode结构
+*/
 struct socket_alloc {
+	/* socket结构 */
 	struct socket socket;
+	/* inode结构 */
 	struct inode vfs_inode;
 };
 

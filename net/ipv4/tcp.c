@@ -296,6 +296,9 @@ EXPORT_SYMBOL(tcp_memory_allocated);
 /*
  * Current number of TCP sockets.
  */
+/*
+当前tcp套接字的数量
+*/
 struct percpu_counter tcp_sockets_allocated;
 EXPORT_SYMBOL(tcp_sockets_allocated);
 
@@ -3212,6 +3215,9 @@ static int __init set_thash_entries(char *str)
 }
 __setup("thash_entries=", set_thash_entries);
 
+/*
+inet_init()中调用
+*/
 void __init tcp_init(void)
 {
 	struct sk_buff *skb = NULL;

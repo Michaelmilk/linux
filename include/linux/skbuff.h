@@ -606,7 +606,14 @@ struct sk_buff {
  * skb might have a dst pointer attached, refcounted or not.
  * _skb_refdst low order bit is set if refcount was _not_ taken
  */
+/*
+指针都是4字节对齐的，低2个bit为0
+引用dst指针的时候，在最低bit标记是否增加了dst的引用计数
+*/
 #define SKB_DST_NOREF	1UL
+/*
+掩码用来去掉最低bit的标志位
+*/
 #define SKB_DST_PTRMASK	~(SKB_DST_NOREF)
 
 /**
@@ -620,9 +627,11 @@ static inline struct dst_entry *skb_dst(const struct sk_buff *skb)
 	/* If refdst was not refcounted, check we still are in a 
 	 * rcu_read_lock section
 	 */
+	/* 如果引用dst没有增加其引用计数，则需要使用dst指针时处于rcu所上下文 */
 	WARN_ON((skb->_skb_refdst & SKB_DST_NOREF) &&
 		!rcu_read_lock_held() &&
 		!rcu_read_lock_bh_held());
+	/* 掩掉bit标记位，返回指针 */
 	return (struct dst_entry *)(skb->_skb_refdst & SKB_DST_PTRMASK);
 }
 
@@ -652,6 +661,8 @@ static inline bool skb_dst_is_noref(const struct sk_buff *skb)
 
 static inline struct rtable *skb_rtable(const struct sk_buff *skb)
 {
+	/* 取skb的dst指针，该结构是内嵌在struct rtable结构中的第一个成员
+	   强制转换为struct rtable指针 */
 	return (struct rtable *)skb_dst(skb);
 }
 

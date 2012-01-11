@@ -88,8 +88,18 @@ EXPORT_SYMBOL_GPL(inet_csk_bind_conflict);
 /* Obtain a reference to a local port for the given sock,
  * if snum is zero it means select any available local port.
  */
+/*
+csk	: inet_connection_sock
+
+@sk	:
+@snum	: 端口号，0的话表示由内核分配一个可用的端口
+*/
 int inet_csk_get_port(struct sock *sk, unsigned short snum)
 {
+	/* tcp_prot中初始化为全局变量tcp_hashinfo
+	   udp_prot中初始化为全局变量udp_table
+	   raw_prot中初始化为全局变量raw_v4_hashinfo
+	*/
 	struct inet_hashinfo *hashinfo = sk->sk_prot->h.hashinfo;
 	struct inet_bind_hashbucket *head;
 	struct hlist_node *node;
@@ -99,23 +109,32 @@ int inet_csk_get_port(struct sock *sk, unsigned short snum)
 	int smallest_size = -1, smallest_rover;
 
 	local_bh_disable();
+	/* 没有指定端口号 */
 	if (!snum) {
 		int remaining, rover, low, high;
 
 again:
+		/* 端口范围 */
 		inet_get_local_port_range(&low, &high);
+		/* 剩余端口个数 */
 		remaining = (high - low) + 1;
+		/* 随机端口号 */
 		smallest_rover = rover = net_random() % remaining + low;
 
 		smallest_size = -1;
 		do {
+			/* 是预留端口，则换一个 */
 			if (inet_is_reserved_local_port(rover))
 				goto next_nolock;
+			/* 取哈希表的桶头 */
 			head = &hashinfo->bhash[inet_bhashfn(net, rover,
 					hashinfo->bhash_size)];
 			spin_lock(&head->lock);
+			/* 遍历桶下的链表 */
 			inet_bind_bucket_for_each(tb, node, &head->chain)
+				/* 相同的端口号已经存在链表中 */
 				if (net_eq(ib_net(tb), net) && tb->port == rover) {
+					/* 检查是否可以重用 */
 					if (tb->fastreuse > 0 &&
 					    sk->sk_reuse &&
 					    sk->sk_state != TCP_LISTEN &&
@@ -125,17 +144,22 @@ again:
 						if (atomic_read(&hashinfo->bsockets) > (high - low) + 1) {
 							spin_unlock(&head->lock);
 							snum = smallest_rover;
+							/* 找到可用端口 */
 							goto have_snum;
 						}
 					}
+					/* 换一个端口 */
 					goto next;
 				}
+			/* rover端口号可用，break */
 			break;
 		next:
 			spin_unlock(&head->lock);
 		next_nolock:
+			/* 回绕 */
 			if (++rover > high)
 				rover = low;
+		/* 循环尝试直到剩余个数用完 */
 		} while (--remaining > 0);
 
 		/* Exhausted local port range during search?  It is not
@@ -145,6 +169,7 @@ again:
 		 * the top level, not from the 'break;' statement.
 		 */
 		ret = 1;
+		/* 没有可用端口号 */
 		if (remaining <= 0) {
 			if (smallest_size != -1) {
 				snum = smallest_rover;
@@ -157,6 +182,7 @@ again:
 		 */
 		snum = rover;
 	} else {
+/* 指定或找到端口号 */
 have_snum:
 		head = &hashinfo->bhash[inet_bhashfn(net, snum,
 				hashinfo->bhash_size)];

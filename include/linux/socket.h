@@ -4,15 +4,23 @@
 /*
  * Desired design of maximum size and alignment (see RFC2553)
  */
+/*
+socket地址最大128字节
+*/
 #define _K_SS_MAXSIZE	128	/* Implementation specific max size */
+/*
+按照结构struct sockaddr的大小对齐，即16字节
+*/
 #define _K_SS_ALIGNSIZE	(__alignof__ (struct sockaddr *))
 				/* Implementation specific desired alignment */
 
 typedef unsigned short __kernel_sa_family_t;
 
 struct __kernel_sockaddr_storage {
+	/* 地址族 */
 	__kernel_sa_family_t	ss_family;		/* address family */
 	/* Following field(s) are implementation specific */
+	/* 剩下的字段126字节，内容依赖具体的实现 */
 	char		__data[_K_SS_MAXSIZE - sizeof(unsigned short)];
 				/* space to achieve desired size, */
 				/* _SS_MAXSIZE value minus size of ss_family */
@@ -53,6 +61,9 @@ struct linger {
 	int		l_linger;	/* How long to linger for	*/
 };
 
+/*
+保存socket地址的结构类型
+*/
 #define sockaddr_storage __kernel_sockaddr_storage
 
 /*

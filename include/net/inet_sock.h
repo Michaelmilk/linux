@@ -147,10 +147,14 @@ struct inet_sock {
 #define inet_rcv_saddr		sk.__sk_common.skc_rcv_saddr
 
 	__be16			inet_dport;
+	/* L4协议号，例如IPPROTO_TCP
+	   另参考inet_bind()函数
+	*/
 	__u16			inet_num;
 	__be32			inet_saddr;
 	__s16			uc_ttl;
 	__u16			cmsg_flags;
+	/* 本地源端口号 */
 	__be16			inet_sport;
 	__u16			inet_id;
 

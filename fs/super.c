@@ -1073,7 +1073,7 @@ struct dentry *mount_single(struct file_system_type *fs_type,
 EXPORT_SYMBOL(mount_single);
 
 /*
-@type	:
+@type	: 文件系统类型
 @flags	:
 @name	: 设备名称，例如/dev/dsk/hda1
 @data	:
@@ -1097,7 +1097,9 @@ mount_fs(struct file_system_type *type, int flags, const char *name, void *data)
 	}
 
 	/* 调用文件系统的mount函数
-	   例如ext3_fs_type文件系统的ext3_mount()函数 */
+	   例如ext3_fs_type文件系统的ext3_mount()函数
+	   sock_fs_type => sockfs_mount()
+	*/
 	root = type->mount(type, flags, name, data);
 	if (IS_ERR(root)) {
 		error = PTR_ERR(root);

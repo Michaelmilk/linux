@@ -80,9 +80,12 @@ struct inet_protosw {
 	struct list_head list;
 
         /* These two fields form the lookup key.  */
+	/* socket系统调用的第2个参数，套接字类型，例如SOCK_STREAM */
 	unsigned short	 type;	   /* This is the 2nd argument to socket(2). */
+	/* 第4层协议号，例如IPPROTO_TCP */
 	unsigned short	 protocol; /* This is the L4 protocol number.  */
 
+	/* 指向对应的4层协议操作函数表，例如tcp_prot */
 	struct proto	 *prot;
 	const struct proto_ops *ops;
   

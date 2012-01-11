@@ -271,15 +271,20 @@ struct rt_hash_bucket {
 static spinlock_t	*rt_hash_locks;
 # define rt_hash_lock_addr(slot) &rt_hash_locks[(slot) & (RT_HASH_LOCK_SZ - 1)]
 
+/*
+申请哈希表rt_hash_table的桶锁，并初始化
+*/
 static __init void rt_hash_lock_init(void)
 {
 	int i;
 
+	/* 申请自旋锁空间 */
 	rt_hash_locks = kmalloc(sizeof(spinlock_t) * RT_HASH_LOCK_SZ,
 			GFP_KERNEL);
 	if (!rt_hash_locks)
 		panic("IP: failed to allocate rt_hash_locks\n");
 
+	/* 初始化自旋锁 */
 	for (i = 0; i < RT_HASH_LOCK_SZ; i++)
 		spin_lock_init(&rt_hash_locks[i]);
 }
@@ -291,13 +296,28 @@ static inline void rt_hash_lock_init(void)
 }
 #endif
 
+/*
+哈希表桶头
+*/
 static struct rt_hash_bucket 	*rt_hash_table __read_mostly;
+/*
+哈希表个数的掩码
+*/
 static unsigned			rt_hash_mask __read_mostly;
+/*
+哈希表桶个数2的幂次
+*/
 static unsigned int		rt_hash_log  __read_mostly;
 
 static DEFINE_PER_CPU(struct rt_cache_stat, rt_cache_stat);
 #define RT_CACHE_STAT_INC(field) __this_cpu_inc(rt_cache_stat.field)
 
+/*
+@daddr	: 目的ip
+@saddr	: 源ip
+@idx	: 接口索引ifindex
+@genid	:
+*/
 static inline unsigned int rt_hash(__be32 daddr, __be32 saddr, int idx,
 				   int genid)
 {
@@ -2347,6 +2367,14 @@ martian_source_keep_err:
 	goto out;
 }
 
+/*
+@skb	:
+@daddr	: 目的ip
+@saddr	: 源ip
+@tos	: 服务类型
+@dev	: 收到此报文的接口
+@noref	: 是否增加
+*/
 int ip_route_input_common(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 			   u8 tos, struct net_device *dev, bool noref)
 {
@@ -2364,16 +2392,24 @@ int ip_route_input_common(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 		goto skip_cache;
 
 	tos &= IPTOS_RT_MASK;
+	/* 计算哈希值 */
 	hash = rt_hash(daddr, saddr, iif, rt_genid(net));
 
+	/* 遍历对应哈希桶下的链 */
 	for (rth = rcu_dereference(rt_hash_table[hash].chain); rth;
 	     rth = rcu_dereference(rth->dst.rt_next)) {
+			/* 目的ip */
 		if ((((__force u32)rth->rt_key_dst ^ (__force u32)daddr) |
+			/* 源ip */
 		     ((__force u32)rth->rt_key_src ^ (__force u32)saddr) |
+			/* 同一个接口 */
 		     (rth->rt_route_iif ^ iif) |
+			/* 服务类型 */
 		     (rth->rt_key_tos ^ tos)) == 0 &&
 		    rth->rt_mark == skb->mark &&
+			/* net命名空间 */
 		    net_eq(dev_net(rth->dst.dev), net) &&
+			/* 路由项还未超时 */
 		    !rt_is_expired(rth)) {
 			ipv4_validate_peer(rth);
 			if (noref) {
@@ -3357,6 +3393,7 @@ int __init ip_rt_init(void)
 		panic("IP: failed to allocate ip_rt_acct\n");
 #endif
 
+	/* 缓存分配的大小为struct rtable结构 */
 	ipv4_dst_ops.kmem_cachep =
 		kmem_cache_create("ip_dst_cache", sizeof(struct rtable), 0,
 				  SLAB_HWCACHE_ALIGN|SLAB_PANIC, NULL);
@@ -3369,6 +3406,7 @@ int __init ip_rt_init(void)
 	if (dst_entries_init(&ipv4_dst_blackhole_ops) < 0)
 		panic("IP: failed to allocate ipv4_dst_blackhole_ops counter\n");
 
+	/* 分配哈希表的桶头 */
 	rt_hash_table = (struct rt_hash_bucket *)
 		alloc_large_system_hash("IP route cache",
 					sizeof(struct rt_hash_bucket),
@@ -3379,10 +3417,13 @@ int __init ip_rt_init(void)
 					&rt_hash_log,
 					&rt_hash_mask,
 					rhash_entries ? 0 : 512 * 1024);
+	/* 初始化为0 */
 	memset(rt_hash_table, 0, (rt_hash_mask + 1) * sizeof(struct rt_hash_bucket));
+	/* 申请哈希表rt_hash_table的桶锁，并初始化 */
 	rt_hash_lock_init();
 
 	ipv4_dst_ops.gc_thresh = (rt_hash_mask + 1);
+	/* 最多每个桶下16个节点 */
 	ip_rt_max_size = (rt_hash_mask + 1) * 16;
 
 	devinet_init();

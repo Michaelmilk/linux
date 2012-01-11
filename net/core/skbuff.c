@@ -3114,11 +3114,13 @@ EXPORT_SYMBOL_GPL(skb_gro_receive);
 
 void __init skb_init(void)
 {
+	/* 建立skb缓存 */
 	skbuff_head_cache = kmem_cache_create("skbuff_head_cache",
 					      sizeof(struct sk_buff),
 					      0,
 					      SLAB_HWCACHE_ALIGN|SLAB_PANIC,
 					      NULL);
+	/* 连续2个skb的缓存，用于快速clone的时候选择skb */
 	skbuff_fclone_cache = kmem_cache_create("skbuff_fclone_cache",
 						(2*sizeof(struct sk_buff)) +
 						sizeof(atomic_t),

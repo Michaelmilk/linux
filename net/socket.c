@@ -132,6 +132,9 @@ static ssize_t sock_splice_read(struct file *file, loff_t *ppos,
  *	in the operation structures but are done directly via the socketcall() multiplexor.
  */
 
+/*
+在sock_alloc_file()中赋给新建立的套接字
+*/
 static const struct file_operations socket_file_ops = {
 	.owner =	THIS_MODULE,
 	.llseek =	no_llseek,
@@ -187,10 +190,12 @@ static DEFINE_PER_CPU(int, sockets_in_use);
 
 int move_addr_to_kernel(void __user *uaddr, int ulen, struct sockaddr *kaddr)
 {
+	/* 检查用户层传递来的大小 */
 	if (ulen < 0 || ulen > sizeof(struct sockaddr_storage))
 		return -EINVAL;
 	if (ulen == 0)
 		return 0;
+	/* 将用户空间的地址复制到内核空间 */
 	if (copy_from_user(kaddr, uaddr, ulen))
 		return -EFAULT;
 	return audit_sockaddr(ulen, kaddr);
@@ -241,11 +246,15 @@ static int move_addr_to_user(struct sockaddr *kaddr, int klen,
 
 static struct kmem_cache *sock_inode_cachep __read_mostly;
 
+/*
+socket超级块操作函数sockfs_ops的alloc_inode函数指针所指函数
+*/
 static struct inode *sock_alloc_inode(struct super_block *sb)
 {
 	struct socket_alloc *ei;
 	struct socket_wq *wq;
 
+	/* 从slab高速缓存中分配结构socket_alloc实例 */
 	ei = kmem_cache_alloc(sock_inode_cachep, GFP_KERNEL);
 	if (!ei)
 		return NULL;
@@ -254,6 +263,7 @@ static struct inode *sock_alloc_inode(struct super_block *sb)
 		kmem_cache_free(sock_inode_cachep, ei);
 		return NULL;
 	}
+	/* 初始化等待队列头 */
 	init_waitqueue_head(&wq->wait);
 	wq->fasync_list = NULL;
 	RCU_INIT_POINTER(ei->socket.wq, wq);
@@ -264,6 +274,7 @@ static struct inode *sock_alloc_inode(struct super_block *sb)
 	ei->socket.sk = NULL;
 	ei->socket.file = NULL;
 
+	/* 返回内嵌的inode结构的指针 */
 	return &ei->vfs_inode;
 }
 
@@ -287,6 +298,7 @@ static void init_once(void *foo)
 
 static int init_inodecache(void)
 {
+	/* 建立socket inode缓存 */
 	sock_inode_cachep = kmem_cache_create("sock_inode_cache",
 					      sizeof(struct socket_alloc),
 					      0,
@@ -325,6 +337,9 @@ static struct dentry *sockfs_mount(struct file_system_type *fs_type,
 		&sockfs_dentry_operations, SOCKFS_MAGIC);
 }
 
+/*
+套接字文件系统挂载点
+*/
 static struct vfsmount *sock_mnt __read_mostly;
 
 static struct file_system_type sock_fs_type = {
@@ -357,10 +372,12 @@ static int sock_alloc_file(struct socket *sock, struct file **f, int flags)
 	struct file *file;
 	int fd;
 
+	/* 获取一个未使用的文件描述符 */
 	fd = get_unused_fd_flags(flags);
 	if (unlikely(fd < 0))
 		return fd;
 
+	/* 创建套接字文件系统目录项 */
 	path.dentry = d_alloc_pseudo(sock_mnt->mnt_sb, &name);
 	if (unlikely(!path.dentry)) {
 		put_unused_fd(fd);
@@ -369,8 +386,10 @@ static int sock_alloc_file(struct socket *sock, struct file **f, int flags)
 	path.mnt = mntget(sock_mnt);
 
 	d_instantiate(path.dentry, SOCK_INODE(sock));
+	/* 套接字文件的操作函数表 */
 	SOCK_INODE(sock)->i_fop = &socket_file_ops;
 
+	/* 分配file结构实例 */
 	file = alloc_file(&path, FMODE_READ | FMODE_WRITE,
 		  &socket_file_ops);
 	if (unlikely(!file)) {
@@ -381,18 +400,28 @@ static int sock_alloc_file(struct socket *sock, struct file **f, int flags)
 		return -ENFILE;
 	}
 
+	/* 记录file文件 */
 	sock->file = file;
 	file->f_flags = O_RDWR | (flags & O_NONBLOCK);
 	file->f_pos = 0;
+	/* 私有数据字段
+	   通过虚拟文件系统便可以找到对应的套接字结构
+	*/
 	file->private_data = sock;
 
+	/* 记录创建的file结构实例 */
 	*f = file;
+	/* 返回文件描述符 */
 	return fd;
 }
 
+/*
+将套接字与虚拟文件系统建立对应关系
+*/
 int sock_map_fd(struct socket *sock, int flags)
 {
 	struct file *newfile;
+	/* 创建文件描述符和file结构实例 */
 	int fd = sock_alloc_file(sock, &newfile, flags);
 
 	if (likely(fd >= 0))
@@ -404,7 +433,9 @@ EXPORT_SYMBOL(sock_map_fd);
 
 static struct socket *sock_from_file(struct file *file, int *err)
 {
+	/* file的操作函数指针是套接字文件操作指针 */
 	if (file->f_op == &socket_file_ops)
+		/* 返回私有字段数据，在函数sock_alloc_file()中赋值 */
 		return file->private_data;	/* set in sock_map_fd */
 
 	*err = -ENOTSOCK;
@@ -442,14 +473,19 @@ struct socket *sockfd_lookup(int fd, int *err)
 }
 EXPORT_SYMBOL(sockfd_lookup);
 
+/*
+从文件描述符@fd取得其对应的socket结构
+*/
 static struct socket *sockfd_lookup_light(int fd, int *err, int *fput_needed)
 {
 	struct file *file;
 	struct socket *sock;
 
 	*err = -EBADF;
+	/* 根据文件描述符取得对应的file结构 */
 	file = fget_light(fd, fput_needed);
 	if (file) {
+		/* 从虚拟文件系统的file结构得到对应的套接字结构 */
 		sock = sock_from_file(file, err);
 		if (sock)
 			return sock;
@@ -471,10 +507,16 @@ static struct socket *sock_alloc(void)
 	struct inode *inode;
 	struct socket *sock;
 
+	/* 调用socket超级块操作函数sockfs_ops的alloc_inode函数指针
+	   即函数sock_alloc_inode()分配inode节点
+	*/
 	inode = new_inode_pseudo(sock_mnt->mnt_sb);
 	if (!inode)
 		return NULL;
 
+	/* inode指针指向分配的结构socket_alloc实例成员vfs_inode
+	   取得其对应的socket结构实例
+	*/
 	sock = SOCKET_I(inode);
 
 	kmemcheck_annotate_bitfield(sock, type);
@@ -1184,6 +1226,14 @@ call_kill:
 }
 EXPORT_SYMBOL(sock_wake_async);
 
+/*
+@net		: 网络命名空间
+@family		: 协议族，例如PF_INET
+@type		: 套接字类型，例如流套接字SOCK_STREAM
+@protocol	: 应用程序使用的第4层通信协议，例如IPPROTO_TCP
+@res		: 保存返回值
+@kern		: 0表示应用程序使用socket系统调用，1表示内核中调用
+*/
 int __sock_create(struct net *net, int family, int type, int protocol,
 			 struct socket **res, int kern)
 {
@@ -1194,8 +1244,10 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 	/*
 	 *      Check protocol is in range
 	 */
+	/* 检查协议族 */
 	if (family < 0 || family >= NPROTO)
 		return -EAFNOSUPPORT;
+	/* 检查套接字类型 */
 	if (type < 0 || type >= SOCK_MAX)
 		return -EINVAL;
 
@@ -1223,6 +1275,7 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 	 *	the protocol is 0, the family is instructed to select an appropriate
 	 *	default.
 	 */
+	/* 申请socket结构空间 */
 	sock = sock_alloc();
 	if (!sock) {
 		if (net_ratelimit())
@@ -1231,6 +1284,7 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 				   closest posix thing */
 	}
 
+	/* 记录套接字类型 */
 	sock->type = type;
 
 #ifdef CONFIG_MODULES
@@ -1240,11 +1294,14 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 	 * requested real, full-featured networking support upon configuration.
 	 * Otherwise module support will break!
 	 */
+	/* 检查对应的协议族是否已经使用sock_register()注册 */
 	if (rcu_access_pointer(net_families[family]) == NULL)
+		/* 如果对应协议族没有注册，则尝试加载协议模块 */
 		request_module("net-pf-%d", family);
 #endif
 
 	rcu_read_lock();
+	/* 取对应的协议族操作函数，例如inet_family_ops */
 	pf = rcu_dereference(net_families[family]);
 	err = -EAFNOSUPPORT;
 	if (!pf)
@@ -1284,6 +1341,7 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 	err = security_socket_post_create(sock, family, type, protocol, kern);
 	if (err)
 		goto out_sock_release;
+	/* 返回创建的socket结构实例指针 */
 	*res = sock;
 
 	return 0;
@@ -1315,6 +1373,15 @@ int sock_create_kern(int family, int type, int protocol, struct socket **res)
 }
 EXPORT_SYMBOL(sock_create_kern);
 
+/*
+sys_socket系统调用
+
+返回值为int型
+
+@family		: 协议族，例如PF_INET
+@type		: 套接字类型，例如流套接字SOCK_STREAM
+@protocol	: 应用程序使用的第4层通信协议，例如IPPROTO_TCP
+*/
 SYSCALL_DEFINE3(socket, int, family, int, type, int, protocol)
 {
 	int retval;
@@ -1443,6 +1510,7 @@ SYSCALL_DEFINE3(bind, int, fd, struct sockaddr __user *, umyaddr, int, addrlen)
 	struct sockaddr_storage address;
 	int err, fput_needed;
 
+	/* 根据文件描述符查找对应的socket结构 */
 	sock = sockfd_lookup_light(fd, &err, &fput_needed);
 	if (sock) {
 		err = move_addr_to_kernel(umyaddr, addrlen, (struct sockaddr *)&address);
@@ -1451,6 +1519,9 @@ SYSCALL_DEFINE3(bind, int, fd, struct sockaddr __user *, umyaddr, int, addrlen)
 						   (struct sockaddr *)&address,
 						   addrlen);
 			if (!err)
+				/* 调用套接字的绑定函数
+				   例如tcp套接字inet_stream_ops的inet_bind()函数
+				*/
 				err = sock->ops->bind(sock,
 						      (struct sockaddr *)
 						      &address, addrlen);
@@ -2551,11 +2622,14 @@ static int __init sock_init(void)
 	 *      Initialize the protocols module.
 	 */
 
+	/* 建立socket inode缓存 */
 	init_inodecache();
 
+	/* 注册套接字文件系统 */
 	err = register_filesystem(&sock_fs_type);
 	if (err)
 		goto out_fs;
+	/* 挂载套接字文件系统 */
 	sock_mnt = kern_mount(&sock_fs_type);
 	if (IS_ERR(sock_mnt)) {
 		err = PTR_ERR(sock_mnt);

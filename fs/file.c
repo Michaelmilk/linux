@@ -452,6 +452,9 @@ struct files_struct init_files = {
 /*
  * allocate a file descriptor, mark it busy.
  */
+/*
+分配一个文件描述符
+*/
 int alloc_fd(unsigned start, unsigned flags)
 {
 	struct files_struct *files = current->files;

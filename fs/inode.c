@@ -215,9 +215,13 @@ static struct inode *alloc_inode(struct super_block *sb)
 {
 	struct inode *inode;
 
+	/* 如果超级块有alloc_inode函数实现，则调用
+	   例如sock_alloc_inode()函数
+	*/
 	if (sb->s_op->alloc_inode)
 		inode = sb->s_op->alloc_inode(sb);
 	else
+		/* 从slab高速缓存中分配struct inode实例 */
 		inode = kmem_cache_alloc(inode_cachep, GFP_KERNEL);
 
 	if (!inode)
@@ -826,6 +830,18 @@ EXPORT_SYMBOL(get_next_ino);
  *	- fs can't be unmount
  *	- quotas, fsnotify, writeback can't work
  */
+/*
+获取一个inode节点
+
+@sb	: 超级块
+
+从给定的超级块中分配一个inode节点
+
+节点不会链入超级块的s_inodes链表
+这意味着:
+文件系统不会被卸载
+配额，通知链，回写等都不起作用
+*/
 struct inode *new_inode_pseudo(struct super_block *sb)
 {
 	struct inode *inode = alloc_inode(sb);

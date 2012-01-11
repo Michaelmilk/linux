@@ -229,14 +229,20 @@ EXPORT_SYMBOL(inet_ehash_secret);
 /*
  * inet_ehash_secret must be set exactly once
  */
+/*
+inet_ehash_secret的值只能设置一次
+*/
 void build_ehash_secret(void)
 {
 	u32 rnd;
 
 	do {
+		/* 取一个随机值 */
 		get_random_bytes(&rnd, sizeof(rnd));
 	} while (rnd == 0);
 
+	/* 如果inet_ehash_secret原来的值是0，则将其置为rnd
+	   如果不是0，则还保持原来的值 */
 	cmpxchg(&inet_ehash_secret, 0, rnd);
 }
 EXPORT_SYMBOL(build_ehash_secret);
@@ -262,6 +268,16 @@ static inline int inet_netns_ok(struct net *net, int protocol)
  *	Create an inet socket.
  */
 
+/*
+创建一个套接字
+
+在__sock_create()中由函数指针pf->create()调用
+
+@net		: 网络命名空间
+@sock		: __sock_create()中申请的socket结构实例
+@protocol	: IPv4的第4层协议，例如IPPROTO_TCP
+@kern		: 0表示用户态应用程序创建，1表示内核中创建
+*/
 static int inet_create(struct net *net, struct socket *sock, int protocol,
 		       int kern)
 {
@@ -274,25 +290,33 @@ static int inet_create(struct net *net, struct socket *sock, int protocol,
 	int try_loading_module = 0;
 	int err;
 
+	/* 如果inet_ehash_secret为0，则初始化为一个随机值 */
 	if (unlikely(!inet_ehash_secret))
 		if (sock->type != SOCK_RAW && sock->type != SOCK_DGRAM)
 			build_ehash_secret();
 
+	/* 套接字状态置为未连接 */
 	sock->state = SS_UNCONNECTED;
 
 	/* Look for the requested type/protocol pair. */
 lookup_protocol:
 	err = -ESOCKTNOSUPPORT;
 	rcu_read_lock();
+	/* 参考inetsw_array[]数组 */
 	list_for_each_entry_rcu(answer, &inetsw[sock->type], list) {
 
 		err = 0;
 		/* Check the non-wild match. */
+		/* 协议号一致 */
 		if (protocol == answer->protocol) {
 			if (protocol != IPPROTO_IP)
 				break;
 		} else {
 			/* Check for the two wild cases. */
+			/* 检查两种通配情况
+			   例如socket系统调用第3个参数为0，套接字类型为SOCK_STREAM
+			   则protocol会置为IPPROTO_TCP
+			*/
 			if (IPPROTO_IP == protocol) {
 				protocol = answer->protocol;
 				break;
@@ -303,6 +327,7 @@ lookup_protocol:
 		err = -EPROTONOSUPPORT;
 	}
 
+	/* 如果出错，尝试加载对应协议族模块 */
 	if (unlikely(err)) {
 		if (try_loading_module < 2) {
 			rcu_read_unlock();
@@ -326,6 +351,7 @@ lookup_protocol:
 	}
 
 	err = -EPERM;
+	/* 用户应用程序创建SOCK_RAW类型套接字，需要CAP_NET_RAW权限 */
 	if (sock->type == SOCK_RAW && !kern && !capable(CAP_NET_RAW))
 		goto out_rcu_unlock;
 
@@ -333,15 +359,22 @@ lookup_protocol:
 	if (!inet_netns_ok(net, protocol))
 		goto out_rcu_unlock;
 
+	/* 套接字的操作函数
+	   例如SOCK_STREAM套接字类型 => TCP协议
+	   对应inetsw_array[]数组中的inet_stream_ops
+	*/
 	sock->ops = answer->ops;
+	/* 例如tcp_prot udp_prot */
 	answer_prot = answer->prot;
 	answer_no_check = answer->no_check;
 	answer_flags = answer->flags;
 	rcu_read_unlock();
 
+	/* 对应协议的缓存在启动初始化的时候完成*/
 	WARN_ON(answer_prot->slab == NULL);
 
 	err = -ENOBUFS;
+	/* 例如tcp_prot中对应的分配空间为struct tcp_sock结构实例 */
 	sk = sk_alloc(net, PF_INET, GFP_KERNEL, answer_prot);
 	if (sk == NULL)
 		goto out;
@@ -351,6 +384,8 @@ lookup_protocol:
 	if (INET_PROTOSW_REUSE & answer_flags)
 		sk->sk_reuse = 1;
 
+	/* 取struct inet_sock结构的指针
+	   例如struct tcp_sock结构中内嵌的第一项成员便是struct inet_sock结构 */
 	inet = inet_sk(sk);
 	inet->is_icsk = (INET_PROTOSW_ICSK & answer_flags) != 0;
 
@@ -395,6 +430,9 @@ lookup_protocol:
 		sk->sk_prot->hash(sk);
 	}
 
+	/* 在上面sk_alloc()分配sock结构实例后，sk->sk_prot初始化为answer_prot
+	   例如tcp_prot，则调用tcp_v4_init_sock()函数
+	*/
 	if (sk->sk_prot->init) {
 		err = sk->sk_prot->init(sk);
 		if (err)
@@ -457,6 +495,7 @@ int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	int err;
 
 	/* If the socket has its own bind function then use it. (RAW) */
+	/* 如果sk有bind函数，则调用，例如raw_prot的raw_bind()函数 */
 	if (sk->sk_prot->bind) {
 		err = sk->sk_prot->bind(sk, uaddr, addr_len);
 		goto out;
@@ -475,6 +514,7 @@ int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 			goto out;
 	}
 
+	/* 地址类型 */
 	chk_addr_ret = inet_addr_type(sock_net(sk), addr->sin_addr.s_addr);
 
 	/* Not specified by any standard per-se, however it breaks too
@@ -493,8 +533,10 @@ int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	    chk_addr_ret != RTN_BROADCAST)
 		goto out;
 
+	/* 端口号 */
 	snum = ntohs(addr->sin_port);
 	err = -EACCES;
+	/* 小于1024的端口号需要CAP_NET_BIND_SERVICE权限 */
 	if (snum && snum < PROT_SOCK && !capable(CAP_NET_BIND_SERVICE))
 		goto out;
 
@@ -512,11 +554,13 @@ int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	if (sk->sk_state != TCP_CLOSE || inet->inet_num)
 		goto out_release_sock;
 
+	/* 记录绑定的ip地址 */
 	inet->inet_rcv_saddr = inet->inet_saddr = addr->sin_addr.s_addr;
 	if (chk_addr_ret == RTN_MULTICAST || chk_addr_ret == RTN_BROADCAST)
 		inet->inet_saddr = 0;  /* Use device */
 
 	/* Make sure we are allowed to bind here. */
+	/* 例如tcp_prot的inet_csk_get_port()函数 */
 	if (sk->sk_prot->get_port(sk, snum)) {
 		inet->inet_saddr = inet->inet_rcv_saddr = 0;
 		err = -EADDRINUSE;
@@ -527,6 +571,9 @@ int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		sk->sk_userlocks |= SOCK_BINDADDR_LOCK;
 	if (snum)
 		sk->sk_userlocks |= SOCK_BINDPORT_LOCK;
+	/* 记录本地源端口号
+	   在inet_csk_get_port() => inet_bind_hash()中inet_num被赋值为源端口号
+	*/
 	inet->inet_sport = htons(inet->inet_num);
 	inet->inet_daddr = 0;
 	inet->inet_dport = 0;
@@ -1000,8 +1047,12 @@ static const struct net_proto_family inet_family_ops = {
 /* Upon startup we insert all the elements in inetsw_array[] into
  * the linked list inetsw.
  */
+/*
+启动的时候这些项会根据type加入inetsw[type]数组对应下标的链表中
+*/
 static struct inet_protosw inetsw_array[] =
 {
+	/* tcp协议 */
 	{
 		.type =       SOCK_STREAM,
 		.protocol =   IPPROTO_TCP,
@@ -1012,6 +1063,7 @@ static struct inet_protosw inetsw_array[] =
 			      INET_PROTOSW_ICSK,
 	},
 
+	/* udp协议 */
 	{
 		.type =       SOCK_DGRAM,
 		.protocol =   IPPROTO_UDP,
@@ -1021,6 +1073,7 @@ static struct inet_protosw inetsw_array[] =
 		.flags =      INET_PROTOSW_PERMANENT,
        },
 
+	/* icmp协议 */
        {
 		.type =       SOCK_DGRAM,
 		.protocol =   IPPROTO_ICMP,
@@ -1030,6 +1083,7 @@ static struct inet_protosw inetsw_array[] =
 		.flags =      INET_PROTOSW_REUSE,
        },
 
+	/* raw */
        {
 	       .type =       SOCK_RAW,
 	       .protocol =   IPPROTO_IP,	/* wild card */
@@ -1042,6 +1096,9 @@ static struct inet_protosw inetsw_array[] =
 
 #define INETSW_ARRAY_LEN ARRAY_SIZE(inetsw_array)
 
+/*
+将第4层协议注册给IPv4的套接字
+*/
 void inet_register_protosw(struct inet_protosw *p)
 {
 	struct list_head *lh;
@@ -1635,6 +1692,7 @@ static struct packet_type ip_packet_type __read_mostly = {
 
 /*
 IPv4网络子系统的初始化函数
+do_initcalls()中调用
 */
 static int __init inet_init(void)
 {
@@ -1647,6 +1705,7 @@ static int __init inet_init(void)
 	   因此要确保cb[]能够容纳struct inet_skb_parm */
 	BUILD_BUG_ON(sizeof(struct inet_skb_parm) > sizeof(dummy_skb->cb));
 
+	/* 预留端口号的位图内存空间 */
 	sysctl_local_reserved_ports = kzalloc(65536 / 8, GFP_KERNEL);
 	if (!sysctl_local_reserved_ports)
 		goto out;
@@ -1697,6 +1756,7 @@ static int __init inet_init(void)
 	for (r = &inetsw[0]; r < &inetsw[SOCK_MAX]; ++r)
 		INIT_LIST_HEAD(r);
 
+	/* 注册第4层协议 */
 	for (q = inetsw_array; q < &inetsw_array[INETSW_ARRAY_LEN]; ++q)
 		inet_register_protosw(q);
 

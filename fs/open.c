@@ -864,6 +864,9 @@ EXPORT_SYMBOL(put_unused_fd);
  * will follow.
  */
 
+/*
+将@file结构实例指针与文件描述符@fd整数对应起来
+*/
 void fd_install(unsigned int fd, struct file *file)
 {
 	struct files_struct *files = current->files;

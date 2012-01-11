@@ -80,10 +80,15 @@ struct inet_bind_bucket {
 #ifdef CONFIG_NET_NS
 	struct net		*ib_net;
 #endif
+	/* 本地端口号 */
 	unsigned short		port;
 	signed short		fastreuse;
+	/* inet_bind_hash()中增加计数 */
 	int			num_owners;
+	/* 链入struct inet_hashinfo结构的bhash哈希表 */
 	struct hlist_node	node;
+	/* 哈希表的桶头节点
+	   struct sock结构的sk_bind_node节点链入此桶 */
 	struct hlist_head	owners;
 };
 
@@ -95,8 +100,13 @@ static inline struct net *ib_net(struct inet_bind_bucket *ib)
 #define inet_bind_bucket_for_each(tb, pos, head) \
 	hlist_for_each_entry(tb, pos, head, node)
 
+/*
+哈希表桶头节点
+*/
 struct inet_bind_hashbucket {
+	/* 桶锁 */
 	spinlock_t		lock;
+	/* 桶链表 */
 	struct hlist_head	chain;
 };
 
@@ -133,6 +143,7 @@ struct inet_hashinfo {
 	 */
 	struct inet_bind_hashbucket	*bhash;
 
+	/* 端口绑定哈希表的大小，2的n次方 */
 	unsigned int			bhash_size;
 	/* 4 bytes hole on 64 bit */
 
@@ -224,6 +235,11 @@ extern struct inet_bind_bucket *
 extern void inet_bind_bucket_destroy(struct kmem_cache *cachep,
 				     struct inet_bind_bucket *tb);
 
+/*
+@net		:
+@lport		: 本地端口号
+@bhash_size	: 哈希表大小，即桶的个数
+*/
 static inline int inet_bhashfn(struct net *net,
 		const __u16 lport, const int bhash_size)
 {

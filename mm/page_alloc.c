@@ -5500,8 +5500,8 @@ __setup("hashdist=", set_hashdist);
 			  自动按系统内存计算桶头节点个数的时候
 			  限制计算出的节点数不超过2^scale字节比内存数的比例值
 @flags		:
-@_hash_shift:
-@_hash_mask	:
+@_hash_shift	: 返回移位的数目，即2的幂次
+@_hash_mask	: 返回桶个数的掩码，比如255
 @limit		: 桶个数的上限
 */
 void *__init alloc_large_system_hash(const char *tablename,

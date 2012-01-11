@@ -364,10 +364,12 @@ static int ip_rcv_finish(struct sk_buff *skb)
 	}
 #endif
 
+	/* 该ip包有选项数据，解析之 */
 	if (iph->ihl > 5 && ip_rcv_options(skb))
 		goto drop;
 
 	rt = skb_rtable(skb);
+	/* 统计数据 */
 	if (rt->rt_type == RTN_MULTICAST) {
 		IP_UPD_PO_STATS_BH(dev_net(rt->dst.dev), IPSTATS_MIB_INMCAST,
 				skb->len);

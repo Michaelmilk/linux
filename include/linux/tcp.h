@@ -297,8 +297,11 @@ static inline struct tcp_request_sock *tcp_rsk(const struct request_sock *req)
 
 struct tcp_sock {
 	/* inet_connection_sock has to be the first member of tcp_sock */
+	/* inet_connection_sock结构成员需要是第一个内嵌的成员变量 */
 	struct inet_connection_sock	inet_conn;
+	/* tcp头部字节数 */
 	u16	tcp_header_len;	/* Bytes of tcp header to send		*/
+	/* 分段发送的数据包数量 */
 	u16	xmit_size_goal_segs; /* Goal for segmenting output packets */
 
 /*
@@ -312,7 +315,9 @@ struct tcp_sock {
  *	read the code and the spec side by side (and laugh ...)
  *	See RFC793 and RFC1122. The RFC writes these in capitals.
  */
+	/* 下一个要接收的序列号 */
  	u32	rcv_nxt;	/* What we want to receive next 	*/
+	/* 待拷贝的数据序列号 */
 	u32	copied_seq;	/* Head of yet unread data		*/
 	u32	rcv_wup;	/* rcv_nxt on last window update sent	*/
  	u32	snd_nxt;	/* Next sequence we send		*/

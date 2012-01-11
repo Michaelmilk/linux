@@ -127,8 +127,11 @@ struct ip_mreq  {
 };
 
 struct ip_mreqn {
+	/* 多播组IP地址 */
 	struct in_addr	imr_multiaddr;		/* IP multicast address of group */
+	/* 本地址网络接口的IP地址 */
 	struct in_addr	imr_address;		/* local IP address of interface */
+	/* 网络接口序号 */
 	int		imr_ifindex;		/* Interface index */
 };
 
@@ -182,11 +185,15 @@ struct in_pktinfo {
 /* Structure describing an Internet (IP) socket address. */
 #define __SOCK_SIZE__	16		/* sizeof(struct sockaddr)	*/
 struct sockaddr_in {
+/* 地址族 */
   __kernel_sa_family_t	sin_family;	/* Address family		*/
+/* 端口号，网络字节序 */
   __be16		sin_port;	/* Port number			*/
+/* ip地址，网络字节序 */
   struct in_addr	sin_addr;	/* Internet address		*/
 
   /* Pad to size of `struct sockaddr'. */
+/* 填充到16个字节 */
   unsigned char		__pad[__SOCK_SIZE__ - sizeof(short int) -
 			sizeof(unsigned short int) - sizeof(struct in_addr)];
 };
@@ -219,6 +226,11 @@ struct sockaddr_in {
 #define	IN_MULTICAST(a)		IN_CLASSD(a)
 #define IN_MULTICAST_NET	0xF0000000
 
+/*
+E类地址:
+E 类地址保留作研究之用。因此Internet上没有可用的E类地址。
+E类地址的前4位恒为1，因此有效的地址范围从240.0.0.0 至255.255.255.255。
+*/
 #define	IN_EXPERIMENTAL(a)	((((long int) (a)) & 0xf0000000) == 0xf0000000)
 #define	IN_BADCLASS(a)		IN_EXPERIMENTAL((a))
 
@@ -269,27 +281,34 @@ static inline int proto_ports_offset(int proto)
 	}
 }
 
+/* 127.0.0.1 */
 static inline bool ipv4_is_loopback(__be32 addr)
 {
 	return (addr & htonl(0xff000000)) == htonl(0x7f000000);
 }
 
+/* D类地址，即组播地址 */
 static inline bool ipv4_is_multicast(__be32 addr)
 {
 	return (addr & htonl(0xf0000000)) == htonl(0xe0000000);
 }
 
+/* IP地址高24位为0xE0000000的为局域组播地址类 */
 static inline bool ipv4_is_local_multicast(__be32 addr)
 {
 	return (addr & htonl(0xffffff00)) == htonl(0xe0000000);
 }
 
+/*
+有限广播地址
+*/
 static inline bool ipv4_is_lbcast(__be32 addr)
 {
 	/* limited broadcast */
 	return addr == htonl(INADDR_BROADCAST);
 }
 
+/* IP地址高8位为0的为零网地址类 */
 static inline bool ipv4_is_zeronet(__be32 addr)
 {
 	return (addr & htonl(0xff000000)) == htonl(0x00000000);

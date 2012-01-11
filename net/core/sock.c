@@ -1048,9 +1048,14 @@ static struct sock *sk_prot_alloc(struct proto *prot, gfp_t priority,
 
 	slab = prot->slab;
 	if (slab != NULL) {
+		/* 从slab缓存中分配
+		   例如tcp_prot对应的缓存空间大小为结构tcp_sock
+		   struct sock结构内嵌在tcp_sock结构的第一个成员字段
+		*/
 		sk = kmem_cache_alloc(slab, priority & ~__GFP_ZERO);
 		if (!sk)
 			return sk;
+		/* 有清0标记，则清除数据 */
 		if (priority & __GFP_ZERO) {
 			if (prot->clear_sk)
 				prot->clear_sk(sk, prot->obj_size);
@@ -1058,6 +1063,7 @@ static struct sock *sk_prot_alloc(struct proto *prot, gfp_t priority,
 				sk_prot_clear_nulls(sk, prot->obj_size);
 		}
 	} else
+		/* 没有slab缓存的话则使用kmalloc()分配空间 */
 		sk = kmalloc(prot->obj_size, priority);
 
 	if (sk != NULL) {

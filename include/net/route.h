@@ -42,7 +42,21 @@
 struct fib_nh;
 struct inet_peer;
 struct fib_info;
+/*
+在一张路由表(struct fib_table)中，
+根据查询路由的目的IP地址(key)在其路由哈希表(struct fn_hash)中
+找到一个路由域(struct fn_zone)，
+并在路由域中匹配到一个key相等的路由节点(struct fib_node)，
+取其路由别名(struct fib_alias)和路由信息(struct fib_info)，
+生成一个路由查询结果(struct fib_result)。
+
+路由查询结果还不能直接供发送IP数据报使用，
+接下来，还必须根据这个查询结果生成一个路由目的入口(dst_entry)，
+根据目的入口才可以发送IP数据报，目的入口用结构体struct dst_entry表示，
+在实际使用时，还在它的外面包装了一层，形成一个结构体struct rtable
+*/
 struct rtable {
+	/* 内嵌的struct dst_entry结构 */
 	struct dst_entry	dst;
 
 	/* Lookup key. */
@@ -50,18 +64,40 @@ struct rtable {
 	__be32			rt_key_src;
 
 	int			rt_genid;
+	/* rt_flags是一组标志位，按目的入口查询的执行顺序：
+	   如果路由使用本地环回接口，则rt_flags上加标志RTCF_LOCAL，
+	   如果路由结果类型是广播，则加标志RTCF_BROADCAST和RTCF_LOCAL，
+	   如果结果是组播，则加标志RTCF_MULTICAST和RTCF_LOCAL，
+	   该标志最终决定了目的入口使用哪一个IP数据报输入函数和输出函数，
+
+	   如果是RTCF_LOCAL，则使用输入函数ip_local_deliver，
+	   如果是RTCF_BROADCAST或RTCF_MULTICAST，并且带有RTCF_LOCAL标志，
+	   并且输出设备不是环回接口设备，则使用输出函数ip_mc_output，
+	   否则使用输出函数ip_output。
+	*/
 	unsigned		rt_flags;
+	/* rt_type是路由类型，
+	   如果路由是LOOPBACK，则置类型为RTN_LOCAL，
+	   单播路由类型为RTN_UNICAST，
+	   如果目的地址为0xFFFFFFFF，则路由类型为RTN_BROADCAST，
+	   如果目的地址是组播地址，则路由类型为RTN_MULTICAST。
+	   rt_type跟rt_flags关系比较密切。
+	*/
 	__u16			rt_type;
 	__u8			rt_key_tos;
 
+	/* 路由的目的地址 */
 	__be32			rt_dst;	/* Path destination	*/
+	/* 路由的源地址 */
 	__be32			rt_src;	/* Path source		*/
 	int			rt_route_iif;
+	/* 路由的输入设备接口的索引号 */
 	int			rt_iif;
 	int			rt_oif;
 	__u32			rt_mark;
 
 	/* Info on neighbour */
+	/* 路由网关的IP地址 */
 	__be32			rt_gateway;
 
 	/* Miscellaneous cached information */

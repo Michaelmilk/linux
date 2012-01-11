@@ -29,12 +29,24 @@
 
 struct sk_buff;
 
+/*
+路由结构
+
+最终生成的IP数据报的路由称为目的入口(dst_entry)，
+目的入口反映了相邻的外部主机在主机内部的一种“映象”
+*/
 struct dst_entry {
 	struct rcu_head		rcu_head;
 	struct dst_entry	*child;
+	/* 该路由的输出网络设备接口 */
 	struct net_device       *dev;
 	struct  dst_ops	        *ops;
 	unsigned long		_metrics;
+	/* 一个超时时间值，
+	   定时器rt_periodic_timer定期扫描路由缓存表rt_hash_table，
+	   如果发现expires值为0，或者小于当前系统时间值，
+	   并符合其它超时条件，则把该路由从缓存表中删除
+	*/
 	unsigned long		expires;
 	struct dst_entry	*path;
 	struct neighbour __rcu	*_neighbour;
@@ -43,9 +55,11 @@ struct dst_entry {
 #else
 	void			*__pad1;
 #endif
+	/* 该目的入口的输入和输出函数 */
 	int			(*input)(struct sk_buff*);
 	int			(*output)(struct sk_buff*);
 
+	/* 标志位，取值如下 */
 	int			flags;
 #define DST_HOST		0x0001
 #define DST_NOXFRM		0x0002
@@ -75,8 +89,25 @@ struct dst_entry {
 	 * __refcnt wants to be on a different cache line from
 	 * input/output/ops or performance tanks badly
 	 */
+	/* 目的入口的引用计数，创建成功后即设为1 */
 	atomic_t		__refcnt;	/* client references	*/
+	/* 一个统计数值，该目的入口被使用一次(发送一个IP数据报)，__use就加1 */
 	int			__use;
+	/* 一个时间值，每次目的入口被用于发送IP数据报，
+	   就将该值设置为当前系统时间值。
+	   该值被用于几个地方，
+	   路由缓存表my rt_hash_table是一个很大的数组(依据系统的内存大小而定)，
+	   每一项都是一个struct rtable的链表，
+	   当要往缓存表的某一个链表中插入一个新的struct rtable时，
+	   如果这个链表的长度已经超出ip_rt_gc_elasticity(值为8)，
+	   则需要删掉一个当前使用价值最低的，已保持链表长度的平衡。
+	   函数rt_score就是用于为每个struct rtable计算价值分数，
+	   分数是一个32位值，最高位表示非常有价值，
+	   当struct rtable的成员rt_flags上有标志RTCF_REDIRECTED或RTCF_NOTIFY，
+	   或者目的入口的超时时间未到时，置该位，次高位价值次之，
+	   余下的30位由lastuse决定，该目的入口距上次使用时间越长，价值越低。
+	   另外，用于在rt_may_expire函数中判断一个struct rtable是否超时。
+	*/
 	unsigned long		lastuse;
 	union {
 		struct dst_entry	*next;
@@ -428,8 +459,14 @@ static inline int dst_output(struct sk_buff *skb)
 }
 
 /* Input packet from network to transport.  */
+/*
+实际上是调用skb->dst->input(skb)，对应input的初始化在route.c中。
+如果是发往本地的数据包dst->input=ip_local_deliver;
+如果是转发的数据包dst->input=ip_forward;
+*/
 static inline int dst_input(struct sk_buff *skb)
 {
+	/* 可能是ip_local_deliver()或ip_forward() */
 	return skb_dst(skb)->input(skb);
 }
 

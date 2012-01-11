@@ -693,6 +693,7 @@ static struct vfsmount *skip_mnt_tree(struct vfsmount *p)
 @type	: 文件系统描述符，例如传递ext3_fs_type
 @flags	:
 @name	: 设备名称，例如/dev/dsk/hda1
+	  使用kern_mount()调用的则为虚拟文件系统的名称，例如sock_fs_type的名称"sockfs"
 @data	:
 */
 struct vfsmount *

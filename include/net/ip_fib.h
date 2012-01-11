@@ -100,6 +100,9 @@ struct fib_rule;
 #endif
 
 struct fib_table;
+/*
+路由查询结果
+*/
 struct fib_result {
 	unsigned char	prefixlen;
 	unsigned char	nh_sel;
@@ -158,6 +161,10 @@ extern __be32 fib_info_update_nh_saddr(struct net *net, struct fib_nh *nh);
 
 struct fib_table {
 	struct hlist_node tb_hlist;
+	/* tb_id表明该表的用途(RT_TABLE_LOCAL， RT_TABLE_MAIN等)，
+	   同时也表明它在全局数组fib_tables中的位置
+	   (RT_TABLE_LOCAL==255，RT_TABLE_MAIN==254)。
+	*/
 	u32		tb_id;
 	int		tb_default;
 	int		tb_num_default;

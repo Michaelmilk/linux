@@ -235,6 +235,7 @@ struct dentry *mount_pseudo(struct file_system_type *fs_type, char *name,
 	s->s_blocksize = PAGE_SIZE;
 	s->s_blocksize_bits = PAGE_SHIFT;
 	s->s_magic = magic;
+	/* 超级块的操作函数表 */
 	s->s_op = ops ? ops : &simple_super_operations;
 	s->s_time_gran = 1;
 	root = new_inode(s);

@@ -163,6 +163,9 @@ struct audit_tree_refs {
 };
 
 /* The per-task audit context. */
+/*
+每个进程的审计上下文
+*/
 struct audit_context {
 	int		    dummy;	/* must be the first element */
 	int		    in_syscall;	/* 1 if task is in a syscall */
@@ -860,6 +863,7 @@ static inline struct audit_context *audit_alloc_context(enum audit_state state)
 {
 	struct audit_context *context;
 
+	/* 分配audit_context结构空间 */
 	if (!(context = kmalloc(sizeof(*context), GFP_KERNEL)))
 		return NULL;
 	audit_zero_context(context, state);
@@ -2339,13 +2343,16 @@ int audit_sockaddr(int len, void *a)
 		return 0;
 
 	if (!context->sockaddr) {
+		/* 分配struct sockaddr_storage结构空间 */
 		void *p = kmalloc(sizeof(struct sockaddr_storage), GFP_KERNEL);
 		if (!p)
 			return -ENOMEM;
 		context->sockaddr = p;
 	}
 
+	/* 记录长度 */
 	context->sockaddr_len = len;
+	/* 保存地址 */
 	memcpy(context->sockaddr, a, len);
 	return 0;
 }

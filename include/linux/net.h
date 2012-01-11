@@ -136,18 +136,25 @@ struct socket_wq {
  *  @wq: wait queue for several uses
  */
 struct socket {
+	/* socket的状态 */
 	socket_state		state;
 
 	kmemcheck_bitfield_begin(type);
+	/* socket类型，SOCK_STREAM等 */
 	short			type;
 	kmemcheck_bitfield_end(type);
 
+	/* 标志位 */
 	unsigned long		flags;
 
 	struct socket_wq __rcu	*wq;
 
+	/* 与socket关联的文件指针 */
 	struct file		*file;
+	/* 指向协议相关的sock结构实例
+	   例如在inet_create() => sk_alloc()后 => sock_init_data()中赋值 */
 	struct sock		*sk;
+	/* 函数操作表 */
 	const struct proto_ops	*ops;
 };
 

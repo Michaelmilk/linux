@@ -47,8 +47,13 @@ struct wait_bit_queue {
 	wait_queue_t wait;
 };
 
+/*
+等待队列头节点
+*/
 struct __wait_queue_head {
+	/* 自旋锁控制链表的并发 */
 	spinlock_t lock;
+	/* 链表头节点 */
 	struct list_head task_list;
 };
 typedef struct __wait_queue_head wait_queue_head_t;

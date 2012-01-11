@@ -146,8 +146,10 @@ static inline unsigned __inet_dev_addr_type(struct net *net,
 	unsigned ret = RTN_BROADCAST;
 	struct fib_table *local_table;
 
+	/* 零网地址 广播地址 */
 	if (ipv4_is_zeronet(addr) || ipv4_is_lbcast(addr))
 		return RTN_BROADCAST;
+	/* 组播地址 */
 	if (ipv4_is_multicast(addr))
 		return RTN_MULTICAST;
 
@@ -155,6 +157,7 @@ static inline unsigned __inet_dev_addr_type(struct net *net,
 	res.r = NULL;
 #endif
 
+	/* 本地路由表 */
 	local_table = fib_get_table(net, RT_TABLE_LOCAL);
 	if (local_table) {
 		ret = RTN_UNICAST;

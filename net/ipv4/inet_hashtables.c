@@ -37,6 +37,7 @@ struct inet_bind_bucket *inet_bind_bucket_create(struct kmem_cache *cachep,
 
 	if (tb != NULL) {
 		write_pnet(&tb->ib_net, hold_net(net));
+		/* ¼ÇÂ¼¶Ë¿ÚºÅ */
 		tb->port      = snum;
 		tb->fastreuse = 0;
 		tb->num_owners = 0;

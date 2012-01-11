@@ -1862,6 +1862,9 @@ static const struct tcp_sock_af_ops tcp_sock_ipv4_specific = {
 static int tcp_v4_init_sock(struct sock *sk)
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);
+	/* 取对应的struct tcp_sock结构指针
+	   在inet_create() => sk_alloc() => sk_prot_alloc()中分配的空间为结构tcp_sock
+	*/
 	struct tcp_sock *tp = tcp_sk(sk);
 
 	skb_queue_head_init(&tp->out_of_order_queue);
@@ -1888,6 +1891,7 @@ static int tcp_v4_init_sock(struct sock *sk)
 	tp->reordering = sysctl_tcp_reordering;
 	icsk->icsk_ca_ops = &tcp_init_congestion_ops;
 
+	/* 初始状态为关闭 */
 	sk->sk_state = TCP_CLOSE;
 
 	sk->sk_write_space = sk_stream_write_space;
@@ -1916,6 +1920,7 @@ static int tcp_v4_init_sock(struct sock *sk)
 	sk->sk_rcvbuf = sysctl_tcp_rmem[1];
 
 	local_bh_disable();
+	/* tcp套接字数量+1 */
 	percpu_counter_inc(&tcp_sockets_allocated);
 	local_bh_enable();
 

@@ -160,10 +160,16 @@ void *dst_alloc(struct dst_ops *ops, struct net_device *dev,
 		if (ops->gc(ops))
 			return NULL;
 	}
+	/* 从缓存中分配struct dst_entry结构实例
+	   实际上分配到的空间不止struct dst_entry结构的大小
+	   比如ip_rt_init()中初始化ipv4_dst_ops.kmem_cachep时
+	   缓存大小为struct rtable结构
+	*/
 	dst = kmem_cache_alloc(ops->kmem_cachep, GFP_ATOMIC);
 	if (!dst)
 		return NULL;
 	dst->child = NULL;
+	/* 出接口 */
 	dst->dev = dev;
 	if (dev)
 		dev_hold(dev);
@@ -175,6 +181,7 @@ void *dst_alloc(struct dst_ops *ops, struct net_device *dev,
 #ifdef CONFIG_XFRM
 	dst->xfrm = NULL;
 #endif
+	/* 初始为dst_discard() */
 	dst->input = dst_discard;
 	dst->output = dst_discard;
 	dst->error = 0;
@@ -335,6 +342,7 @@ void skb_dst_set_noref(struct sk_buff *skb, struct dst_entry *dst)
 		dst_hold(dst);
 		skb_dst_set(skb, dst);
 	} else {
+		/* 在指针的低bit增加SKB_DST_NOREF标记 */
 		skb->_skb_refdst = (unsigned long)dst | SKB_DST_NOREF;
 	}
 }
