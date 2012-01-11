@@ -14,6 +14,17 @@
  * Set to 0 : This is a pointer to some object (ptr)
  */
 
+/*
+链表的特殊版本，链表的结尾不是一个NULL指针
+而是一个有着多种不同值的'nulls'标记
+
+在标准的哈希表中，使用NULL指针表示链表的终结
+在这个特殊的'nulls'变量中，利用这样一个事实，保存在链表中的对象都是按字对齐的
+(4或8字节对齐)
+因此可以使用最低bit标记'nulls'为链表的结尾
+1: 表示'nulls'标记
+0: 表示一个指针
+*/
 struct hlist_nulls_head {
 	struct hlist_nulls_node *first;
 };
@@ -21,6 +32,9 @@ struct hlist_nulls_head {
 struct hlist_nulls_node {
 	struct hlist_nulls_node *next, **pprev;
 };
+/*
+初始化为高31bit含有@nulls值的结尾
+*/
 #define INIT_HLIST_NULLS_HEAD(ptr, nulls) \
 	((ptr)->first = (struct hlist_nulls_node *) (1UL | (((long)nulls) << 1)))
 
@@ -30,6 +44,9 @@ struct hlist_nulls_node {
  * @ptr: ptr to be tested
  *
  */
+/*
+检查@ptr是否为特殊的nulls结束标记
+*/
 static inline int is_a_nulls(const struct hlist_nulls_node *ptr)
 {
 	return ((unsigned long)ptr & 1);
@@ -43,6 +60,7 @@ static inline int is_a_nulls(const struct hlist_nulls_node *ptr)
  */
 static inline unsigned long get_nulls_value(const struct hlist_nulls_node *ptr)
 {
+	/* 右移1位，高31bit保存的是原始值 */
 	return ((unsigned long)ptr) >> 1;
 }
 
