@@ -245,6 +245,13 @@ void ip_options_fragment(struct sk_buff * skb)
  * If opt == NULL, then skb->data should point to IP header.
  */
 
+/*
+解析选项信息
+
+@net	: 命名空间
+@opt	: 保存解析结果
+@skb	: skb数据
+*/
 int ip_options_compile(struct net *net,
 		       struct ip_options * opt, struct sk_buff * skb)
 {
@@ -255,14 +262,17 @@ int ip_options_compile(struct net *net,
 	unsigned char * pp_ptr = NULL;
 	struct rtable *rt = NULL;
 
+	/* 取选项数据的起始指针 */
 	if (skb != NULL) {
 		rt = skb_rtable(skb);
 		/* ip_hdr(skb)[1]以结构iphdr为单位，下标1即到了iphdr后option的起始位置 */
 		optptr = (unsigned char *)&(ip_hdr(skb)[1]);
 	} else
 		optptr = opt->__data;
+	/* 取IP头指针 */
 	iph = optptr - sizeof(struct iphdr);
 
+	/* 遍历解析选项长度的数据 */
 	for (l = opt->optlen; l > 0; ) {
 		switch (*optptr) {
 		      case IPOPT_END:
@@ -452,7 +462,9 @@ int ip_options_compile(struct net *net,
 			}
 			break;
 		}
+		/* 剩余字节长度 */
 		l -= optlen;
+		/* 下一个选项 */
 		optptr += optlen;
 	}
 
@@ -546,6 +558,9 @@ int ip_options_get(struct net *net, struct ip_options_rcu **optp,
 	return ip_options_get_finish(net, optp, opt, optlen);
 }
 
+/*
+写选项信息
+*/
 void ip_forward_options(struct sk_buff *skb)
 {
 	struct   ip_options * opt	= &(IPCB(skb)->opt);

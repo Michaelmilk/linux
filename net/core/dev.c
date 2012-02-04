@@ -4223,6 +4223,9 @@ softnet_break:
 	goto out;
 }
 
+/*
+对应协议的接口参数获取函数指针数组
+*/
 static gifconf_func_t *gifconf_list[NPROTO];
 
 /**

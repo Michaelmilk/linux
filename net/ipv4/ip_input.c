@@ -185,17 +185,27 @@ int ip_call_ra_chain(struct sk_buff *skb)
 	return 0;
 }
 
+/*
+向上层协议栈传递
+到达传输层
+*/
 static int ip_local_deliver_finish(struct sk_buff *skb)
 {
+	/* 接收报文的设备所属命名空间 */
 	struct net *net = dev_net(skb->dev);
 
+	/* skb的data指针指向L4传输层数据起始位置 */
 	__skb_pull(skb, ip_hdrlen(skb));
 
 	/* Point into the IP datagram, just past the header. */
+	/* 根据data指针设置transport_header指针 */
 	skb_reset_transport_header(skb);
 
 	rcu_read_lock();
 	{
+		/* IP头中携带的传输层协议类型
+		   例如IPPROTO_TCP IPPROTO_UDP
+		*/
 		int protocol = ip_hdr(skb)->protocol;
 		int hash, raw;
 		const struct net_protocol *ipprot;
@@ -204,10 +214,15 @@ static int ip_local_deliver_finish(struct sk_buff *skb)
 		raw = raw_local_deliver(skb, protocol);
 
 		hash = protocol & (MAX_INET_PROTOS - 1);
+		/* 取对应协议处理结构
+		   例如tcp_protocol udp_protocol
+		*/
 		ipprot = rcu_dereference(inet_protos[hash]);
+		/* 对应的传输层协议有注册 */
 		if (ipprot != NULL) {
 			int ret;
 
+			/* 检查命名空间 */
 			if (!net_eq(net, &init_net) && !ipprot->netns_ok) {
 				if (net_ratelimit())
 					printk("%s: proto %d isn't netns-ready\n",
@@ -216,6 +231,7 @@ static int ip_local_deliver_finish(struct sk_buff *skb)
 				goto out;
 			}
 
+			/* 有检查策略 */
 			if (!ipprot->no_policy) {
 				if (!xfrm4_policy_check(NULL, XFRM_POLICY_IN, skb)) {
 					kfree_skb(skb);
@@ -223,6 +239,9 @@ static int ip_local_deliver_finish(struct sk_buff *skb)
 				}
 				nf_reset(skb);
 			}
+			/* 调用传输层协议对应的处理函数
+			   例如tcp_v4_rcv() udp_rcv()
+			*/
 			ret = ipprot->handler(skb);
 			if (ret < 0) {
 				protocol = -ret;
@@ -233,6 +252,7 @@ static int ip_local_deliver_finish(struct sk_buff *skb)
 			if (!raw) {
 				if (xfrm4_policy_check(NULL, XFRM_POLICY_IN, skb)) {
 					IP_INC_STATS_BH(net, IPSTATS_MIB_INUNKNOWNPROTOS);
+					/* 回送不可达 */
 					icmp_send(skb, ICMP_DEST_UNREACH,
 						  ICMP_PROT_UNREACH, 0);
 				}
@@ -278,10 +298,14 @@ int ip_local_deliver(struct sk_buff *skb)
 		       ip_local_deliver_finish);
 }
 
+/*
+解析IP头中的选项内容
+*/
 static inline int ip_rcv_options(struct sk_buff *skb)
 {
 	struct ip_options *opt;
 	const struct iphdr *iph;
+	/* 接收报文的接口 */
 	struct net_device *dev = skb->dev;
 
 	/* It looks as overkill, because not all
@@ -296,10 +320,14 @@ static inline int ip_rcv_options(struct sk_buff *skb)
 		goto drop;
 	}
 
+	/* 取IP头 */
 	iph = ip_hdr(skb);
+	/* 使用cb字段保存options信息 */
 	opt = &(IPCB(skb)->opt);
+	/* 记录选项数据长度 */
 	opt->optlen = iph->ihl*4 - sizeof(struct iphdr);
 
+	/* 解析选项信息 */
 	if (ip_options_compile(dev_net(dev), opt, skb)) {
 		IP_INC_STATS_BH(dev_net(dev), IPSTATS_MIB_INHDRERRORS);
 		goto drop;
@@ -329,6 +357,7 @@ drop:
 
 static int ip_rcv_finish(struct sk_buff *skb)
 {
+	/* 取ip头指针 */
 	const struct iphdr *iph = ip_hdr(skb);
 	struct rtable *rt;
 
@@ -340,6 +369,7 @@ static int ip_rcv_finish(struct sk_buff *skb)
 		int err = ip_route_input_noref(skb, iph->daddr, iph->saddr,
 					       iph->tos, skb->dev);
 		if (unlikely(err)) {
+			/* 统计信息 */
 			if (err == -EHOSTUNREACH)
 				IP_INC_STATS_BH(dev_net(skb->dev),
 						IPSTATS_MIB_INADDRERRORS);
@@ -368,6 +398,7 @@ static int ip_rcv_finish(struct sk_buff *skb)
 	if (iph->ihl > 5 && ip_rcv_options(skb))
 		goto drop;
 
+	/* 取rtable结构 */
 	rt = skb_rtable(skb);
 	/* 统计数据 */
 	if (rt->rt_type == RTN_MULTICAST) {

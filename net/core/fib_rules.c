@@ -22,10 +22,15 @@ int fib_default_rule_add(struct fib_rules_ops *ops,
 {
 	struct fib_rule *r;
 
+	/* 分配的路由规则空间
+	   为内嵌了struct fib_rule结构的大结构空间大小
+	   例如struct fib4_rule
+	*/
 	r = kzalloc(ops->rule_size, GFP_KERNEL);
 	if (r == NULL)
 		return -ENOMEM;
 
+	/* 引用计数初始化为1 */
 	atomic_set(&r->refcnt, 1);
 	r->action = FR_ACT_TO_TBL;
 	r->pref = pref;
@@ -35,6 +40,7 @@ int fib_default_rule_add(struct fib_rules_ops *ops,
 
 	/* The lock is not required here, the list in unreacheable
 	 * at the moment this function is called */
+	/* 链入rules_list链表 */
 	list_add_tail(&r->list, &ops->rules_list);
 	return 0;
 }
@@ -92,28 +98,39 @@ static void flush_route_cache(struct fib_rules_ops *ops)
 		ops->flush_cache(ops);
 }
 
+/*
+将@ops注册进其所属的网络命名空间
+*/
 static int __fib_rules_register(struct fib_rules_ops *ops)
 {
 	int err = -EEXIST;
 	struct fib_rules_ops *o;
 	struct net *net;
 
+	/* 取网络命名空间 */
 	net = ops->fro_net;
 
+	/* 检查大小
+	   至少达到struct fib_rule的大小
+	   例如struct fib_rule是内嵌在struct fib4_rule第一个字段的
+	*/
 	if (ops->rule_size < sizeof(struct fib_rule))
 		return -EINVAL;
 
+	/* 以下函数指针不能为空 */
 	if (ops->match == NULL || ops->configure == NULL ||
 	    ops->compare == NULL || ops->fill == NULL ||
 	    ops->action == NULL)
 		return -EINVAL;
 
 	spin_lock(&net->rules_mod_lock);
+	/* 遍历网络命名空间，检查是否重复 */
 	list_for_each_entry(o, &net->rules_ops, list)
 		if (ops->family == o->family)
 			goto errout;
 
 	hold_net(net);
+	/* 链入网络命名空间的rules_ops链表 */
 	list_add_tail_rcu(&ops->list, &net->rules_ops);
 	err = 0;
 errout:
@@ -122,25 +139,36 @@ errout:
 	return err;
 }
 
+/*
+从模板@tmpl复制出新的结构空间
+并注册进@net命名空间
+
+返回新的struct fib_rules_ops结构空间指针
+*/
 struct fib_rules_ops *
 fib_rules_register(const struct fib_rules_ops *tmpl, struct net *net)
 {
 	struct fib_rules_ops *ops;
 	int err;
 
+	/* 复制操作函数结构空间 */
 	ops = kmemdup(tmpl, sizeof(*ops), GFP_KERNEL);
 	if (ops == NULL)
 		return ERR_PTR(-ENOMEM);
 
+	/* 初始化链表头节点 */
 	INIT_LIST_HEAD(&ops->rules_list);
+	/* 记录网络命名空间 */
 	ops->fro_net = net;
 
+	/* 注册ops */
 	err = __fib_rules_register(ops);
 	if (err) {
 		kfree(ops);
 		ops = ERR_PTR(err);
 	}
 
+	/* 返回从模板复制的操作函数结构 */
 	return ops;
 }
 EXPORT_SYMBOL_GPL(fib_rules_register);

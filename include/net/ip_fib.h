@@ -160,6 +160,7 @@ extern __be32 fib_info_update_nh_saddr(struct net *net, struct fib_nh *nh);
 					 FIB_RES_SADDR(net, res))
 
 struct fib_table {
+	/* 参考fib4_rules_init()函数 */
 	struct hlist_node tb_hlist;
 	/* tb_id表明该表的用途(RT_TABLE_LOCAL， RT_TABLE_MAIN等)，
 	   同时也表明它在全局数组fib_tables中的位置
@@ -168,6 +169,8 @@ struct fib_table {
 	u32		tb_id;
 	int		tb_default;
 	int		tb_num_default;
+	/* 指向结构struct trie
+	   参考fib_trie_table()函数 */
 	unsigned long	tb_data[0];
 };
 

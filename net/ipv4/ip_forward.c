@@ -45,16 +45,21 @@ static int ip_forward_finish(struct sk_buff *skb)
 
 	IP_INC_STATS_BH(dev_net(skb_dst(skb)->dev), IPSTATS_MIB_OUTFORWDATAGRAMS);
 
+	/* 有选项数据需要添加 */
 	if (unlikely(opt->optlen))
 		ip_forward_options(skb);
 
 	return dst_output(skb);
 }
 
+/*
+转发IP数据包
+*/
 int ip_forward(struct sk_buff *skb)
 {
 	struct iphdr *iph;	/* Our header */
 	struct rtable *rt;	/* Route we use */
+	/* 取cb字段中的options */
 	struct ip_options * opt	= &(IPCB(skb)->opt);
 
 	if (skb_warn_if_lro(skb))
@@ -66,6 +71,7 @@ int ip_forward(struct sk_buff *skb)
 	if (IPCB(skb)->opt.router_alert && ip_call_ra_chain(skb))
 		return NET_RX_SUCCESS;
 
+	/* 二层目的MAC不是本机，则三层不处理 */
 	if (skb->pkt_type != PACKET_HOST)
 		goto drop;
 
@@ -76,28 +82,34 @@ int ip_forward(struct sk_buff *skb)
 	 *	that reaches zero, we must reply an ICMP control message telling
 	 *	that the packet's lifetime expired.
 	 */
+	/* 检查IP包的生存时间 */
 	if (ip_hdr(skb)->ttl <= 1)
 		goto too_many_hops;
 
 	if (!xfrm4_route_forward(skb))
 		goto drop;
 
+	/* 取路由表，在ip_rcv_finish()中会先处理路由的选择 */
 	rt = skb_rtable(skb);
 
 	if (opt->is_strictroute && opt->nexthop != rt->rt_gateway)
 		goto sr_failed;
 
+	/* 检查MTU */
 	if (unlikely(skb->len > dst_mtu(&rt->dst) && !skb_is_gso(skb) &&
 		     (ip_hdr(skb)->frag_off & htons(IP_DF))) && !skb->local_df) {
 		IP_INC_STATS(dev_net(rt->dst.dev), IPSTATS_MIB_FRAGFAILS);
+		/* 回送需要分片 */
 		icmp_send(skb, ICMP_DEST_UNREACH, ICMP_FRAG_NEEDED,
 			  htonl(dst_mtu(&rt->dst)));
 		goto drop;
 	}
 
 	/* We are about to mangle packet. Copy it! */
+	/* 线性区可写，前部留有放链路层地址的空间 */
 	if (skb_cow(skb, LL_RESERVED_SPACE(rt->dst.dev)+rt->dst.header_len))
 		goto drop;
+	/* 取IP头指针 */
 	iph = ip_hdr(skb);
 
 	/* Decrease ttl after skb cow done */
@@ -110,6 +122,7 @@ int ip_forward(struct sk_buff *skb)
 	if (rt->rt_flags&RTCF_DOREDIRECT && !opt->srr && !skb_sec_path(skb))
 		ip_rt_send_redirect(skb);
 
+	/* 优先级 */
 	skb->priority = rt_tos2priority(iph->tos);
 
 	return NF_HOOK(NFPROTO_IPV4, NF_INET_FORWARD, skb, skb->dev,

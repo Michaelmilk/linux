@@ -1983,6 +1983,7 @@ struct fib_table *fib_trie_table(u32 id)
 	struct fib_table *tb;
 	struct trie *t;
 
+	/* 分配struct fib_table和struct trie结构空间 */
 	tb = kmalloc(sizeof(struct fib_table) + sizeof(struct trie),
 		     GFP_KERNEL);
 	if (tb == NULL)

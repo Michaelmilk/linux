@@ -1768,7 +1768,7 @@ netlink_kernel_create(struct net *net, int unit, unsigned int groups,
 	if (groups < 32)
 		groups = 32;
 
-	/* listerns是个位图对应groups中每个元素 */
+	/* listeners是个位图对应groups中每个元素 */
 	listeners = kzalloc(sizeof(*listeners) + NLGRPSZ(groups), GFP_KERNEL);
 	if (!listeners)
 		goto out_sock_release;

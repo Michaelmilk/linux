@@ -238,6 +238,10 @@ static inline void ip_rt_put(struct rtable * rt)
 		dst_release(&rt->dst);
 }
 
+/*
+ÑÚµôµÍ2¸öbit
+0x1c
+*/
 #define IPTOS_RT_MASK	(IPTOS_TOS_MASK & ~3)
 
 extern const __u8 ip_tos2prio[16];

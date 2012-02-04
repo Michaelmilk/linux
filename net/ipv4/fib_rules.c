@@ -265,16 +265,22 @@ static const struct fib_rules_ops __net_initdata fib4_rules_ops_template = {
 	.owner		= THIS_MODULE,
 };
 
+/*
+创建3个路由规则
+*/
 static int fib_default_rules_init(struct fib_rules_ops *ops)
 {
 	int err;
 
+	/* 本地路由规则 */
 	err = fib_default_rule_add(ops, 0, RT_TABLE_LOCAL, 0);
 	if (err < 0)
 		return err;
+	/* 主路由规则 */
 	err = fib_default_rule_add(ops, 0x7FFE, RT_TABLE_MAIN, 0);
 	if (err < 0)
 		return err;
+	/* 默认路由规则 */
 	err = fib_default_rule_add(ops, 0x7FFF, RT_TABLE_DEFAULT, 0);
 	if (err < 0)
 		return err;
@@ -286,13 +292,16 @@ int __net_init fib4_rules_init(struct net *net)
 	int err;
 	struct fib_rules_ops *ops;
 
+	/* 注册函数操作模板 */
 	ops = fib_rules_register(&fib4_rules_ops_template, net);
 	if (IS_ERR(ops))
 		return PTR_ERR(ops);
 
+	/* 路由规则初始化 */
 	err = fib_default_rules_init(ops);
 	if (err < 0)
 		goto fail;
+	/* 记录复制的ops */
 	net->ipv4.rules_ops = ops;
 	return 0;
 

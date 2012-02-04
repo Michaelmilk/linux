@@ -8,22 +8,46 @@
 #include <net/flow.h>
 #include <net/rtnetlink.h>
 
+/*
+通用的路由规则结构
+内嵌入具体的路由规则大结构中
+例如
+struct fib4_rule
+struct fib6_rule
+*/
 struct fib_rule {
+	/* 链入struct fib_rules_ops的rules_list链表
+	   参考fib_default_rule_add()函数
+	*/
 	struct list_head	list;
+	/* 引用计数 */
 	atomic_t		refcnt;
+	/* 接口索引 */
 	int			iifindex;
 	int			oifindex;
 	u32			mark;
 	u32			mark_mask;
+	/* 优先级 */
 	u32			pref;
+	/* 标志位 */
 	u32			flags;
+	/* 路由表标识符
+	   例如RT_TABLE_LOCAL
+	   参考fib_default_rules_init()函数
+	*/
 	u32			table;
+	/* 参考fib_default_rule_add()函数 */
 	u8			action;
 	u32			target;
+	/* 当前规则 */
 	struct fib_rule __rcu	*ctarget;
+	/* 接口名称 */
 	char			iifname[IFNAMSIZ];
 	char			oifname[IFNAMSIZ];
 	struct rcu_head		rcu;
+	/* 网络命名空间
+	   参考fib_default_rule_add()函数
+	*/
 	struct net *		fr_net;
 };
 
@@ -36,9 +60,18 @@ struct fib_lookup_arg {
 };
 
 struct fib_rules_ops {
+	/* 协议族
+	   例如AF_INET */
 	int			family;
+	/* 链入网络命名空间的rules_ops链表 */
 	struct list_head	list;
+	/* 规则结构大小
+	   例如struct fib4_rule的大小
+	*/
 	int			rule_size;
+	/* 地址大小
+	   例如ipv4的为4个字节
+	*/
 	int			addr_size;
 	int			unresolved_rules;
 	int			nr_goto_rules;
@@ -66,6 +99,7 @@ struct fib_rules_ops {
 
 	int			nlgroup;
 	const struct nla_policy	*policy;
+	/* 参考fib_default_rule_add()函数 */
 	struct list_head	rules_list;
 	struct module		*owner;
 	struct net		*fro_net;

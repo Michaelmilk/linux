@@ -19,6 +19,7 @@
 #include <linux/types.h>
 #include <asm/byteorder.h>
 
+/* 00011110 */
 #define IPTOS_TOS_MASK		0x1E
 #define IPTOS_TOS(tos)		((tos)&IPTOS_TOS_MASK)
 #define	IPTOS_LOWDELAY		0x10

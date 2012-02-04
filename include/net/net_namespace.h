@@ -72,6 +72,7 @@ struct net {
 	unsigned int		dev_base_seq;	/* protected by rtnl_mutex */
 
 	/* core fib_rules */
+	/* struct fib_rules_ops通过其list字段链入此链表 */
 	struct list_head	rules_ops;
 
 

@@ -23,8 +23,10 @@ struct netns_ipv4 {
 	struct ipv4_devconf	*devconf_all;
 	struct ipv4_devconf	*devconf_dflt;
 #ifdef CONFIG_IP_MULTIPLE_TABLES
+	/* 参考fib4_rules_init()函数 */
 	struct fib_rules_ops	*rules_ops;
 #endif
+	/* 指向分配的哈希表桶头节点空间 */
 	struct hlist_head	*fib_table_hash;
 	struct sock		*fibnl;
 

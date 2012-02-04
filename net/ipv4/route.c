@@ -116,8 +116,10 @@
 
 #define IP_MAX_MTU	0xFFF0
 
+/* 5分钟 */
 #define RT_GC_TIMEOUT (300*HZ)
 
+/* 在ip_rt_init()赋初值 */
 static int ip_rt_max_size;
 static int ip_rt_gc_timeout __read_mostly	= RT_GC_TIMEOUT;
 static int ip_rt_gc_min_interval __read_mostly	= HZ / 2;
@@ -241,7 +243,11 @@ const __u8 ip_tos2prio[16] = {
  *    lock held.
  */
 
+/*
+路由表的哈希桶头节点
+*/
 struct rt_hash_bucket {
+	/* 组成单链表 */
 	struct rtable __rcu	*chain;
 };
 
@@ -907,6 +913,7 @@ static int rt_garbage_collect(struct dst_ops *ops)
 	static unsigned long expire = RT_GC_TIMEOUT;
 	static unsigned long last_gc;
 	static int rover;
+	/* equilibrium: 平衡 */
 	static int equilibrium;
 	struct rtable *rth;
 	struct rtable __rcu **rthp;
@@ -919,9 +926,12 @@ static int rt_garbage_collect(struct dst_ops *ops)
 	 * do not make it too frequently.
 	 */
 
+	/* 统计回收次数 */
 	RT_CACHE_STAT_INC(gc_total);
 
+	/* 两次时间小于1/2秒 */
 	if (now - last_gc < ip_rt_gc_min_interval &&
+	/* 未达到上限 */
 	    entries < ip_rt_max_size) {
 		RT_CACHE_STAT_INC(gc_ignored);
 		goto out;
@@ -2368,12 +2378,12 @@ martian_source_keep_err:
 }
 
 /*
-@skb	:
+@skb	: skb报文
 @daddr	: 目的ip
 @saddr	: 源ip
 @tos	: 服务类型
 @dev	: 收到此报文的接口
-@noref	: 是否增加
+@noref	: 是否增加引用
 */
 int ip_route_input_common(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 			   u8 tos, struct net_device *dev, bool noref)
@@ -2384,6 +2394,7 @@ int ip_route_input_common(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 	struct net *net;
 	int res;
 
+	/* 取接口所在的网络命名空间 */
 	net = dev_net(dev);
 
 	rcu_read_lock();
@@ -2411,6 +2422,8 @@ int ip_route_input_common(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 		    net_eq(dev_net(rth->dst.dev), net) &&
 			/* 路由项还未超时 */
 		    !rt_is_expired(rth)) {
+		/* 所有条件满足，找到一项路由缓存 */
+
 			ipv4_validate_peer(rth);
 			if (noref) {
 				dst_use_noref(&rth->dst, jiffies);
@@ -2460,6 +2473,9 @@ skip_cache:
 		rcu_read_unlock();
 		return -EINVAL;
 	}
+	/* 缓存中没有匹配项
+	   则建立新的路由缓存
+	*/
 	res = ip_route_input_slow(skb, daddr, saddr, tos, dev);
 	rcu_read_unlock();
 	return res;
@@ -3388,6 +3404,7 @@ int __init ip_rt_init(void)
 	int rc = 0;
 
 #ifdef CONFIG_IP_ROUTE_CLASSID
+	/* 分配每cpu的统计值变量空间 */
 	ip_rt_acct = __alloc_percpu(256 * sizeof(struct ip_rt_acct), __alignof__(struct ip_rt_acct));
 	if (!ip_rt_acct)
 		panic("IP: failed to allocate ip_rt_acct\n");
@@ -3422,6 +3439,7 @@ int __init ip_rt_init(void)
 	/* 申请哈希表rt_hash_table的桶锁，并初始化 */
 	rt_hash_lock_init();
 
+	/* 回收阈值为平均每个桶下一个节点 */
 	ipv4_dst_ops.gc_thresh = (rt_hash_mask + 1);
 	/* 最多每个桶下16个节点 */
 	ip_rt_max_size = (rt_hash_mask + 1) * 16;

@@ -1049,8 +1049,10 @@ static int __net_init ip_fib_net_init(struct net *net)
 	size_t size = sizeof(struct hlist_head) * FIB_TABLE_HASHSZ;
 
 	/* Avoid false sharing : Use at least a full cache line */
+	/* 分配的空间至少要达到一级缓存线大小 */
 	size = max_t(size_t, size, L1_CACHE_BYTES);
 
+	/* 分配哈希表桶头节点空间 */
 	net->ipv4.fib_table_hash = kzalloc(size, GFP_KERNEL);
 	if (net->ipv4.fib_table_hash == NULL)
 		return -ENOMEM;

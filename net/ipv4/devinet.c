@@ -1597,6 +1597,7 @@ static struct devinet_sysctl_table {
 	struct ctl_table devinet_vars[__IPV4_DEVCONF_MAX];
 	char *dev_name;
 } devinet_sysctl = {
+/* 目录/proc/sys/net/ipv4/conf/XXX/下的内容 */
 	.devinet_vars = {
 		DEVINET_SYSCTL_COMPLEX_ENTRY(FORWARDING, "forwarding",
 					     devinet_sysctl_forward),
@@ -1632,6 +1633,9 @@ static struct devinet_sysctl_table {
 	},
 };
 
+/*
+目录/proc/sys/net/ipv4/conf/@dev_name
+*/
 static int __devinet_sysctl_register(struct net *net, char *dev_name,
 					struct ipv4_devconf *p)
 {
@@ -1836,6 +1840,7 @@ void __init devinet_init(void)
 {
 	int i;
 
+	/* 初始化哈希表桶头 */
 	for (i = 0; i < IN4_ADDR_HSIZE; i++)
 		INIT_HLIST_HEAD(&inet_addr_lst[i]);
 

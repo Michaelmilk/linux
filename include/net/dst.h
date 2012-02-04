@@ -271,6 +271,7 @@ static inline void dst_hold(struct dst_entry * dst)
 	 * __pad_to_align_refcnt declaration in struct dst_entry
 	 */
 	BUILD_BUG_ON(offsetof(struct dst_entry, __refcnt) & 63);
+	/* 增加@dst的引用计数 */
 	atomic_inc(&dst->__refcnt);
 }
 
@@ -455,6 +456,9 @@ static inline void dst_set_expires(struct dst_entry *dst, int timeout)
 /* Output packet to network from transport.  */
 static inline int dst_output(struct sk_buff *skb)
 {
+	/* 调用路由的输出函数
+	   ip_output()
+	*/
 	return skb_dst(skb)->output(skb);
 }
 
