@@ -432,9 +432,9 @@ struct sk_buff {
 	struct sk_buff		*prev;
 
 	/* 此变量用于记录 packet　的到达时间或发送时间。
-       由于计算时间有一定开销，因此只在必要时才使用此变量。
-       需要记录时间时，调用net_enable_timestamp()，
-       不需要时，调用net_disable_timestamp() 。 */
+	   由于计算时间有一定开销，因此只在必要时才使用此变量。
+	   需要记录时间时，调用net_enable_timestamp()，
+	   不需要时，调用net_disable_timestamp() 。 */
 	ktime_t			tstamp;
 
 	/* 该sk_buff属于哪个sock */
@@ -448,8 +448,8 @@ struct sk_buff {
 	 * want to keep them across layers you have to do a skb_clone()
 	 * first. This is owned by whoever has the skb queued ATM.
 	 */
-    /* 此数组作为 SKB 的控制块，具体的协议可用它来做一些私有用途，
-       例如 TCP 用这个控制块保存序列号和重传状态。 */
+	/* 此数组作为 SKB 的控制块，具体的协议可用它来做一些私有用途，
+	   例如 TCP 用这个控制块保存序列号和重传状态。 */
 	char			cb[48] __aligned(8);
 
 	unsigned long		_skb_refdst;
@@ -458,7 +458,7 @@ struct sk_buff {
 #endif
 	/* 当前数据包的大小。为(线性区长度+data_len)之和。
 	   线性区长度 = skb->tail - skb->data，在各个层之间是变化的
-       以ip层为例，进入了ip层，skb->len就是当前ip数据包的长度，包括ip头部和其载荷 */
+	   以ip层为例，进入了ip层，skb->len就是当前ip数据包的长度，包括ip头部和其载荷 */
 	unsigned int		len,
 	/* skb_shared_info中链表frag_list和数组frags中数据长度之和 */
 				data_len;
@@ -474,43 +474,43 @@ struct sk_buff {
 		};
 	};
 	/* 用于实现 QoS，它的值可能取之于 IPv4 头中的 TOS 域。
-       Traffic Control 模块需要根据这个域来对 packet 进行分类，以决定调度策略。 */
+	   Traffic Control 模块需要根据这个域来对 packet 进行分类，以决定调度策略。 */
 	__u32			priority;
 	kmemcheck_bitfield_begin(flags1);
 	/* local_df在 IPv4 中使用，设为1 后代表允许对已经分片的数据包进行再次分片，
-       在IPSec等情况下使用 */
+	   在IPSec等情况下使用 */
 	__u8			local_df:1,
 	/* 代表 skb 是否被 clone 当一个 SKB 被 clone 后，
-       原来的 SKB 和新的 SKB 结构中，”cloned” 都要被设置为1。 */
+	   原来的 SKB 和新的 SKB 结构中，”cloned” 都要被设置为1。 */
 				cloned:1,
 	/* 表示校验和的执行策略，代表网卡是否支持计算接收包checksum
 	   CHECKSUM_NONE：代表网卡不算checksum
 	   CHECKSUM_HW：代表网卡支持硬件计算checksum（对L4 head + payload 的校验），
-                    并且已经将计算结果复制给skb->csum，
-                    软件需要计算“伪头(pseudo header)”的校验和，
-                    与skb->csum相加得到L4 的结果
+			并且已经将计算结果复制给skb->csum，
+			软件需要计算“伪头(pseudo header)”的校验和，
+			与skb->csum相加得到L4 的结果
 	   CHECKSUM_UNNECESSARY：网卡已经计算并校验过整个包的校验，包括伪头，
-                             软件无需再次计算，一般用于 loopback device */
+				软件无需再次计算，一般用于 loopback device */
 				ip_summed:2,
 	/* nohdr代表了 skb_shared_info 里的dataref 有没有被分成两部分
-       nohdr = 0：dataref代表整个skb数据区的引用计数
-       nohdr = 1：dataref的高16bits 代表 skb 数据区“payload 部分”的引用计数，
-                  低 16bits代表整个 skb数据区的引用计数 */
+	   nohdr = 0：dataref代表整个skb数据区的引用计数
+	   nohdr = 1：dataref的高16bits 代表 skb 数据区“payload 部分”的引用计数，
+			低 16bits代表整个 skb数据区的引用计数 */
 				nohdr:1,
 	/* nfctinfo用于netfilter子系统中的conntrack模块记录连接状态，
-       可取值为 enum ip_conntrack_info变量 */
+	   可取值为 enum ip_conntrack_info变量 */
 				nfctinfo:3;
 	/* 根据mac标记该数据包的类型
-       PACKET_HOST, PACKET_OTHERHOST, PACKET_BROADCAST等
-       表示根据 L2的目的mac地址得到的包类型
+	   PACKET_HOST, PACKET_OTHERHOST, PACKET_BROADCAST等
+	   表示根据 L2的目的mac地址得到的包类型
 	   参考eth_type_trans()函数 */
 	__u8			pkt_type:3,
 	/* fast clone
-       通过fclone 参数选择从skbuff_head_cache或者skbuff_fclone_cache 中分配
+	   通过fclone 参数选择从skbuff_head_cache或者skbuff_fclone_cache 中分配
 	   参考函数__alloc_skb() */
 				fclone:2,
 	/* “ipvs_property”是为ip_vs模块添加的变量，
-       置为1 代表已经被ip_vs 某个部分处理过，后续不需要再处理 */
+	   置为1 代表已经被ip_vs 某个部分处理过，后续不需要再处理 */
 				ipvs_property:1,
 				peeked:1,
 				nf_trace:1;
@@ -533,8 +533,8 @@ struct sk_buff {
 #endif
 
 	/* 接收数据包的时候，dev 和 skb_iif 都指向最初的 interface，
-       此后，如果需要被 virtual driver 处理，那么 dev 会发生变化，而 iif 始终不变。
-       参考函数__netif_receive_skb() */
+	   此后，如果需要被 virtual driver 处理，那么 dev 会发生变化，而 iif 始终不变。
+	   参考函数__netif_receive_skb() */
 	int			skb_iif;
 #ifdef CONFIG_NET_SCHED
 	__u16			tc_index;	/* traffic control index */
@@ -586,9 +586,9 @@ struct sk_buff {
 	unsigned char		*head,
 				*data;
 	/* 分配到的内存空间大小。一个skb消耗的所有内存空间。
-       linear_len = skb->end - skb->head
-       truesize = sizeof(struct sk_buff) + linear_len + data_len
-       并不包含struct skb_shared_info */
+	   linear_len = skb->end - skb->head
+	   truesize = sizeof(struct sk_buff) + linear_len + data_len
+	   并不包含struct skb_shared_info */
 	unsigned int		truesize;
 	/* sk_buff 结构本身的引用计数 */
 	atomic_t		users;
@@ -645,6 +645,7 @@ static inline struct dst_entry *skb_dst(const struct sk_buff *skb)
  */
 static inline void skb_dst_set(struct sk_buff *skb, struct dst_entry *dst)
 {
+	/* 直接将@dst指针转换为unsigned long保存 */
 	skb->_skb_refdst = (unsigned long)dst;
 }
 
@@ -2103,6 +2104,18 @@ static inline int __skb_cow(struct sk_buff *skb, unsigned int headroom,
 					GFP_ATOMIC);
 	return 0;
 }
+
+/*
+需要的时候复制线性区数据
+@skb		: 源skb
+@headroom	: 前部需要留的空间
+
+当skb前面没有足够的headroom或者线性区共享了
+则重新分配新的线性区
+分配失败的话，则返回错误，源skb不变
+
+结果是skb拥有一份可写的线性区，并且前部留有@headroom的空间
+*/
 
 /**
  *	skb_cow - copy header of skb when it is required
