@@ -37,6 +37,7 @@ __cold__属性告诉编译器该函数不太可能会被执行
 */
 #define __cold			__attribute__((__cold__))
 
+#define __linktime_error(message) __attribute__((__error__(message)))
 
 /* gcc4.5往后的版本 */
 #if __GNUC_MINOR__ >= 5

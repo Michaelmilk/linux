@@ -1,7 +1,7 @@
 VERSION = 3
-PATCHLEVEL = 2
+PATCHLEVEL = 3
 SUBLEVEL = 0
-EXTRAVERSION = -rc6
+EXTRAVERSION = -rc2
 NAME = Saber-toothed Squirrel
 
 	# 内核版本信息
@@ -532,8 +532,7 @@ endif
 	# 如果make使用了-s参数的话，则阻止命令的输出
 	# 函数findstring的语法是：$(findstring <find>;,<in>;)
 	# 函数findstring的功能是：如果在$(MAKEFLAGS)中能找到字符s，那么返回字符s；否则返回空字符。
-
-ifneq ($(findstring s,$(MAKEFLAGS)),)
+ifneq ($(filter s% -s%,$(MAKEFLAGS)),)
   quiet=silent_
 endif
 
@@ -703,7 +702,7 @@ asm-generic:
 
 no-dot-config-targets := clean mrproper distclean \
 			 cscope gtags TAGS tags help %docs check% coccicheck \
-			 include/linux/version.h headers_% \
+			 include/linux/version.h headers_% archheaders \
 			 kernelversion %src-pkg
 
 	# config-targets置1表示对内核进行配置
@@ -1405,7 +1404,7 @@ prepare1: prepare2 include/linux/version.h include/generated/utsrelease.h \
                    include/config/auto.conf
 	$(cmd_crmodverdir)
 
-archprepare: prepare1 scripts_basic
+archprepare: archheaders prepare1 scripts_basic
 
 prepare0: archprepare FORCE
 	$(Q)$(MAKE) $(build)=.
@@ -1472,8 +1471,11 @@ hdr-inst := -rR -f $(srctree)/scripts/Makefile.headersinst obj
 # If we do an all arch process set dst to asm-$(hdr-arch)
 hdr-dst = $(if $(KBUILD_HEADERS), dst=include/asm-$(hdr-arch), dst=include/asm)
 
+PHONY += archheaders
+archheaders:
+
 PHONY += __headers
-__headers: include/linux/version.h scripts_basic asm-generic FORCE
+__headers: include/linux/version.h scripts_basic asm-generic archheaders FORCE
 	$(Q)$(MAKE) $(build)=scripts build_unifdef
 
 PHONY += headers_install_all

@@ -308,7 +308,7 @@ int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 	/* 代码段选择子
 	   请求特权级 */
 	regs.cs = __KERNEL_CS | get_kernel_rpl();
-	regs.flags = X86_EFLAGS_IF | 0x2;
+	regs.flags = X86_EFLAGS_IF | X86_EFLAGS_BIT1;
 
 	/* Ok, create the new process.. */
 	/* 创建新的内核线程 */

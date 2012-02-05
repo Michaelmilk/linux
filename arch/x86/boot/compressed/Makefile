@@ -33,8 +33,15 @@ hostprogs-y	:= mkpiggy
 	#         arch/x86/boot/compressed/string.o arch/x86/boot/compressed/cmdline.o
 	#         arch/x86/boot/compressed/early_serial_console.o arch/x86/boot/compressed/piggy.o
 	#         -o arch/x86/boot/compressed/vmlinux
+VMLINUX_OBJS = $(obj)/vmlinux.lds $(obj)/head_$(BITS).o $(obj)/misc.o \
+	$(obj)/string.o $(obj)/cmdline.o $(obj)/early_serial_console.o \
+	$(obj)/piggy.o
 
-$(obj)/vmlinux: $(obj)/vmlinux.lds $(obj)/head_$(BITS).o $(obj)/misc.o $(obj)/string.o $(obj)/cmdline.o $(obj)/early_serial_console.o $(obj)/piggy.o FORCE
+ifeq ($(CONFIG_EFI_STUB), y)
+	VMLINUX_OBJS += $(obj)/eboot.o $(obj)/efi_stub_$(BITS).o
+endif
+
+$(obj)/vmlinux: $(VMLINUX_OBJS) FORCE
 	$(call if_changed,ld)
 	@:
 

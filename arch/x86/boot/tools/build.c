@@ -141,6 +141,9 @@ arch/x86/boot/tools/build
 */
 int main(int argc, char ** argv)
 {
+#ifdef CONFIG_EFI_STUB
+	unsigned int file_sz, pe_header;
+#endif
 	unsigned int i, sz, setup_sectors;
 	int c;
 	u32 sys_size;
@@ -212,6 +215,42 @@ int main(int argc, char ** argv)
 	buf[0x1f5] = sys_size >> 8;
 	buf[0x1f6] = sys_size >> 16;
 	buf[0x1f7] = sys_size >> 24;
+
+#ifdef CONFIG_EFI_STUB
+	file_sz = sz + i + ((sys_size * 16) - sz);
+
+	pe_header = *(unsigned int *)&buf[0x3c];
+
+	/* Size of code */
+	*(unsigned int *)&buf[pe_header + 0x1c] = file_sz;
+
+	/* Size of image */
+	*(unsigned int *)&buf[pe_header + 0x50] = file_sz;
+
+#ifdef CONFIG_X86_32
+	/* Address of entry point */
+	*(unsigned int *)&buf[pe_header + 0x28] = i;
+
+	/* .text size */
+	*(unsigned int *)&buf[pe_header + 0xb0] = file_sz;
+
+	/* .text size of initialised data */
+	*(unsigned int *)&buf[pe_header + 0xb8] = file_sz;
+#else
+	/*
+	 * Address of entry point. startup_32 is at the beginning and
+	 * the 64-bit entry point (startup_64) is always 512 bytes
+	 * after.
+	 */
+	*(unsigned int *)&buf[pe_header + 0x28] = i + 512;
+
+	/* .text size */
+	*(unsigned int *)&buf[pe_header + 0xc0] = file_sz;
+
+	/* .text size of initialised data */
+	*(unsigned int *)&buf[pe_header + 0xc8] = file_sz;
+#endif /* CONFIG_X86_32 */
+#endif /* CONFIG_EFI_STUB */
 
 	crc = partial_crc32(buf, i, crc);
 	/* 将buf[]中的setup部分写入标准输出，重定向至文件bzImage */

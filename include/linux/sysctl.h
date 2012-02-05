@@ -1039,7 +1039,7 @@ struct ctl_table
 	const char *procname;		/* Text ID for /proc/sys, or zero */
 	void *data;
 	int maxlen;
-	mode_t mode;
+	umode_t mode;
 	/* procname目录的子目录 */
 	struct ctl_table *child;
 	struct ctl_table *parent;	/* Automatically set */

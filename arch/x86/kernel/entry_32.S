@@ -42,6 +42,7 @@
  */
 
 #include <linux/linkage.h>
+#include <linux/err.h>
 #include <asm/thread_info.h>
 #include <asm/irqflags.h>
 #include <asm/errno.h>
@@ -80,8 +81,6 @@
  * Allowing a register to be clobbered can shrink the paravirt replacement
  * enough to patch inline, increasing performance.
  */
-
-#define nr_syscalls ((syscall_table_size)/4)
 
 #ifdef CONFIG_PREEMPT
 #define preempt_stop(clobbers)	DISABLE_INTERRUPTS(clobbers); TRACE_IRQS_OFF
@@ -452,7 +451,7 @@ sysenter_past_esp:
 	testl $_TIF_WORK_SYSCALL_ENTRY,TI_flags(%ebp)
 	jnz sysenter_audit
 sysenter_do_call:
-	cmpl $(nr_syscalls), %eax
+	cmpl $(NR_syscalls), %eax
 	jae syscall_badsys
 	call *sys_call_table(,%eax,4)
 	movl %eax,PT_EAX(%esp)
@@ -484,7 +483,7 @@ sysenter_audit:
 	movl %ebx,%ecx			/* 3rd arg: 1st syscall arg */
 	movl %eax,%edx			/* 2nd arg: syscall number */
 	movl $AUDIT_ARCH_I386,%eax	/* 1st arg: audit arch */
-	call audit_syscall_entry
+	call __audit_syscall_entry
 	pushl_cfi %ebx
 	movl PT_EAX(%esp),%eax		/* reload syscall number */
 	jmp sysenter_do_call
@@ -495,11 +494,10 @@ sysexit_audit:
 	TRACE_IRQS_ON
 	ENABLE_INTERRUPTS(CLBR_ANY)
 	movl %eax,%edx		/* second arg, syscall return value */
-	cmpl $0,%eax		/* is it < 0? */
-	setl %al		/* 1 if so, 0 if not */
+	cmpl $-MAX_ERRNO,%eax	/* is it an error ? */
+	setbe %al		/* 1 if so, 0 if not */
 	movzbl %al,%eax		/* zero-extend that */
-	inc %eax /* first arg, 0->1(AUDITSC_SUCCESS), 1->2(AUDITSC_FAILURE) */
-	call audit_syscall_exit
+	call __audit_syscall_exit
 	DISABLE_INTERRUPTS(CLBR_ANY)
 	TRACE_IRQS_OFF
 	movl TI_flags(%ebp), %ecx
@@ -536,7 +534,7 @@ ENTRY(system_call)
 					# system call tracing in operation / emulation
 	testl $_TIF_WORK_SYSCALL_ENTRY,TI_flags(%ebp)
 	jnz syscall_trace_entry
-	cmpl $(nr_syscalls), %eax
+	cmpl $(NR_syscalls), %eax
 	jae syscall_badsys
 syscall_call:
 	/* 调用相应系统调用号的函数 */
@@ -667,6 +665,8 @@ work_notifysig:				# deal with pending signals and
 	movl %esp, %eax
 	jne work_notifysig_v86		# returning to kernel-space or
 					# vm86-space
+	TRACE_IRQS_ON
+	ENABLE_INTERRUPTS(CLBR_NONE)
 	xorl %edx, %edx
 	/* 进行信号处理 */
 	call do_notify_resume
@@ -681,6 +681,8 @@ work_notifysig_v86:
 #else
 	movl %esp, %eax
 #endif
+	TRACE_IRQS_ON
+	ENABLE_INTERRUPTS(CLBR_NONE)
 	xorl %edx, %edx
 	/* 进行信号处理 */
 	call do_notify_resume
@@ -693,8 +695,8 @@ syscall_trace_entry:
 	movl $-ENOSYS,PT_EAX(%esp)
 	movl %esp, %eax
 	call syscall_trace_enter
-	/* What it returned is what we''ll actually use.  */
-	cmpl $(nr_syscalls), %eax
+	/* What it returned is what we'll actually use.  */
+	cmpl $(NR_syscalls), %eax
 	jnae syscall_call
 	jmp syscall_exit
 END(syscall_trace_entry)
@@ -737,29 +739,28 @@ END(syscall_badsys)
  * System calls that need a pt_regs pointer.
  */
 #define PTREGSCALL0(name) \
-	ALIGN; \
-ptregs_##name: \
+ENTRY(ptregs_##name) ;  \
 	leal 4(%esp),%eax; \
-	jmp sys_##name;
+	jmp sys_##name; \
+ENDPROC(ptregs_##name)
 
 #define PTREGSCALL1(name) \
-	ALIGN; \
-ptregs_##name: \
+ENTRY(ptregs_##name) ; \
 	leal 4(%esp),%edx; \
 	movl (PT_EBX+4)(%esp),%eax; \
-	jmp sys_##name;
+	jmp sys_##name; \
+ENDPROC(ptregs_##name)
 
 #define PTREGSCALL2(name) \
-	ALIGN; \
-ptregs_##name: \
+ENTRY(ptregs_##name) ; \
 	leal 4(%esp),%ecx; \
 	movl (PT_ECX+4)(%esp),%edx; \
 	movl (PT_EBX+4)(%esp),%eax; \
-	jmp sys_##name;
+	jmp sys_##name; \
+ENDPROC(ptregs_##name)
 
 #define PTREGSCALL3(name) \
-	ALIGN; \
-ptregs_##name: \
+ENTRY(ptregs_##name) ; \
 	CFI_STARTPROC; \
 	leal 4(%esp),%eax; \
 	pushl_cfi %eax; \
@@ -784,8 +785,7 @@ PTREGSCALL2(vm86)
 PTREGSCALL1(vm86old)
 
 /* Clone is an oddball.  The 4th arg is in %edi */
-	ALIGN;
-ptregs_clone:
+ENTRY(ptregs_clone)
 	CFI_STARTPROC
 	leal 4(%esp),%eax
 	pushl_cfi %eax
@@ -1261,11 +1261,6 @@ return_to_handler:
 	popl %eax
 	jmp *%ecx
 #endif
-
-.section .rodata,"a"
-#include "syscall_table_32.S"
-
-syscall_table_size=(.-sys_call_table)
 
 /*
  * Some functions should be protected against kprobes

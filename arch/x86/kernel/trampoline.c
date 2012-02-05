@@ -29,13 +29,13 @@ void __init setup_trampolines(void)
 	   以便AP的实模式下执行该代码
 	   AP: application processor 非启动cpu */
 	mem = memblock_find_in_range(0, 1<<20, size, PAGE_SIZE);
-	if (mem == MEMBLOCK_ERROR)
+	if (!mem)
 		panic("Cannot allocate trampoline\n");
 
 	/* 记录虚拟地址 */
 	x86_trampoline_base = __va(mem);
 	/* 在memblock中标记预留 */
-	memblock_x86_reserve_range(mem, mem + size, "TRAMPOLINE");
+	memblock_reserve(mem, size);
 
 	/* 打印分配的地址和代码大小
 	   例如:Base memory trampoline at [c009b000] 9b000 size 16384 */

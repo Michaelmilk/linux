@@ -112,11 +112,6 @@
 #include <net/arp.h>
 #include <net/ax25.h>
 #include <net/netrom.h>
-#if defined(CONFIG_ATM_CLIP) || defined(CONFIG_ATM_CLIP_MODULE)
-#include <net/atmclip.h>
-struct neigh_table *clip_tbl_hook;
-EXPORT_SYMBOL(clip_tbl_hook);
-#endif
 
 #include <asm/system.h>
 #include <linux/uaccess.h>
@@ -126,7 +121,7 @@ EXPORT_SYMBOL(clip_tbl_hook);
 /*
  *	Interface to generic neighbour cache.
  */
-static u32 arp_hash(const void *pkey, const struct net_device *dev, __u32 rnd);
+static u32 arp_hash(const void *pkey, const struct net_device *dev, __u32 *hash_rnd);
 static int arp_constructor(struct neighbour *neigh);
 static void arp_solicit(struct neighbour *neigh, struct sk_buff *skb);
 static void arp_error_report(struct neighbour *neigh, struct sk_buff *skb);
@@ -173,7 +168,6 @@ static const struct neigh_ops arp_broken_ops = {
 
 struct neigh_table arp_tbl = {
 	.family		= AF_INET,
-	.entry_size	= sizeof(struct neighbour) + 4,
 	.key_len	= 4,
 	.hash		= arp_hash,
 	.constructor	= arp_constructor,
@@ -186,7 +180,7 @@ struct neigh_table arp_tbl = {
 		.gc_staletime		= 60 * HZ,
 		.reachable_time		= 30 * HZ,
 		.delay_probe_time	= 5 * HZ,
-		.queue_len		= 3,
+		.queue_len_bytes	= 64*1024,
 		.ucast_probes		= 3,
 		.mcast_probes		= 3,
 		.anycast_delay		= 1 * HZ,
@@ -230,9 +224,9 @@ int arp_mc_map(__be32 addr, u8 *haddr, struct net_device *dev, int dir)
 
 static u32 arp_hash(const void *pkey,
 		    const struct net_device *dev,
-		    __u32 hash_rnd)
+		    __u32 *hash_rnd)
 {
-	return arp_hashfn(*(u32 *)pkey, dev, hash_rnd);
+	return arp_hashfn(*(u32 *)pkey, dev, *hash_rnd);
 }
 
 /*
@@ -301,9 +295,9 @@ static int arp_constructor(struct neighbour *neigh)
 		default:
 			break;
 		case ARPHRD_ROSE:
-#if defined(CONFIG_AX25) || defined(CONFIG_AX25_MODULE)
+#if IS_ENABLED(CONFIG_AX25)
 		case ARPHRD_AX25:
-#if defined(CONFIG_NETROM) || defined(CONFIG_NETROM_MODULE)
+#if IS_ENABLED(CONFIG_NETROM)
 		case ARPHRD_NETROM:
 #endif
 			neigh->ops = &arp_broken_ops;
@@ -618,18 +612,20 @@ struct sk_buff *arp_create(int type, int ptype, __be32 dest_ip,
 	struct sk_buff *skb;
 	struct arphdr *arp;
 	unsigned char *arp_ptr;
+	int hlen = LL_RESERVED_SPACE(dev);
+	int tlen = dev->needed_tailroom;
 
 	/*
 	 *	Allocate a buffer
 	 */
 
 	/* 申请一个skb用来构造arp包 */
-	skb = alloc_skb(arp_hdr_len(dev) + LL_ALLOCATED_SPACE(dev), GFP_ATOMIC);
+	skb = alloc_skb(arp_hdr_len(dev) + hlen + tlen, GFP_ATOMIC);
 	if (skb == NULL)
 		return NULL;
 
 	/* 预留硬件帧头区域,16字节对齐 */
-	skb_reserve(skb, LL_RESERVED_SPACE(dev));
+	skb_reserve(skb, hlen);
 	/* 设置ip层包头指针 */
 	skb_reset_network_header(skb);
 	/* 分配arp包的数据区域 */
@@ -669,13 +665,13 @@ struct sk_buff *arp_create(int type, int ptype, __be32 dest_ip,
 		arp->ar_pro = htons(ETH_P_IP);
 		break;
 
-#if defined(CONFIG_AX25) || defined(CONFIG_AX25_MODULE)
+#if IS_ENABLED(CONFIG_AX25)
 	case ARPHRD_AX25:
 		arp->ar_hrd = htons(ARPHRD_AX25);
 		arp->ar_pro = htons(AX25_P_IP);
 		break;
 
-#if defined(CONFIG_NETROM) || defined(CONFIG_NETROM_MODULE)
+#if IS_ENABLED(CONFIG_NETROM)
 	case ARPHRD_NETROM:
 		arp->ar_hrd = htons(ARPHRD_NETROM);
 		arp->ar_pro = htons(AX25_P_IP);
@@ -683,13 +679,13 @@ struct sk_buff *arp_create(int type, int ptype, __be32 dest_ip,
 #endif
 #endif
 
-#if defined(CONFIG_FDDI) || defined(CONFIG_FDDI_MODULE)
+#if IS_ENABLED(CONFIG_FDDI)
 	case ARPHRD_FDDI:
 		arp->ar_hrd = htons(ARPHRD_ETHER);
 		arp->ar_pro = htons(ETH_P_IP);
 		break;
 #endif
-#if defined(CONFIG_TR) || defined(CONFIG_TR_MODULE)
+#if IS_ENABLED(CONFIG_TR)
 	case ARPHRD_IEEE802_TR:
 		arp->ar_hrd = htons(ARPHRD_IEEE802);
 		arp->ar_pro = htons(ETH_P_IP);
@@ -1131,7 +1127,7 @@ static int arp_req_set(struct net *net, struct arpreq *r,
 			return -EINVAL;
 	}
 	switch (dev->type) {
-#if defined(CONFIG_FDDI) || defined(CONFIG_FDDI_MODULE)
+#if IS_ENABLED(CONFIG_FDDI)
 	case ARPHRD_FDDI:
 		/*
 		 * According to RFC 1390, FDDI devices should accept ARP
@@ -1382,7 +1378,7 @@ void __init arp_init(void)
 }
 
 #ifdef CONFIG_PROC_FS
-#if defined(CONFIG_AX25) || defined(CONFIG_AX25_MODULE)
+#if IS_ENABLED(CONFIG_AX25)
 
 /* ------------------------------------------------------------------------ */
 /*
@@ -1430,7 +1426,7 @@ static void arp_format_neigh_entry(struct seq_file *seq,
 
 	read_lock(&n->lock);
 	/* Convert hardware address to XX:XX:XX:XX ... form. */
-#if defined(CONFIG_AX25) || defined(CONFIG_AX25_MODULE)
+#if IS_ENABLED(CONFIG_AX25)
 	if (hatype == ARPHRD_AX25 || hatype == ARPHRD_NETROM)
 		ax2asc2((ax25_address *)n->ha, hbuffer);
 	else {
@@ -1443,7 +1439,7 @@ static void arp_format_neigh_entry(struct seq_file *seq,
 	if (k != 0)
 		--k;
 	hbuffer[k] = 0;
-#if defined(CONFIG_AX25) || defined(CONFIG_AX25_MODULE)
+#if IS_ENABLED(CONFIG_AX25)
 	}
 #endif
 	sprintf(tbuf, "%pI4", n->primary_key);

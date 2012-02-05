@@ -77,7 +77,7 @@ struct neigh_parms {
 	int	delay_probe_time;
 
 	/* arp缓存队列长度，默认3个skb */
-	int	queue_len;
+	int	queue_len_bytes;
 	/* 单播探测,默认3次 */
 	int	ucast_probes;
 	/* 应用探测,默认0次 */
@@ -148,6 +148,7 @@ struct neighbour {
 	   当收到正确应答, 邻居进入连接状态(NUD_REACHABLE),
 	   这时arp_queue中发送包将被创建帧头后发送到设备上 */
 	struct sk_buff_head	arp_queue;
+	unsigned int		arp_queue_len_bytes;
 	/* 定时器 */
 	struct timer_list	timer;
 	/* 最近使用时间 */
@@ -208,6 +209,8 @@ struct pneigh_entry {
  *	neighbour table manipulation
  */
 
+#define NEIGH_NUM_HASH_RND	4
+
 /*
 对该结构的分配由neigh_hash_alloc()完成
 */
@@ -217,7 +220,7 @@ struct neigh_hash_table {
 	struct neighbour __rcu	**hash_buckets;
 	/* hash随机种子，初始化时赋值 */
 	unsigned int		hash_shift;
-	__u32			hash_rnd;
+	__u32			hash_rnd[NEIGH_NUM_HASH_RND];
 	struct rcu_head		rcu;
 };
 
@@ -242,7 +245,7 @@ struct neigh_table {
 	/* 构造出存放和检索这个neigh_table的neighbour的哈希函数 */
 	__u32			(*hash)(const void *pkey,
 					const struct net_device *dev,
-					__u32 hash_rnd);
+					__u32 *hash_rnd);
 	int			(*constructor)(struct neighbour *);
 	int			(*pconstructor)(struct pneigh_entry *);
 	void			(*pdestructor)(struct pneigh_entry *);
@@ -264,13 +267,19 @@ struct neigh_table {
 	atomic_t		entries;
 	rwlock_t		lock;
 	unsigned long		last_rand;
-	struct kmem_cache	*kmem_cachep;
 	struct neigh_statistics	__percpu *stats;
 	/* 邻居哈希表 */
 	struct neigh_hash_table __rcu *nht;
 	/* 邻接代理hash表 */
 	struct pneigh_entry	**phash_buckets;
 };
+
+#define NEIGH_PRIV_ALIGN	sizeof(long long)
+
+static inline void *neighbour_priv(const struct neighbour *n)
+{
+	return (char *)n + ALIGN(sizeof(*n) + n->tbl->key_len, NEIGH_PRIV_ALIGN);
+}
 
 /* flags for neigh_update() */
 #define NEIGH_UPDATE_F_OVERRIDE			0x00000001

@@ -52,6 +52,28 @@ ENTRY(startup_32)
 	/* 对连接好的arch/x86/boot/compressed/vmlinux使用objdump -d得到的信息
 	   第一条命令就是这里的cld
 	   DF标志置0，指示地址方向为增加 */
+#ifdef CONFIG_EFI_STUB
+	/*
+	 * We don't need the return address, so set up the stack so
+	 * efi_main() can find its arugments.
+	 */
+	add	$0x4, %esp
+
+	call	efi_main
+	cmpl	$0, %eax
+	je	preferred_addr
+	movl	%eax, %esi
+	call	1f
+1:
+	popl	%eax
+	subl	$1b, %eax
+	subl	BP_pref_address(%esi), %eax
+	add	BP_code32_start(%esi), %eax
+	leal	preferred_addr(%eax), %eax
+	jmp	*%eax
+
+preferred_addr:
+#endif
 	cld
 	/*
 	 * Test KEEP_SEGMENTS flag to see if the bootloader is asking

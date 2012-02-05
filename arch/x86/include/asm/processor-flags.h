@@ -12,6 +12,7 @@ carry: 进位
 /*
 parity: 奇偶校验
 */
+#define X86_EFLAGS_BIT1	0x00000002 /* Bit 1 - always on */
 #define X86_EFLAGS_PF	0x00000004 /* Parity Flag */
 /*
 auxiliary: 辅助的

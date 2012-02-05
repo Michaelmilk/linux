@@ -31,10 +31,11 @@ static void __init i386_default_early_setup(void)
 
 void __init i386_start_kernel(void)
 {
-	memblock_init();
+
 
 	/* 标记预留内核代码段，数据段，和BSS段 */
-	memblock_x86_reserve_range(__pa_symbol(&_text), __pa_symbol(&__bss_stop), "TEXT DATA BSS");
+	memblock_reserve(__pa_symbol(&_text),
+			 __pa_symbol(&__bss_stop) - __pa_symbol(&_text));
 
 #ifdef CONFIG_BLK_DEV_INITRD
 	/* Reserve INITRD */
@@ -46,7 +47,7 @@ void __init i386_start_kernel(void)
 		/* 假定起始地址已经按页大小对齐了
 	  	   所以只将结束地址对齐下 */
 		u64 ramdisk_end   = PAGE_ALIGN(ramdisk_image + ramdisk_size);
-		memblock_x86_reserve_range(ramdisk_image, ramdisk_end, "RAMDISK");
+		memblock_reserve(ramdisk_image, ramdisk_end - ramdisk_image);
 	}
 #endif
 

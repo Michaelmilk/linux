@@ -90,8 +90,6 @@ int register_filesystem(struct file_system_type * fs)
 	/* @fs只能是单一实例，不能是已经组成链表的 */
 	if (fs->next)
 		return -EBUSY;
-	/* 初始化超级块链表头 */
-	INIT_LIST_HEAD(&fs->fs_supers);
 	/* 获取链表file_systems的写锁 */
 	write_lock(&file_systems_lock);
 	/* 检查是否有重复项 */

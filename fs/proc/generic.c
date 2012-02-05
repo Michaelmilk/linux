@@ -618,7 +618,7 @@ static int proc_register(struct proc_dir_entry * dir, struct proc_dir_entry * dp
 */
 static struct proc_dir_entry *__proc_create(struct proc_dir_entry **parent,
 					  const char *name,
-					  mode_t mode,
+					  umode_t mode,
 					  nlink_t nlink)
 {
 	struct proc_dir_entry *ent = NULL;
@@ -694,7 +694,7 @@ struct proc_dir_entry *proc_symlink(const char *name,
 }
 EXPORT_SYMBOL(proc_symlink);
 
-struct proc_dir_entry *proc_mkdir_mode(const char *name, mode_t mode,
+struct proc_dir_entry *proc_mkdir_mode(const char *name, umode_t mode,
 		struct proc_dir_entry *parent)
 {
 	struct proc_dir_entry *ent;
@@ -748,7 +748,7 @@ EXPORT_SYMBOL(proc_mkdir);
 如果要在/proc下建立proc条目，parent应当为NULL。
 否则它应当为proc_mkdir返回的struct proc_dir_entry结构的指针。
 */
-struct proc_dir_entry *create_proc_entry(const char *name, mode_t mode,
+struct proc_dir_entry *create_proc_entry(const char *name, umode_t mode,
 					 struct proc_dir_entry *parent)
 {
 	struct proc_dir_entry *ent;
@@ -779,7 +779,7 @@ struct proc_dir_entry *create_proc_entry(const char *name, mode_t mode,
 }
 EXPORT_SYMBOL(create_proc_entry);
 
-struct proc_dir_entry *proc_create_data(const char *name, mode_t mode,
+struct proc_dir_entry *proc_create_data(const char *name, umode_t mode,
 					struct proc_dir_entry *parent,
 					const struct file_operations *proc_fops,
 					void *data)
