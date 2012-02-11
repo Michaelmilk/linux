@@ -492,13 +492,15 @@ static int exact_lock(dev_t dev, void *data)
  * cdev_add() - add a char device to the system
  * @p: the cdev structure for the device
  * @dev: the first device number for which this device is responsible
- * @count: the number of consecutive(连续不断的) minor numbers corresponding to this
+ * @count: the number of consecutive minor numbers corresponding to this
  *         device
  *
  * cdev_add() adds the device represented by @p to the system, making it
  * live immediately.  A negative error code is returned on failure.
  */
 /*
+consecutive: 连续不断的
+
 将cdev对象添加到驱动模型中,其主要是通过kobj_map()来实现
 */
 int cdev_add(struct cdev *p, dev_t dev, unsigned count)

@@ -65,15 +65,6 @@ static inline void atomic_sub(int i, atomic_t *v)
 		     : "ir" (i));
 }
 
-/**
- * atomic_sub_and_test - subtract value from variable and test result
- * @i: integer value to subtract
- * @v: pointer of type atomic_t
- *
- * Atomically subtracts @i from @v and returns
- * true if the result is zero, or false for all
- * other cases.
- */
 /*
 SETE/SETZ - Set if Equal / Set if Zero (386+)
 
@@ -98,6 +89,17 @@ otherwise sets the operand to 0.
   这时该内存单元可能已经被修改了，两者可能不一致了。这里的memory为损坏部。 
   (先是指令部：输出部：输入部：损坏部)
 */
+
+/**
+ * atomic_sub_and_test - subtract value from variable and test result
+ * @i: integer value to subtract
+ * @v: pointer of type atomic_t
+ *
+ * Atomically subtracts @i from @v and returns
+ * true if the result is zero, or false for all
+ * other cases.
+ */
+
 /*
 从@v中减去@i
 若@v值变为了0，则返回true

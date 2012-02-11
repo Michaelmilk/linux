@@ -123,10 +123,12 @@ char *get_options(const char *str, int nints, int *ints)
  *	%M (for megabytes, or 1048576 bytes), or %G (for gigabytes, or
  *	1073741824).  If the number is suffixed with K, M, or G, then
  *	the return value is the number multiplied by one kilobyte, one
- *	megabyte, or one gigabyte, respectively(分别的).
+ *	megabyte, or one gigabyte, respectively.
  */
 
 /*
+respectively: 分别的
+
 返回字符串表示的字节数
 */
 unsigned long long memparse(const char *ptr, char **retptr)

@@ -49,6 +49,20 @@ extern int __must_check bus_create_file(struct bus_type *,
 					struct bus_attribute *);
 extern void bus_remove_file(struct bus_type *, struct bus_attribute *);
 
+/*
+bus_type 代表一个总线，对应于/sys/bus/下的一个目录。
+
+一个实际的总线在设备驱动模型中是用两个结构表示的： bus_type和 device。
+bus_type 代表总线类型，出现在/sys/bus/目录下；
+device 代表总线设备，出现在/sys/devices/目录下，
+这表明实际的总线本质上是一种设备。
+
+驱动核心可以注册多种类型的总线。
+每种总线下面可以挂载许多设备。(通过kset devices)
+每种总线下可以用很多设备驱动。(通过包含一个kset drivers)}
+每个驱动可以处理一组设备。
+*/
+
 /**
  * struct bus_type - The bus type of the device
  *
@@ -86,19 +100,7 @@ extern void bus_remove_file(struct bus_type *, struct bus_attribute *);
  * default attributes, the bus' methods, PM operations, and the driver core's
  * private data.
  */
-/*
-bus_type 代表一个总线，对应于/sys/bus/下的一个目录。
 
-一个实际的总线在设备驱动模型中是用两个结构表示的： bus_type和 device。
-bus_type 代表总线类型，出现在/sys/bus/目录下；
-device 代表总线设备，出现在/sys/devices/目录下，
-这表明实际的总线本质上是一种设备。
-
-驱动核心可以注册多种类型的总线。
-每种总线下面可以挂载许多设备。(通过kset devices)
-每种总线下可以用很多设备驱动。(通过包含一个kset drivers)}
-每个驱动可以处理一组设备。
-*/
 struct bus_type {
 	/* 总线名称，显示在/sys/bus/目录下，如/sys/bus/pci */
 	const char		*name;
@@ -108,19 +110,19 @@ struct bus_type {
 	struct device_attribute	*dev_attrs;
 	struct driver_attribute	*drv_attrs;
 
-    /* 对设备和驱动的操作方法
-       这几个方法在 device_driver 中也定义了。
-       内核在调用这些方法时，会优先调用 bus_type 中定义的方法。
-       如果相应的方法在bus_type 中未定义，才会去调用 device_driver中定义的方法。
+	/* 对设备和驱动的操作方法
+	   这几个方法在 device_driver 中也定义了。
+	   内核在调用这些方法时，会优先调用 bus_type 中定义的方法。
+	   如果相应的方法在bus_type 中未定义，才会去调用 device_driver中定义的方法。
 
-       设备驱动匹配函数
-       将设备驱动程序粘接到设备上，
-       函数match通过把总线驱动程序支持的设备ID与特定设备ID进行比较，
-       来决定总线是否支持这个设备。 */
+	   设备驱动匹配函数
+	   将设备驱动程序粘接到设备上，
+	   函数match通过把总线驱动程序支持的设备ID与特定设备ID进行比较，
+	   来决定总线是否支持这个设备。 */
 	int (*match)(struct device *dev, struct device_driver *drv);
 	/* 热拔插事件
-       uevent 是“user event”的简称，是一种内核向用户空间发送信息的方式。
-       Linux 内核的热拔插机制（hotplug）就是通过 uevent 实现的。 */
+	   uevent 是“user event”的简称，是一种内核向用户空间发送信息的方式。
+	   Linux 内核的热拔插机制（hotplug）就是通过 uevent 实现的。 */
 	int (*uevent)(struct device *dev, struct kobj_uevent_env *env);
 	int (*probe)(struct device *dev);
 	int (*remove)(struct device *dev);
@@ -254,12 +256,12 @@ struct device_driver {
 	const struct of_device_id	*of_match_table;
 
 	/* 用来查询特定设备是否存在的函数(以及这个驱动程序是否能操作它)
-       函数probe被调用来验证某一类型硬件的存在。
-       在总线已经验证设备的ID和驱动程序支持的设备ID中的一个匹配后，
-       函数probe在驱动程序邦定过程中被调用。
-       它可分配一个特定驱动程序的结构，但它不应该做硬件本身的任何初始化。
-       在绑定期间，函数init在函数probe成功返回后
-       并且设备被注册到它的设备类时调用，它负责初始化硬件。 */
+	   函数probe被调用来验证某一类型硬件的存在。
+	   在总线已经验证设备的ID和驱动程序支持的设备ID中的一个匹配后，
+	   函数probe在驱动程序邦定过程中被调用。
+	   它可分配一个特定驱动程序的结构，但它不应该做硬件本身的任何初始化。
+	   在绑定期间，函数init在函数probe成功返回后
+	   并且设备被注册到它的设备类时调用，它负责初始化硬件。 */
 	int (*probe) (struct device *dev);
 	/* 当设备从系统删除的时候要调用remove函数 */
 	int (*remove) (struct device *dev);
