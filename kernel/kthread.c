@@ -18,8 +18,17 @@
 #include <linux/freezer.h>
 #include <trace/events/sched.h>
 
+/*
+控制对kthread_create_list链表的并发
+*/
 static DEFINE_SPINLOCK(kthread_create_lock);
+/*
+等待被创建的内核线程链表
+*/
 static LIST_HEAD(kthread_create_list);
+/*
+在rest_init()中赋值，即kthreadd内核线程
+*/
 struct task_struct *kthreadd_task;
 
 struct kthread_create_info
@@ -134,6 +143,9 @@ int tsk_fork_get_node(struct task_struct *tsk)
 	return numa_node_id();
 }
 
+/*
+创建内核线程
+*/
 static void create_kthread(struct kthread_create_info *create)
 {
 	int pid;
@@ -272,33 +284,48 @@ int kthread_stop(struct task_struct *k)
 }
 EXPORT_SYMBOL(kthread_stop);
 
+/*
+系统初始化的时候创建的kthreadd内核线程函数
+该线程随后承担创建新内核线程的任务
+*/
 int kthreadd(void *unused)
 {
 	struct task_struct *tsk = current;
 
 	/* Setup a clean context for our children to inherit. */
 	set_task_comm(tsk, "kthreadd");
+	/* 该线程不处理信号 */
 	ignore_signals(tsk);
+	/* 在所有cpu上可运行 */
 	set_cpus_allowed_ptr(tsk, cpu_all_mask);
+	/* 允许运行在内存节点的哪个区域 */
 	set_mems_allowed(node_states[N_HIGH_MEMORY]);
 
 	current->flags |= PF_NOFREEZE;
 
+	/* 循环 */
 	for (;;) {
 		set_current_state(TASK_INTERRUPTIBLE);
+		/* kthread_create_list链表空的话，则主动调度，让出cpu */
 		if (list_empty(&kthread_create_list))
 			schedule();
+		/* 进入就绪状态 */
 		__set_current_state(TASK_RUNNING);
 
+		/* 取kthread_create_list链表锁 */
 		spin_lock(&kthread_create_lock);
+		/* 循环直至链表空 */
 		while (!list_empty(&kthread_create_list)) {
 			struct kthread_create_info *create;
 
+			/* 根据链表节点取kthread_create_info结构 */
 			create = list_entry(kthread_create_list.next,
 					    struct kthread_create_info, list);
+			/* 从链表中移除 */
 			list_del_init(&create->list);
 			spin_unlock(&kthread_create_lock);
 
+			/* 根据链表中的kthread_create_info结构信息创建新的内核线程 */
 			create_kthread(create);
 
 			spin_lock(&kthread_create_lock);

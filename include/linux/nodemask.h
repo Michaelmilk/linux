@@ -95,6 +95,9 @@
 #include <linux/bitmap.h>
 #include <linux/numa.h>
 
+/*
+内存节点位图
+*/
 typedef struct { DECLARE_BITMAP(bits, MAX_NUMNODES); } nodemask_t;
 extern nodemask_t _unused_nodemask_arg_;
 

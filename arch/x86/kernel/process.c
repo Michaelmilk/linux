@@ -280,6 +280,7 @@ extern void kernel_thread_helper(void);
  */
 /*
 kernel_thread()才是真正创建内核线程的所在
+因为到了这里线程有了寄存器的上下文环境值
 */
 int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 {

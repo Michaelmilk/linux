@@ -10,6 +10,10 @@
 #include <linux/threads.h>
 #include <linux/bitmap.h>
 
+/*
+cpu相关状态的掩码结构
+内部封装一个至少含有NR_CPUS个位的位图
+*/
 typedef struct cpumask { DECLARE_BITMAP(bits, NR_CPUS); } cpumask_t;
 
 /**
@@ -706,6 +710,11 @@ void set_cpu_active(unsigned int cpu, bool active);
 void init_cpu_present(const struct cpumask *src);
 void init_cpu_possible(const struct cpumask *src);
 void init_cpu_online(const struct cpumask *src);
+
+/*
+将含有NR_CPUS个位的位图转换为cpumask结构类型的指针来指向
+@bitmap: 位图
+*/
 
 /**
  * to_cpumask - convert an NR_CPUS bitmap to a struct cpumask *

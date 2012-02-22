@@ -523,7 +523,7 @@ asmlinkage void __init start_kernel(void)
 {
 	char * command_line;
 	/* 引用2个内核符号，在链接脚本arch/x86/kernel/vmlinux.lds.S引用的
-       头文件include/asm-generic/vmlinux.lds.h中定义的内核参数起始地址 */
+	   头文件include/asm-generic/vmlinux.lds.h中定义的内核参数起始地址 */
 	extern const struct kernel_param __start___param[], __stop___param[];
 
 	/*
@@ -562,9 +562,9 @@ asmlinkage void __init start_kernel(void)
 	/* 根据bios和boot loader传递的参数收集系统硬件信息
 	   设置与体系结构相关的环境
 
-       每种体系结构都有自己的setup_arch()函数，是体系结构相关的，
-       具体编译哪个体系结构的setup_arch()函数,
-       由源码树顶层目录下的Makefile中的ARCH变量决定 */
+	   每种体系结构都有自己的setup_arch()函数，是体系结构相关的，
+	   具体编译哪个体系结构的setup_arch()函数,
+	   由源码树顶层目录下的Makefile中的ARCH变量决定 */
 	setup_arch(&command_line);
 	mm_init_owner(&init_mm, &init_task);
 	mm_init_cpumask(&init_mm);
@@ -861,10 +861,10 @@ static noinline int init_post(void)
 {
 	/* need to finish all async __init code before freeing the memory */
 	async_synchronize_full();
-    /* 调用free_initmem()舍弃内存的__init_begin至__init_end
+	/* 调用free_initmem()舍弃内存的__init_begin至__init_end
 	   （包括.init.setup、.initcall.init等节）之间的数据。
-       所有使用__init标记过的函数和使用__initdata标记过的数据，
-       在free_initmem()函数执行后，都不能再使用。 */
+	   所有使用__init标记过的函数和使用__initdata标记过的数据，
+	   在free_initmem()函数执行后，都不能再使用。 */
 	free_initmem();
 	mark_rodata_ro();
 	system_state = SYSTEM_RUNNING;
@@ -904,10 +904,10 @@ static noinline int init_post(void)
 	run_init_process("/bin/init");
 	run_init_process("/bin/sh");
 
-    /* run_init_process()在调用相应程序运行的时候，用的是kernel_execve。
-       也就是说调用进程会替换当前进程。
-       只要上述任意一个文件调用成功，就不会返回到这个函数。
-       如果上面几个文件都无法执行。打印出没有找到init文件的错误。 */
+	/* run_init_process()在调用相应程序运行的时候，用的是kernel_execve。
+	   也就是说调用进程会替换当前进程。
+	   只要上述任意一个文件调用成功，就不会返回到这个函数。
+	   如果上面几个文件都无法执行。打印出没有找到init文件的错误。 */
 	panic("No init found.  Try passing init= option to kernel. "
 	      "See Linux Documentation/init.txt for guidance.");
 }
@@ -928,7 +928,7 @@ static int __init kernel_init(void * unused)
 	/*
 	 * init can run on any cpu.
 	 */
-    /* 修改进程的CPU亲和力 */
+	/* 修改进程的CPU亲和力 */
 	set_cpus_allowed_ptr(current, cpu_all_mask);
 
 	cad_pid = task_pid(current);
@@ -938,26 +938,26 @@ static int __init kernel_init(void * unused)
 	do_pre_smp_initcalls();
 	lockup_detector_init();
 
-    /* 激活SMP系统中其他CPU */
+	/* 激活SMP系统中其他CPU */
 	smp_init();
 	sched_init_smp();
 
-    /* 初始化设备，完成外设及其驱动程序（直接编译进内核的模块）的加载和初始化 */
+	/* 初始化设备，完成外设及其驱动程序（直接编译进内核的模块）的加载和初始化 */
 	do_basic_setup();
 
 	/* Open the /dev/console on the rootfs, this should never fail */
 	/* 打开终端
-       实际上init进程除了打印错误信息以外，并不使用控制台，
-       但是如果调用的是shell或者其他需要交互的进程，而不是init，
-       那么就需要一个可以交互的输入源。
-       如果成功执行open，/dev/console即成为init的标准输入源（文件描述符0）。
-    */
+	   实际上init进程除了打印错误信息以外，并不使用控制台，
+	   但是如果调用的是shell或者其他需要交互的进程，而不是init，
+	   那么就需要一个可以交互的输入源。
+	   如果成功执行open，/dev/console即成为init的标准输入源（文件描述符0）。
+	*/
 	if (sys_open((const char __user *) "/dev/console", O_RDWR, 0) < 0)
 		printk(KERN_WARNING "Warning: unable to open an initial console.\n");
 
-    /* 调用dup打开/dev/console文件描述符两次。
-       这样，该控制台设备就也可以供标准输出和标准错误使用（文件描述符1和2）。
-       init进程现在就拥有3个文件描述符--标准输入、标准输出以及标准错误。 */
+	/* 调用dup打开/dev/console文件描述符两次。
+	   这样，该控制台设备就也可以供标准输出和标准错误使用（文件描述符1和2）。
+	   init进程现在就拥有3个文件描述符--标准输入、标准输出以及标准错误。 */
 	(void) sys_dup(0);
 	(void) sys_dup(0);
 	/*
@@ -979,7 +979,7 @@ static int __init kernel_init(void * unused)
 	 * initmem segments and start the user-mode stuff..
 	 */
 
-    /* 启动用户空间的init进程 */
+	/* 启动用户空间的init进程 */
 	init_post();
 	return 0;
 }

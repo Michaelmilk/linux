@@ -1089,7 +1089,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	struct task_struct *p;
 	int cgroup_callbacks_done = 0;
 
-	/* 对传入的clone_flag进行检查 */
+	/* 对传入的clone_flags进行检查 */
 
 	/* 不能同时设置CLONE_NEWNS | CLONE_FS */
 	if ((clone_flags & (CLONE_NEWNS|CLONE_FS)) == (CLONE_NEWNS|CLONE_FS))
@@ -1510,8 +1510,8 @@ struct task_struct * __cpuinit fork_idle(int cpu)
 /*
 @clone_flags	: clone标志，控制进程复制过程中的一些属性
 @stack_start	: 用户态下栈的起始地址
-@regs			: 寄存器集合
-@stack_size		: 用户态下栈的大小
+@regs		: 寄存器集合
+@stack_size	: 用户态下栈的大小
 @parent_tidptr	: 用户空间指针，指向父进程tid
 @child_tidptr	: 用户空间指针，指向子进程tid
 */
@@ -1530,6 +1530,7 @@ long do_fork(unsigned long clone_flags,
 	 * Do some preliminary argument and permissions checking before we
 	 * actually start allocating stuff
 	 */
+	/* preliminary: 准备工作 */
 	if (clone_flags & CLONE_NEWUSER) {
 		if (clone_flags & CLONE_THREAD)
 			return -EINVAL;
@@ -1547,6 +1548,7 @@ long do_fork(unsigned long clone_flags,
 	 * requested, no event is reported; otherwise, report if the event
 	 * for the type of forking is enabled.
 	 */
+	/* 用户进程fork，并且没有设置CLONE_UNTRACED标志 */
 	if (likely(user_mode(regs)) && !(clone_flags & CLONE_UNTRACED)) {
 		if (clone_flags & CLONE_VFORK)
 			trace = PTRACE_EVENT_VFORK;

@@ -137,6 +137,9 @@ static inline bool task_has_mempolicy(struct task_struct *task)
 
 
 /* bits in struct cpuset flags field */
+/*
+exclusive: 专用的
+*/
 typedef enum {
 	CS_CPU_EXCLUSIVE,
 	CS_MEM_EXCLUSIVE,
@@ -2166,11 +2169,15 @@ static int cpuset_track_online_nodes(struct notifier_block *self,
 
 void __init cpuset_init_smp(void)
 {
+	/* 复制活动cpu位图 */
 	cpumask_copy(top_cpuset.cpus_allowed, cpu_active_mask);
+	/* 内存节点位图 */
 	top_cpuset.mems_allowed = node_states[N_HIGH_MEMORY];
 
+	/* 内存热插拔通知链 */
 	hotplug_memory_notifier(cpuset_track_online_nodes, 10);
 
+	/* 创建一个内核线程cpuset */
 	cpuset_wq = create_singlethread_workqueue("cpuset");
 	BUG_ON(!cpuset_wq);
 }

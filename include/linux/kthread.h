@@ -14,6 +14,9 @@ struct task_struct *kthread_create_on_node(int (*threadfn)(void *data),
 	kthread_create_on_node(threadfn, data, -1, namefmt, ##arg)
 
 
+/*
+创建并唤醒一个内核线程
+*/
 /**
  * kthread_run - create and wake a thread.
  * @threadfn: the function to run until signal_pending(current).

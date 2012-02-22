@@ -2645,13 +2645,13 @@ static inline void setup_thread_stack(struct task_struct *p, struct task_struct 
 返回最小的可用内核栈底
 
 +---------------+ <- 8KB
-|				|
-|				|
-|				|
-|				|
+|		|
+|		|
+|		|
+|		|
 +---------------+
-|				|
-|				|
+|		|
+|		|
 |---------------| <- end_of_stack
 | thread_info	|
 +---------------+ <- 0
