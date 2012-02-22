@@ -290,10 +290,15 @@ static struct file_system_type *__get_fs_type(const char *name, int len)
 	return fs;
 }
 
+/*
+根据文件系统名称取其对应的file_system_type结构实例
+*/
 struct file_system_type *get_fs_type(const char *name)
 {
 	struct file_system_type *fs;
+	/* 跳过'.'前面的部分 */
 	const char *dot = strchr(name, '.');
+	/* 名称长度 */
 	int len = dot ? dot - name : strlen(name);
 
 	fs = __get_fs_type(name, len);

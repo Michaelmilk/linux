@@ -239,6 +239,7 @@ int ramfs_fill_super(struct super_block *sb, void *data, int silent)
 		goto fail;
 	}
 
+	/* ¸ùÄ¿Â¼ */
 	root = d_alloc_root(inode);
 	sb->s_root = root;
 	if (!root) {

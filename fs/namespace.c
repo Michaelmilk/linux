@@ -722,7 +722,7 @@ vfs_kern_mount(struct file_system_type *type, int flags, const char *name, void 
 	if (!type)
 		return ERR_PTR(-ENODEV);
 
-	/* 根据挂载点名称分配一个vfsmount挂载点实例 */
+	/* 根据挂载点名称分配一个mount挂载点实例 */
 	mnt = alloc_vfsmnt(name);
 	if (!mnt)
 		return ERR_PTR(-ENOMEM);
@@ -744,6 +744,9 @@ vfs_kern_mount(struct file_system_type *type, int flags, const char *name, void 
 	br_write_lock(vfsmount_lock);
 	list_add_tail(&mnt->mnt_instance, &root->d_sb->s_mounts);
 	br_write_unlock(vfsmount_lock);
+	/* 分配的是mount结构
+	   这里返回其内嵌的vfsmount结构的指针
+	*/
 	return &mnt->mnt;
 }
 EXPORT_SYMBOL_GPL(vfs_kern_mount);
@@ -1824,6 +1827,12 @@ static struct vfsmount *fs_set_subtype(struct vfsmount *mnt, const char *fstype)
 	return ERR_PTR(err);
 }
 
+/*
+@fstype	: 文件系统名称
+@flags	:
+@name	:
+@data	:
+*/
 static struct vfsmount *
 do_kern_mount(const char *fstype, int flags, const char *name, void *data)
 {

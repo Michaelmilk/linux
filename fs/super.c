@@ -101,6 +101,10 @@ static int prune_super(struct shrinker *shrink, struct shrink_control *sc)
 	return total_objects;
 }
 
+/*
+分配一个新的超级块实例
+*/
+
 /**
  *	alloc_super	-	create new superblock
  *	@type:	filesystem type superblock should belong to
@@ -410,6 +414,15 @@ void generic_shutdown_super(struct super_block *sb)
 
 EXPORT_SYMBOL(generic_shutdown_super);
 
+/*
+查找或创建一个超级块
+
+@type	: 超级块所属的文件系统类型
+@test	:
+@set	:
+@data	:
+*/
+
 /**
  *	sget	-	find or create a superblock
  *	@type:	filesystem type superblock should belong to
@@ -450,6 +463,7 @@ retry:
 	}
 	if (!s) {
 		spin_unlock(&sb_lock);
+		/* 分配新的超级块实例 */
 		s = alloc_super(type);
 		if (!s)
 			return ERR_PTR(-ENOMEM);
@@ -463,9 +477,13 @@ retry:
 		destroy_super(s);
 		return ERR_PTR(err);
 	}
+	/* 记录该超级块所属的文件系统 */
 	s->s_type = type;
+	/* 记录对应的设备名称 */
 	strlcpy(s->s_id, type->name, sizeof(s->s_id));
+	/* 链入所有超级块的链表 */
 	list_add_tail(&s->s_list, &super_blocks);
+	/* 链入文件系统下的哈希表 */
 	hlist_add_head(&s->s_instances, &type->fs_supers);
 	spin_unlock(&sb_lock);
 	get_filesystem(type);
@@ -1047,6 +1065,8 @@ struct dentry *mount_nodev(struct file_system_type *fs_type,
 
 	s->s_flags = flags;
 
+	/* 例如ramfs_fill_super()
+	*/
 	error = fill_super(s, data, flags & MS_SILENT ? 1 : 0);
 	if (error) {
 		deactivate_locked_super(s);
@@ -1092,6 +1112,8 @@ EXPORT_SYMBOL(mount_single);
 @flags	:
 @name	: 设备名称，例如/dev/dsk/hda1
 @data	:
+
+返回根目录
 */
 struct dentry *
 mount_fs(struct file_system_type *type, int flags, const char *name, void *data)
@@ -1114,6 +1136,7 @@ mount_fs(struct file_system_type *type, int flags, const char *name, void *data)
 	/* 调用文件系统的mount函数
 	   例如ext3_fs_type文件系统的ext3_mount()函数
 	   sock_fs_type => sockfs_mount()
+	   rootfs_fs_type => rootfs_mount()
 	*/
 	root = type->mount(type, flags, name, data);
 	if (IS_ERR(root)) {

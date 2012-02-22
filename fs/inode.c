@@ -141,6 +141,7 @@ int inode_init_always(struct super_block *sb, struct inode *inode)
 	static const struct file_operations empty_fops;
 	struct address_space *const mapping = &inode->i_data;
 
+	/* 记录所属的超级块 */
 	inode->i_sb = sb;
 	inode->i_blkbits = sb->s_blocksize_bits;
 	inode->i_flags = 0;
@@ -229,6 +230,7 @@ static struct inode *alloc_inode(struct super_block *sb)
 	if (!inode)
 		return NULL;
 
+	/* 初始化inode节点中的字段 */
 	if (unlikely(inode_init_always(sb, inode))) {
 		if (inode->i_sb->s_op->destroy_inode)
 			inode->i_sb->s_op->destroy_inode(inode);
@@ -958,6 +960,7 @@ struct inode *new_inode(struct super_block *sb)
 
 	inode = new_inode_pseudo(sb);
 	if (inode)
+		/* inode链入超级块的s_inodes链表 */
 		inode_sb_list_add(inode);
 	return inode;
 }

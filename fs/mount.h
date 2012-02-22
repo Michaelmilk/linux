@@ -19,6 +19,7 @@ struct mount {
 	struct list_head mnt_hash;
 	struct mount *mnt_parent;
 	struct dentry *mnt_mountpoint;
+	/* 内嵌vfsmount结构 */
 	struct vfsmount mnt;
 #ifdef CONFIG_SMP
 	struct mnt_pcp __percpu *mnt_pcp;
@@ -29,6 +30,7 @@ struct mount {
 #endif
 	struct list_head mnt_mounts;	/* list of children, anchored here */
 	struct list_head mnt_child;	/* and going through their mnt_child */
+	/* 链入超级块的s_mounts */
 	struct list_head mnt_instance;	/* mount instance on sb->s_mounts */
 	const char *mnt_devname;	/* Name of device e.g. /dev/dsk/hda1 */
 	struct list_head mnt_list;

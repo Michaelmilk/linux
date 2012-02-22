@@ -1458,6 +1458,11 @@ struct dentry *d_instantiate_unique(struct dentry *entry, struct inode *inode)
 
 EXPORT_SYMBOL(d_instantiate_unique);
 
+/*
+分配根目录dentry
+并与@root_inode关联
+*/
+
 /**
  * d_alloc_root - allocate root dentry
  * @root_inode: inode to allocate the root for
@@ -1472,6 +1477,9 @@ struct dentry * d_alloc_root(struct inode * root_inode)
 	struct dentry *res = NULL;
 
 	if (root_inode) {
+		/* 静态变量
+		   根目录的名称
+		*/
 		static const struct qstr name = { .name = "/", .len = 1 };
 
 		res = __d_alloc(root_inode->i_sb, &name);
