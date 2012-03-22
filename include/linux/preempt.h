@@ -52,7 +52,7 @@ do { \
 	barrier(); \
 } while (0)
 
-#define preempt_enable_no_resched() \
+#define sched_preempt_enable_no_resched() \
 do { \
 	barrier(); \
 	dec_preempt_count(); \
@@ -62,6 +62,10 @@ do { \
 当前内核栈中thread_info的preempt_count字段减1
 检查是否需要重新进行调度
 */
+
+
+#define preempt_enable_no_resched()	sched_preempt_enable_no_resched()
+
 #define preempt_enable() \
 do { \
 	preempt_enable_no_resched(); \
@@ -100,6 +104,7 @@ do { \
 #else /* !CONFIG_PREEMPT_COUNT */
 
 #define preempt_disable()		do { } while (0)
+#define sched_preempt_enable_no_resched()	do { } while (0)
 #define preempt_enable_no_resched()	do { } while (0)
 #define preempt_enable()		do { } while (0)
 

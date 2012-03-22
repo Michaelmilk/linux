@@ -384,7 +384,7 @@ void irq_enter(void)
 	int cpu = smp_processor_id();
 
 	rcu_irq_enter();
-	if (idle_cpu(cpu) && !in_interrupt()) {
+	if (is_idle_task(current) && !in_interrupt()) {
 		/*
 		 * Prevent raise_softirq from needlessly waking up ksoftirqd
 		 * here, as softirq will be serviced on return from interrupt.
@@ -397,31 +397,21 @@ void irq_enter(void)
 	__irq_enter();
 }
 
+static inline void invoke_softirq(void)
+{
+	if (!force_irqthreads) {
 #ifdef __ARCH_IRQ_EXIT_IRQS_DISABLED
-static inline void invoke_softirq(void)
-{
-	if (!force_irqthreads)
 		__do_softirq();
-	else {
-		__local_bh_disable((unsigned long)__builtin_return_address(0),
-				SOFTIRQ_OFFSET);
-		wakeup_softirqd();
-		__local_bh_enable(SOFTIRQ_OFFSET);
-	}
-}
 #else
-static inline void invoke_softirq(void)
-{
-	if (!force_irqthreads)
 		do_softirq();
-	else {
+#endif
+	} else {
 		__local_bh_disable((unsigned long)__builtin_return_address(0),
 				SOFTIRQ_OFFSET);
 		wakeup_softirqd();
 		__local_bh_enable(SOFTIRQ_OFFSET);
 	}
 }
-#endif
 
 /*
  * Exit an interrupt context. Process softirqs if needed and possible:
@@ -445,7 +435,7 @@ void irq_exit(void)
 		tick_nohz_irq_exit();
 #endif
 	rcu_irq_exit();
-	preempt_enable_no_resched();
+	sched_preempt_enable_no_resched();
 }
 
 /*
@@ -475,6 +465,12 @@ void raise_softirq(unsigned int nr)
 	local_irq_save(flags);
 	raise_softirq_irqoff(nr);
 	local_irq_restore(flags);
+}
+
+void __raise_softirq_irqoff(unsigned int nr)
+{
+	trace_softirq_raise(nr);
+	or_softirq_pending(1UL << nr);
 }
 
 void open_softirq(int nr, void (*action)(struct softirq_action *))
@@ -850,10 +846,10 @@ static int run_ksoftirqd(void * __bind_cpu)
 		if (!local_softirq_pending()) {
 			/* 没有的话则主动放弃CPU前先要允许抢占，
 			   因为一直是在不允许抢占状态下执行的代码。 */
-			preempt_enable_no_resched();
+
 			/* 显式调用此函数主动放弃CPU将当前进程放入睡眠队列，
 			   并切换新的进程执行(调度器相关不记录在此) */
-			schedule();
+
 			/* 注意:如果当前显式调用schedule()函数主动切换的进程再次被调度执行的话，
 			   那么将从调用这个函数的下一条语句开始执行。
 			   也就是说，在这里当前进程再次被执行的话，
@@ -861,7 +857,8 @@ static int run_ksoftirqd(void * __bind_cpu)
 
 			   当进程再度被调度时，在以下处理期间内禁止当前进程被抢占。
 			*/
-			preempt_disable();
+
+			schedule_preempt_disabled();
 		}
 
 		/* 设置当前进程为运行状态。
@@ -900,8 +897,9 @@ static int run_ksoftirqd(void * __bind_cpu)
 			if (local_softirq_pending())
 				__do_softirq();
 			local_irq_enable();
+
 			/* 允许当前进程被抢占 */
-			preempt_enable_no_resched();
+
 			/* 这个函数有可能间接的调用schedule()来切换当前进程，
 			   而且上面已经允许当前进程可被抢占。
 			   也就是说在处理完一轮软中断回调函数时，
@@ -910,6 +908,8 @@ static int run_ksoftirqd(void * __bind_cpu)
 			   不至于让这个进程长时间大量的占用 CPU，
 			   二是让在有很多软中断需要处理时不至于让其他进程得不到响应。
 			*/
+
+			sched_preempt_enable_no_resched();
 			cond_resched();
 			/* 禁止当前进程被抢占 */
 			preempt_disable();

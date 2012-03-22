@@ -662,6 +662,7 @@ static struct sh_dmae_pdata usb_dma0_platform_data = {
 	.dmaor_is_32bit	= 1,
 	.needs_tend_set	= 1,
 	.no_dmars	= 1,
+	.slave_only	= 1,
 };
 
 static struct resource sh7372_usb_dmae0_resources[] = {
@@ -723,6 +724,7 @@ static struct sh_dmae_pdata usb_dma1_platform_data = {
 	.dmaor_is_32bit	= 1,
 	.needs_tend_set	= 1,
 	.no_dmars	= 1,
+	.slave_only	= 1,
 };
 
 static struct resource sh7372_usb_dmae1_resources[] = {
@@ -1041,6 +1043,8 @@ void __init sh7372_add_standard_devices(void)
 	sh7372_add_device_to_domain(&sh7372_a4r, &veu2_device);
 	sh7372_add_device_to_domain(&sh7372_a4r, &veu3_device);
 	sh7372_add_device_to_domain(&sh7372_a4r, &jpu_device);
+	sh7372_add_device_to_domain(&sh7372_a4r, &tmu00_device);
+	sh7372_add_device_to_domain(&sh7372_a4r, &tmu01_device);
 }
 
 void __init sh7372_add_early_devices(void)

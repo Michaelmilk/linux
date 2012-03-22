@@ -474,6 +474,7 @@ static __ref int acpi_processor_start(struct acpi_processor *pr)
 
 #ifdef CONFIG_CPU_FREQ
 	acpi_processor_ppc_has_changed(pr, 0);
+	acpi_processor_load_module(pr);
 #endif
 	acpi_processor_get_throttling_info(pr);
 	acpi_processor_get_limit_info(pr);
@@ -578,13 +579,6 @@ static int __cpuinit acpi_processor_add(struct acpi_device *device)
 		result = -EFAULT;
 		goto err_free_cpumask;
 	}
-
-	/*
-	 * Do not start hotplugged CPUs now, but when they
-	 * are onlined the first time
-	 */
-	if (pr->flags.need_hotplug_init)
-		return 0;
 
 	/*
 	 * Do not start hotplugged CPUs now, but when they

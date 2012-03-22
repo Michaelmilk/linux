@@ -383,6 +383,8 @@ union thread_xstate {
 };
 
 struct fpu {
+	unsigned int last_cpu;
+	unsigned int has_fpu;
 	union thread_xstate *state;
 };
 

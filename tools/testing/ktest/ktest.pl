@@ -2601,7 +2601,7 @@ sub config_bisect {
     # read directly what we want to check
     my %config_check;
     open (IN, $output_config)
-	or dodie "faied to open $output_config";
+	or dodie "failed to open $output_config";
 
     while (<IN>) {
 	if (/^((CONFIG\S*)=.*)/) {
@@ -3244,9 +3244,11 @@ sub make_min_config {
 	$in_bisect = 1;
 
 	my $failed = 0;
-	build "oldconfig";
-	start_monitor_and_boot or $failed = 1;
-	end_monitor;
+	build "oldconfig" or $failed = 1;
+	if (!$failed) {
+		start_monitor_and_boot or $failed = 1;
+		end_monitor;
+	}
 
 	$in_bisect = 0;
 

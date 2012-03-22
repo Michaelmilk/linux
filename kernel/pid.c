@@ -567,13 +567,13 @@ pid_hash是依据系统内存大小分配的
 */
 void __init pidhash_init(void)
 {
-	int i, pidhash_size;
+	unsigned int i, pidhash_size;
 
 	pid_hash = alloc_large_system_hash("PID", sizeof(*pid_hash), 0, 18,
 					   HASH_EARLY | HASH_SMALL,
 					   &pidhash_shift, NULL, 4096);
 	/* pidhash_shift保存了哈希表大小的幂次 */
-	pidhash_size = 1 << pidhash_shift;
+	pidhash_size = 1U << pidhash_shift;
 
 	/* 将哈希表头节点指针first初始化为NULL */
 	for (i = 0; i < pidhash_size; i++)
