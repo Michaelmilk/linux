@@ -251,6 +251,14 @@ static inline int atomic_sub_return(int i, atomic_t *v)
 #define atomic_inc_return(v)  (atomic_add_return(1, v))
 #define atomic_dec_return(v)  (atomic_sub_return(1, v))
 
+/*
+如果@v中原来的值与@old相等，则将@new写入@v
+
+返回原来@v中的值
+
+判断返回值与@old相等，则表示交换了，即@new已经写入@v
+返回值与@old不相等，则@v中还是其原来的值
+*/
 static inline int atomic_cmpxchg(atomic_t *v, int old, int new)
 {
 	return cmpxchg(&v->counter, old, new);
@@ -271,18 +279,25 @@ static inline int atomic_xchg(atomic_t *v, int new)
  * Returns the old value of @v.
  */
 /*
-如果@v的值不等于@u，就加@a，返回1。表示加了。
-如果@v的值等于@u，则@v的值不变，返回0。表示没加。
+将@v中的值增加@a
+如果@v中的值已经达到了@u，则不加
 */
 static inline int __atomic_add_unless(atomic_t *v, int a, int u)
 {
 	int c, old;
+	/* 原子读出@v中的值 */
 	c = atomic_read(v);
 	for (;;) {
+		/* @v中的值不超过@u */
 		if (unlikely(c == (u)))
 			break;
 		/* 如果v的值等于c就加a，old=c。如果v的值不等于c，old=v的值 */
 		old = atomic_cmpxchg((v), c, c + (a));
+		/* 相等说明已经将原来@v中的值增加了@a
+		   通常这里都是成功的
+		   除非这里存在并发操作，导致函数开始第一次读的值在atomic_cmpxchg()
+		   的时候@v中的值变了，因此需要循环继续
+		*/
 		if (likely(old == c))
 			break;
 		c = old;

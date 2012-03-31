@@ -182,6 +182,10 @@ PTYPE_HASH_MASK计算哈希值时的掩码
 #define PTYPE_HASH_MASK	(PTYPE_HASH_SIZE - 1)
 
 static DEFINE_SPINLOCK(ptype_lock);
+/*
+哈希表桶头
+由dev_add_pack()根据L2协议号向这个哈希表内添加struct packet_type结构实例
+*/
 static struct list_head ptype_base[PTYPE_HASH_SIZE] __read_mostly;
 static struct list_head ptype_all __read_mostly;	/* Taps */
 
@@ -6846,8 +6850,8 @@ static int __init net_dev_init(void)
 	 *	Initialise the packet receive queues.
 	 */
 
-    /* 遍历每一个CPU，取得它的softnet_data，并初始化相应字段
-       它是一个struct softnet_data的per_cpu变量 */
+	/* 遍历每一个CPU，取得它的softnet_data，并初始化相应字段
+	   它是一个struct softnet_data的per_cpu变量 */
 	for_each_possible_cpu(i) {
 		/* 取得第i个cpu的softnet_data指针 */
 		struct softnet_data *sd = &per_cpu(softnet_data, i);

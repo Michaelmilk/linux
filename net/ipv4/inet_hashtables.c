@@ -231,15 +231,22 @@ struct sock * __inet_lookup_established(struct net *net,
 	/* Optimize here for direct hit, only listening connections can
 	 * have wildcards anyways.
 	 */
+	/* 计算哈希值 */
 	unsigned int hash = inet_ehashfn(net, daddr, hnum, saddr, sport);
+	/* 位与掩码，取桶下标 */
 	unsigned int slot = hash & hashinfo->ehash_mask;
+	/* 取桶头 */
 	struct inet_ehash_bucket *head = &hashinfo->ehash[slot];
 
 	rcu_read_lock();
 begin:
+	/* 遍历该桶下的链表 */
 	sk_nulls_for_each_rcu(sk, node, &head->chain) {
 		if (INET_MATCH(sk, net, hash, acookie,
 					saddr, daddr, ports, dif)) {
+			/* 如果sk_refcnt是0，则跳转到begintw
+			   不是0的话，则增加了引用计数
+			*/
 			if (unlikely(!atomic_inc_not_zero(&sk->sk_refcnt)))
 				goto begintw;
 			if (unlikely(!INET_MATCH(sk, net, hash, acookie,
@@ -260,6 +267,7 @@ begin:
 
 begintw:
 	/* Must check for a TIME_WAIT'er before going to listener hash. */
+	/* 遍历TIME_WAIT链表 */
 	sk_nulls_for_each_rcu(sk, node, &head->twchain) {
 		if (INET_TW_MATCH(sk, net, hash, acookie,
 					saddr, daddr, ports, dif)) {
@@ -401,8 +409,12 @@ int __inet_hash_nolisten(struct sock *sk, struct inet_timewait_sock *tw)
 }
 EXPORT_SYMBOL_GPL(__inet_hash_nolisten);
 
+/*
+将该@sk加入哈希表
+*/
 static void __inet_hash(struct sock *sk)
 {
+	/* 根据@sk取哈希表 */
 	struct inet_hashinfo *hashinfo = sk->sk_prot->h.hashinfo;
 	struct inet_listen_hashbucket *ilb;
 
@@ -412,14 +424,20 @@ static void __inet_hash(struct sock *sk)
 	}
 
 	WARN_ON(!sk_unhashed(sk));
+	/* 取桶 */
 	ilb = &hashinfo->listening_hash[inet_sk_listen_hashfn(sk)];
 
+	/* 锁桶，控制桶下链表的并发操作 */
 	spin_lock(&ilb->lock);
+	/* 加入链表 */
 	__sk_nulls_add_node_rcu(sk, &ilb->head);
 	sock_prot_inuse_add(sock_net(sk), sk->sk_prot, 1);
 	spin_unlock(&ilb->lock);
 }
 
+/*
+将该@sk加入哈希表
+*/
 void inet_hash(struct sock *sk)
 {
 	if (sk->sk_state != TCP_CLOSE) {
@@ -571,11 +589,16 @@ int inet_hash_connect(struct inet_timewait_death_row *death_row,
 }
 EXPORT_SYMBOL_GPL(inet_hash_connect);
 
+/*
+初始化@h结构中的哈希表listening_hash[]数组
+*/
 void inet_hashinfo_init(struct inet_hashinfo *h)
 {
 	int i;
 
+	/* 原子变量初始化为0 */
 	atomic_set(&h->bsockets, 0);
+	/* 初始化各个桶锁和链表头 */
 	for (i = 0; i < INET_LHTABLE_SIZE; i++) {
 		spin_lock_init(&h->listening_hash[i].lock);
 		INIT_HLIST_NULLS_HEAD(&h->listening_hash[i].head,

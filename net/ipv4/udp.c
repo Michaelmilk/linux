@@ -2173,6 +2173,9 @@ static int __init set_uhash_entries(char *str)
 }
 __setup("uhash_entries=", set_uhash_entries);
 
+/*
+初始化UDP的哈希表
+*/
 void __init udp_table_init(struct udp_table *table, const char *name)
 {
 	unsigned int i;
@@ -2210,6 +2213,10 @@ void __init udp_table_init(struct udp_table *table, const char *name)
 	}
 }
 
+/*
+初始化UDP的哈希表
+和一些阈值
+*/
 void __init udp_init(void)
 {
 	unsigned long limit;

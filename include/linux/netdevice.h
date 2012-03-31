@@ -1079,12 +1079,14 @@ struct net_device {
 	netdev_features_t	vlan_features;
 
 	/* Interface index. Unique device identifier	*/
-	/* 接口的唯一数字标识，参考dev_new_index()函数 */
+	/* 接口的唯一数字标识，参考dev_new_index()函数
+	   本结构体struct net_device实例的一个数字ID
+	*/
 	int			ifindex;
 	/* 对于真实的物理设备，iflink与ifindex应该是一致的
-       对于虚拟设备，iflink应该等于此虚拟设备关联的物理设备的ifindex
+	   对于虚拟设备，iflink应该等于此虚拟设备关联的物理设备的ifindex
 	   字面上也是if link链接的意思
-       例如vlan_dev_init()中就使用此字段记录虚拟的vlan接口所依存的物理设备接口 */
+	   例如vlan_dev_init()中就使用此字段记录虚拟的vlan接口所依存的物理设备接口 */
 	int			iflink;
 
 	struct net_device_stats	stats;
@@ -1536,7 +1538,9 @@ struct napi_gro_cb {
 struct packet_type {
 	/* 网络层协议类型，在L2头中携带
 	   由数据类型的定义__be16知type为网络字节序
-	   参考ip_packet_type实例的定义 */
+	   参考ip_packet_type实例的定义
+	   例如cpu_to_be16(ETH_P_IP)
+	*/
 	__be16			type;	/* This is really htons(ether_type). */
 	/* NULL表示适用于所有网络接口
 	   也可以指定该协议只在哪个接口上生效 */

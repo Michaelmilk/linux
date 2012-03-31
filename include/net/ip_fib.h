@@ -221,6 +221,9 @@ static inline int fib_lookup(struct net *net, const struct flowi4 *flp,
 }
 
 #else /* CONFIG_IP_MULTIPLE_TABLES */
+
+/* ≈‰÷√¡ÀCONFIG_IP_MULTIPLE_TABLES */
+
 extern int __net_init fib4_rules_init(struct net *net);
 extern void __net_exit fib4_rules_exit(struct net *net);
 

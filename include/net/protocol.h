@@ -96,6 +96,10 @@ struct inet_protosw {
 #define INET_PROTOSW_PERMANENT 0x02  /* Permanent protocols are unremovable. */
 #define INET_PROTOSW_ICSK      0x04  /* Is this an inet_connection_sock? */
 
+/*
+传输层协议数组
+每一项指向一个传输层协议实例，如tcp_protocol
+*/
 extern const struct net_protocol __rcu *inet_protos[MAX_INET_PROTOS];
 
 #if IS_ENABLED(CONFIG_IPV6)

@@ -713,6 +713,9 @@ static inline int sk_stream_memory_free(struct sock *sk)
 }
 
 /* OOB backlog add */
+/*
+OOB: out of buffer
+*/
 static inline void __sk_add_backlog(struct sock *sk, struct sk_buff *skb)
 {
 	/* dont let skb dst not refcounted, we are going to leave rcu lock */
@@ -914,14 +917,19 @@ struct proto {
 	struct request_sock_ops	*rsk_prot;
 	struct timewait_sock_ops *twsk_prot;
 
+	/* 不同协议操作不同的哈希表 */
 	union {
+		/* tcp_prot => tcp_hashinfo */
 		struct inet_hashinfo	*hashinfo;
+		/* udp_prot => udp_table */
 		struct udp_table	*udp_table;
+		/* raw_prot => raw_v4_hashinfo */
 		struct raw_hashinfo	*raw_hash;
 	} h;
 
 	struct module		*owner;
 
+	/* L4协议名称，如"TCP" */
 	char			name[32];
 
 	/* 通过此节点将本结构的一个实例链入
@@ -1579,6 +1587,7 @@ static inline void sk_filter_charge(struct sock *sk, struct sk_filter *fp)
 /* Ungrab socket and destroy it, if it was the last reference. */
 static inline void sock_put(struct sock *sk)
 {
+	/* 引用计数减1，若减后为0了，则释放 */
 	if (atomic_dec_and_test(&sk->sk_refcnt))
 		sk_free(sk);
 }

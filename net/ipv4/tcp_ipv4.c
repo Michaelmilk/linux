@@ -1606,6 +1606,7 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 		goto discard;
 #endif
 
+	/* 已经建立好连接的TCP_ESTABLISHED状态 */
 	if (sk->sk_state == TCP_ESTABLISHED) { /* Fast path */
 		sock_rps_save_rxhash(sk, skb);
 		if (tcp_rcv_established(sk, skb, tcp_hdr(skb), skb->len)) {
@@ -1661,6 +1662,9 @@ EXPORT_SYMBOL(tcp_v4_do_rcv);
  *	From tcp_input.c
  */
 
+/*
+收取一个tcp报文
+*/
 int tcp_v4_rcv(struct sk_buff *skb)
 {
 	const struct iphdr *iph;
@@ -1669,19 +1673,26 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	int ret;
 	struct net *net = dev_net(skb->dev);
 
+	/* 目的mac必须是发给本机某个接口上的mac地址 */
 	if (skb->pkt_type != PACKET_HOST)
 		goto discard_it;
 
 	/* Count it even if it's bad */
 	TCP_INC_STATS_BH(net, TCP_MIB_INSEGS);
 
+	/* 可以pull出一个标准tcphdr头长度的数据到线性区 */
 	if (!pskb_may_pull(skb, sizeof(struct tcphdr)))
 		goto discard_it;
 
+	/* 取tcp头指针
+	   transport_header指针已经在ip_local_deliver_finish()中进行了设置
+	*/
 	th = tcp_hdr(skb);
 
+	/* 至少达到tcphdr头部长度 */
 	if (th->doff < sizeof(struct tcphdr) / 4)
 		goto bad_packet;
+	/* 可以pull出tcp报文头中携带的长度至线性区 */
 	if (!pskb_may_pull(skb, th->doff * 4))
 		goto discard_it;
 
@@ -1689,11 +1700,16 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	 * Packet length and doff are validated by header prediction,
 	 * provided case of th->doff==0 is eliminated.
 	 * So, we defer the checks. */
+	/* 检查校验和 */
 	if (!skb_csum_unnecessary(skb) && tcp_v4_checksum_init(skb))
 		goto bad_packet;
 
+	/* 上面调用pskb_may_pull()的时候，线性区可能分配了新的
+	   重新取下th和iph
+	*/
 	th = tcp_hdr(skb);
 	iph = ip_hdr(skb);
+	/* 在@skb的cb[]字段保存tcp头中的序号信息等 */
 	TCP_SKB_CB(skb)->seq = ntohl(th->seq);
 	TCP_SKB_CB(skb)->end_seq = (TCP_SKB_CB(skb)->seq + th->syn + th->fin +
 				    skb->len - th->doff * 4);
@@ -1710,6 +1726,7 @@ process:
 	if (sk->sk_state == TCP_TIME_WAIT)
 		goto do_time_wait;
 
+	/* time to live 生存时间 */
 	if (unlikely(iph->ttl < inet_sk(sk)->min_ttl)) {
 		NET_INC_STATS_BH(net, LINUX_MIB_TCPMINTTLDROP);
 		goto discard_and_relse;
@@ -1717,11 +1734,14 @@ process:
 
 	if (!xfrm4_policy_check(sk, XFRM_POLICY_IN, skb))
 		goto discard_and_relse;
+	/* 连接跟踪完毕 */
 	nf_reset(skb);
 
+	/* 过滤规则 */
 	if (sk_filter(sk, skb))
 		goto discard_and_relse;
 
+	/* 脱离接口 */
 	skb->dev = NULL;
 
 	bh_lock_sock_nested(sk);
@@ -1737,8 +1757,10 @@ process:
 #endif
 		{
 			if (!tcp_prequeue(sk, skb))
+				/* 接收tcp报文 */
 				ret = tcp_v4_do_rcv(sk, skb);
 		}
+	/* 加入backlog链表 */
 	} else if (unlikely(sk_add_backlog(sk, skb))) {
 		bh_unlock_sock(sk);
 		NET_INC_STATS_BH(net, LINUX_MIB_TCPBACKLOGDROP);
@@ -1796,6 +1818,7 @@ do_time_wait:
 		/* Fall through to ACK */
 	}
 	case TCP_TW_ACK:
+		/* 发送最后的ack报文 */
 		tcp_v4_timewait_ack(sk, skb);
 		break;
 	case TCP_TW_RST:
@@ -2681,6 +2704,9 @@ static struct pernet_operations __net_initdata tcp_sk_ops = {
        .exit_batch = tcp_sk_exit_batch,
 };
 
+/*
+由inet_init()调用
+*/
 void __init tcp_v4_init(void)
 {
 	inet_hashinfo_init(&tcp_hashinfo);

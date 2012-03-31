@@ -760,6 +760,9 @@ static inline bool compare_hash_inputs(const struct rtable *rt1,
 		(rt1->rt_route_iif ^ rt2->rt_route_iif)) == 0);
 }
 
+/*
+关键字相同则返回1
+*/
 static inline int compare_keys(struct rtable *rt1, struct rtable *rt2)
 {
 	return (((__force u32)rt1->rt_key_dst ^ (__force u32)rt2->rt_key_dst) |
@@ -1174,6 +1177,9 @@ static int rt_bind_neighbour(struct rtable *rt)
 	return 0;
 }
 
+/*
+向哈希表rt_hash_table中加入新的路由节点
+*/
 static struct rtable *rt_intern_hash(unsigned hash, struct rtable *rt,
 				     struct sk_buff *skb, int ifindex)
 {
@@ -1225,15 +1231,21 @@ restart:
 	rthp = &rt_hash_table[hash].chain;
 
 	spin_lock_bh(rt_hash_lock_addr(hash));
+	/* 遍历该桶下的链表 */
 	while ((rth = rcu_dereference_protected(*rthp,
 			lockdep_is_held(rt_hash_lock_addr(hash)))) != NULL) {
+		/* 顺便释放超时节点 */
 		if (rt_is_expired(rth)) {
 			*rthp = rth->dst.rt_next;
 			rt_free(rth);
 			continue;
 		}
+		/* 比较是否已经存在
+		   很可能在另一个cpu上已经完成了相同关键字路由项的添加
+		*/
 		if (compare_keys(rth, rt) && compare_netns(rth, rt)) {
 			/* Put it first */
+			/* 新增项作为链表的第一个节点 */
 			*rthp = rth->dst.rt_next;
 			/*
 			 * Since lookup is lockfree, the deletion
@@ -1257,6 +1269,7 @@ restart:
 			return rth;
 		}
 
+		/* 计算出一个可回收的候选节点 */
 		if (!atomic_read(&rth->dst.__refcnt)) {
 			u32 score = rt_score(rth);
 
@@ -1267,11 +1280,13 @@ restart:
 			}
 		}
 
+		/* 记录链表下节点数量 */
 		chain_length++;
 
 		rthp = &rth->dst.rt_next;
 	}
 
+	/* 有候选节点 */
 	if (cand) {
 		/* ip_rt_gc_elasticity used to be average length of chain
 		 * length, when exceeded gc becomes really aggressive.
@@ -1279,11 +1294,17 @@ restart:
 		 * The second limit is less certain. At the moment it allows
 		 * only 2 entries per bucket. We will see.
 		 */
+		/* elasticity: 弹性
+		   达到垃圾回收数量，则释放该候选节点
+		*/
 		if (chain_length > ip_rt_gc_elasticity) {
 			*candp = cand->dst.rt_next;
 			rt_free(cand);
 		}
 	} else {
+	/* 没有候选节点
+	   该桶下的链又过长
+	*/
 		if (chain_length > rt_chain_length_max &&
 		    slow_chain_length(rt_hash_table[hash].chain) > rt_chain_length_max) {
 			struct net *net = dev_net(rt->dst.dev);
@@ -1292,9 +1313,15 @@ restart:
 				pr_warn("%s: %d rebuilds is over limit, route caching disabled\n",
 					rt->dst.dev->name, num);
 			}
+			/* 修改rt_genid，因为计算哈希值的时候依赖该值
+			   后续的哈希值计算便不同了
+			*/
 			rt_emergency_hash_rebuild(net);
 			spin_unlock_bh(rt_hash_lock_addr(hash));
 
+			/* 重新计算哈希值
+			   以便将该新节点链入另外的桶下
+			*/
 			hash = rt_hash(rt->rt_key_dst, rt->rt_key_src,
 					ifindex, rt_genid(net));
 			goto restart;
@@ -1336,6 +1363,7 @@ restart:
 		}
 	}
 
+	/* 新节点加入链表，成为桶链表的第一个节点 */
 	rt->dst.rt_next = rt_hash_table[hash].chain;
 
 	/*
@@ -2203,6 +2231,7 @@ static int __mkroute_input(struct sk_buff *skb,
 		}
 	}
 
+	/* 分配一个新的路由项实例 */
 	rth = rt_dst_alloc(out_dev->dev,
 			   IN_DEV_CONF_GET(in_dev, NOPOLICY),
 			   IN_DEV_CONF_GET(out_dev, NOXFRM));
@@ -2229,7 +2258,9 @@ static int __mkroute_input(struct sk_buff *skb,
 	rth->peer = NULL;
 	rth->fi = NULL;
 
+	/* 报文转发 */
 	rth->dst.input = ip_forward;
+	/* 输出函数 */
 	rth->dst.output = ip_output;
 
 	rt_set_nexthop(rth, NULL, res, res->fi, res->type, itag);
@@ -2261,8 +2292,10 @@ static int ip_mkroute_input(struct sk_buff *skb,
 		return err;
 
 	/* put it into the cache */
+	/* 计算哈希值 */
 	hash = rt_hash(daddr, saddr, fl4->flowi4_iif,
 		       rt_genid(dev_net(rth->dst.dev)));
+	/* 链入哈希表 */
 	rth = rt_intern_hash(hash, rth, skb, fl4->flowi4_iif);
 	if (IS_ERR(rth))
 		return PTR_ERR(rth);
@@ -2280,6 +2313,10 @@ static int ip_mkroute_input(struct sk_buff *skb,
  *	called with rcu_read_lock()
  */
 
+/*
+对收到的IP报文路由的慢速处理
+创建新节点，链入哈希表
+*/
 static int ip_route_input_slow(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 			       u8 tos, struct net_device *dev)
 {
@@ -2338,9 +2375,11 @@ static int ip_route_input_slow(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 
 	RT_CACHE_STAT_INC(in_slow_tot);
 
+	/* fib查询结果为IP广播包 */
 	if (res.type == RTN_BROADCAST)
 		goto brd_input;
 
+	/* 目的IP是发往本地的 */
 	if (res.type == RTN_LOCAL) {
 		err = fib_validate_source(skb, saddr, daddr, tos,
 					  net->loopback_dev->ifindex,
@@ -2350,6 +2389,7 @@ static int ip_route_input_slow(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 		if (err)
 			flags |= RTCF_DIRECTSRC;
 		spec_dst = daddr;
+		/* 构建发往本地的路由表项 */
 		goto local_input;
 	}
 
@@ -2358,7 +2398,10 @@ static int ip_route_input_slow(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 	if (res.type != RTN_UNICAST)
 		goto martian_destination;
 
+	/* 构建转发的路由表项 */
 	err = ip_mkroute_input(skb, &res, &fl4, in_dev, daddr, saddr, tos);
+
+	/* 处理结束 */
 out:	return err;
 
 brd_input:
@@ -2379,18 +2422,22 @@ brd_input:
 	res.type = RTN_BROADCAST;
 	RT_CACHE_STAT_INC(in_brd);
 
+/* 发往本地 */
 local_input:
 	rth = rt_dst_alloc(net->loopback_dev,
 			   IN_DEV_CONF_GET(in_dev, NOPOLICY), false);
 	if (!rth)
 		goto e_nobufs;
 
+	/* 输入函数为ip_local_deliver()，向上层协议栈递送 */
 	rth->dst.input= ip_local_deliver;
+	/* 输出即直接释放skb */
 	rth->dst.output= ip_rt_bug;
 #ifdef CONFIG_IP_ROUTE_CLASSID
 	rth->dst.tclassid = itag;
 #endif
 
+	/* 记录各个关键字 */
 	rth->rt_key_dst	= daddr;
 	rth->rt_key_src	= saddr;
 	rth->rt_genid = rt_genid(net);
@@ -2416,11 +2463,14 @@ local_input:
 		rth->dst.error= -err;
 		rth->rt_flags 	&= ~RTCF_LOCAL;
 	}
+	/* 计算哈希值 */
 	hash = rt_hash(daddr, saddr, fl4.flowi4_iif, rt_genid(net));
+	/* 链入哈希表rt_hash_table的hash桶链下 */
 	rth = rt_intern_hash(hash, rth, skb, fl4.flowi4_iif);
 	err = 0;
 	if (IS_ERR(rth))
 		err = PTR_ERR(rth);
+	/* 处理结束 */
 	goto out;
 
 no_route:
@@ -2509,6 +2559,7 @@ int ip_route_input_common(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 		/* 所有条件满足，找到一项路由缓存 */
 
 			ipv4_validate_peer(rth);
+			/* 在@skb中记录查找到的路由项 */
 			if (noref) {
 				dst_use_noref(&rth->dst, jiffies);
 				skb_dst_set_noref(skb, &rth->dst);
@@ -3490,6 +3541,9 @@ static int __init set_rhash_entries(char *str)
 }
 __setup("rhash_entries=", set_rhash_entries);
 
+/*
+路由表等初始化
+*/
 int __init ip_rt_init(void)
 {
 	int rc = 0;

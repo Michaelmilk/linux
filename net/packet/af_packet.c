@@ -3914,6 +3914,11 @@ static const struct file_operations packet_seq_fops = {
 
 #endif
 
+/*
+会在register_pernet_subsys()时被调用
+初始化每个命名空间下的锁和链表头
+创建/proc/net/packet目录
+*/
 static int __net_init packet_net_init(struct net *net)
 {
 	spin_lock_init(&net->packet.sklist_lock);
@@ -3927,6 +3932,7 @@ static int __net_init packet_net_init(struct net *net)
 
 static void __net_exit packet_net_exit(struct net *net)
 {
+	/* 移除/proc/net下的目录packet */
 	proc_net_remove(net, "packet");
 }
 

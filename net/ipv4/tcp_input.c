@@ -5167,9 +5167,17 @@ static void tcp_urg(struct sock *sk, struct sk_buff *skb, const struct tcphdr *t
 	}
 }
 
+/*
+将skb中的数据拷贝到用户空间
+
+@sk	:
+@skb	:
+@hlen	: tcp头的长度
+*/
 static int tcp_copy_to_iovec(struct sock *sk, struct sk_buff *skb, int hlen)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
+	/* tcp报文中携带的数据长度 */
 	int chunk = skb->len - hlen;
 	int err;
 
@@ -5348,6 +5356,9 @@ discard:
 int tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 			const struct tcphdr *th, unsigned int len)
 {
+	/* 强制转换为tcp_sock的指针
+	   因为@sk所指的结构是内嵌在tcp_sock结构中的
+	*/
 	struct tcp_sock *tp = tcp_sk(sk);
 	int res;
 
@@ -5439,6 +5450,7 @@ int tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 					eaten = 1;
 				}
 #endif
+				/* 本次中断处理的sock刚好处于当前进程的上下文 */
 				if (tp->ucopy.task == current &&
 				    sock_owned_by_user(sk) && !copied_early) {
 					__set_current_state(TASK_RUNNING);
@@ -5446,6 +5458,7 @@ int tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 					if (!tcp_copy_to_iovec(sk, skb, tcp_header_len))
 						eaten = 1;
 				}
+				/* 数据已经拷贝到用户空间 */
 				if (eaten) {
 					/* Predicted packet is in window by definition.
 					 * seq == rcv_nxt and rcv_wup <= rcv_nxt.
@@ -5466,6 +5479,9 @@ int tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 				if (copied_early)
 					tcp_cleanup_rbuf(sk, skb->len);
 			}
+			/* 本次没有将数据拷贝到用户空间
+			   先将skb链入接收队列
+			*/
 			if (!eaten) {
 				if (tcp_checksum_complete_user(sk, skb))
 					goto csum_error;
@@ -5511,9 +5527,11 @@ no_ack:
 				__skb_queue_tail(&sk->sk_async_wait_queue, skb);
 			else
 #endif
+			/* 数据已经拷贝完成，则释放skb */
 			if (eaten)
 				__kfree_skb(skb);
 			else
+			/* 否则唤醒sock所属进程 */
 				sk->sk_data_ready(sk, 0);
 			return 0;
 		}

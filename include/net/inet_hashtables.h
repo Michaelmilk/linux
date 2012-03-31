@@ -125,6 +125,9 @@ struct inet_listen_hashbucket {
 /* This is for listening sockets, thus all sockets which possess wildcards. */
 #define INET_LHTABLE_SIZE	32	/* Yes, really, this is all you need. */
 
+/*
+TCP连接的哈希表
+*/
 struct inet_hashinfo {
 	/* This is for sockets with full identity only.  Sockets here will
 	 * always be without wildcards and will have the following invariant:
@@ -165,6 +168,9 @@ struct inet_hashinfo {
 	atomic_t			bsockets;
 };
 
+/*
+取桶头节点
+*/
 static inline struct inet_ehash_bucket *inet_ehash_bucket(
 	struct inet_hashinfo *hashinfo,
 	unsigned int hash)
@@ -326,6 +332,9 @@ typedef __u64 __bitwise __addrpair;
 	 ((*((__portpair *)&(inet_twsk(__sk)->tw_dport))) == (__ports)) &&	\
 	 (!((__sk)->sk_bound_dev_if) || ((__sk)->sk_bound_dev_if == (__dif))))
 #else /* 32-bit arch */
+
+/* 32位机 */
+
 #define INET_ADDR_COOKIE(__name, __saddr, __daddr)
 #define INET_MATCH(__sk, __net, __hash, __cookie, __saddr, __daddr, __ports, __dif)	\
 	(((__sk)->sk_hash == (__hash)) && net_eq(sock_net(__sk), (__net))	&&	\
@@ -390,6 +399,12 @@ static inline struct sock *inet_lookup(struct net *net,
 	return sk;
 }
 
+/*
+@hashinfo	: 哈希表
+@skb		: 收到的报文
+@sport		: 源端口
+@dport		: 目的端口
+*/
 static inline struct sock *__inet_lookup_skb(struct inet_hashinfo *hashinfo,
 					     struct sk_buff *skb,
 					     const __be16 sport,

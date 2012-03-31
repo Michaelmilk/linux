@@ -396,6 +396,11 @@ static int ip_rcv_finish(struct sk_buff *skb)
 	}
 #endif
 
+	/* 到这里已经得出了该@skb的路由信息
+	   是发往本地ip_local_deliver()
+	   还是进行转发ip_forward()
+	*/
+
 	/* 该ip包有选项数据，解析之 */
 	if (iph->ihl > 5 && ip_rcv_options(skb))
 		goto drop;

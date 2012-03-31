@@ -1247,6 +1247,9 @@ call_kill:
 EXPORT_SYMBOL(sock_wake_async);
 
 /*
+例如用户进程的socket()系统调用便会由sock_create()调用到这里创建socket
+内核中创建socket由sock_create_kern()调用至此
+
 @net		: 网络命名空间
 @family		: 协议族，例如PF_INET
 @type		: 套接字类型，例如流套接字SOCK_STREAM

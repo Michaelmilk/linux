@@ -50,6 +50,9 @@ struct udp_skb_cb {
 };
 #define UDP_SKB_CB(__skb)	((struct udp_skb_cb *)((__skb)->cb))
 
+/*
+哈希表桶头节点
+*/
 /**
  *	struct udp_hslot - UDP hash slot
  *
@@ -72,9 +75,12 @@ struct udp_hslot {
  *	@log:	log2(number of slots in hash table)
  */
 struct udp_table {
+	/* 哈希表桶头 */
 	struct udp_hslot	*hash;
 	struct udp_hslot	*hash2;
+	/* 掩码，桶头个数-1 */
 	unsigned int		mask;
+	/* 2^log次方为桶头节点的个数 */
 	unsigned int		log;
 };
 extern struct udp_table udp_table;

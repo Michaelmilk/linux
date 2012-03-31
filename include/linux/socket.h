@@ -259,6 +259,7 @@ struct ucred {
  */
  
 #define MSG_OOB		1
+/* 指示接收数据后，在接收队列中保留原数据，不将其删除，随后的读操作还可以接收到相同的数据 */
 #define MSG_PEEK	2
 #define MSG_DONTROUTE	4
 #define MSG_TRYHARD     4       /* Synonym for MSG_DONTROUTE for DECnet */

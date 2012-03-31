@@ -310,13 +310,16 @@ EXPORT_SYMBOL(skb_kill_datagram);
 int skb_copy_datagram_iovec(const struct sk_buff *skb, int offset,
 			    struct iovec *to, int len)
 {
+	/* 线性区长度 */
 	int start = skb_headlen(skb);
+	/* 需要拷贝的在线性区中的数据长度 */
 	int i, copy = start - offset;
 	struct sk_buff *frag_iter;
 
 	trace_skb_copy_datagram_iovec(skb, len);
 
 	/* Copy header. */
+	/* 拷贝线性部分的数据 */
 	if (copy > 0) {
 		if (copy > len)
 			copy = len;
@@ -328,6 +331,7 @@ int skb_copy_datagram_iovec(const struct sk_buff *skb, int offset,
 	}
 
 	/* Copy paged appendix. Hmm... why does this look so complicated? */
+	/* 拷贝页中的数据 */
 	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
 		int end;
 		const skb_frag_t *frag = &skb_shinfo(skb)->frags[i];
@@ -355,6 +359,7 @@ int skb_copy_datagram_iovec(const struct sk_buff *skb, int offset,
 		start = end;
 	}
 
+	/* 拷贝分片skb链表中的数据 */
 	skb_walk_frags(skb, frag_iter) {
 		int end;
 
@@ -364,6 +369,7 @@ int skb_copy_datagram_iovec(const struct sk_buff *skb, int offset,
 		if ((copy = end - offset) > 0) {
 			if (copy > len)
 				copy = len;
+			/* 递归调用 */
 			if (skb_copy_datagram_iovec(frag_iter,
 						    offset - start,
 						    to, copy))

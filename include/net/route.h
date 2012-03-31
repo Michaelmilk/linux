@@ -211,6 +211,9 @@ static inline int ip_route_input(struct sk_buff *skb, __be32 dst, __be32 src,
 	return ip_route_input_common(skb, dst, src, tos, devin, false);
 }
 
+/*
+不增加struct dst_entry实例的引用计数
+*/
 static inline int ip_route_input_noref(struct sk_buff *skb, __be32 dst, __be32 src,
 				       u8 tos, struct net_device *devin)
 {

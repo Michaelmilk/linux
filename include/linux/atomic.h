@@ -12,6 +12,10 @@
  * Atomically adds @a to @v, so long as @v was not already @u.
  * Returns non-zero if @v was not @u, and zero otherwise.
  */
+/*
+如果@v中的值已经等于@u了，则返回0
+如果@v中的值不等于@u，则返回1
+*/
 static inline int atomic_add_unless(atomic_t *v, int a, int u)
 {
 	return __atomic_add_unless(v, a, u) != u;
@@ -25,6 +29,11 @@ static inline int atomic_add_unless(atomic_t *v, int a, int u)
  * Returns non-zero if @v was non-zero, and zero otherwise.
  */
 #ifndef atomic_inc_not_zero
+/*
+如果@v中的值不是0，则+1，返回1
+
+如果@v中的值等于0，则不加，返回0
+*/
 #define atomic_inc_not_zero(v)		atomic_add_unless((v), 1, 0)
 #endif
 

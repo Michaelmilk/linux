@@ -19,6 +19,7 @@ enum {
 	TCP_SYN_RECV,
 	TCP_FIN_WAIT1,
 	TCP_FIN_WAIT2,
+	/* 先close()的一方会进入TIME_WAIT状态 */
 	TCP_TIME_WAIT,
 	TCP_CLOSE,
 	TCP_CLOSE_WAIT,

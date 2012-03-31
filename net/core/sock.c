@@ -2460,6 +2460,9 @@ static void release_proto_idx(struct proto *prot)
 		clear_bit(prot->inuse_idx, proto_inuse_idx);
 }
 #else
+
+/* Œ¥≈‰÷√CONFIG_PROC_FS */
+
 static inline void assign_proto_idx(struct proto *prot)
 {
 }

@@ -201,9 +201,13 @@ int raw_local_deliver(struct sk_buff *skb, int protocol)
 	/* If there maybe a raw socket we must check - if not we
 	 * don't care less
 	 */
+	/* 此桶下非空
+
+	*/
 	if (raw_sk && !raw_v4_input(skb, ip_hdr(skb), hash))
 		raw_sk = NULL;
 
+	/* 如果进行了raw_rcv()的话，则返回1 */
 	return raw_sk != NULL;
 
 }

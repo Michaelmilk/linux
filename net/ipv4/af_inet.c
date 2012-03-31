@@ -1052,6 +1052,7 @@ static const struct net_proto_family inet_family_ops = {
  */
 /*
 启动的时候这些项会根据type加入inetsw[type]数组对应下标的链表中
+在inet_init()中由inet_register_protosw()注册进inetsw[type]
 */
 static struct inet_protosw inetsw_array[] =
 {
