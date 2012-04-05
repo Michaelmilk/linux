@@ -35,7 +35,9 @@ LC_COLLATE=C
 LC_NUMERIC=C
 export LC_COLLATE LC_NUMERIC
 
-	# collate : 校对
+    # collate : 校对
+    # LC_COLLATE : 比较和排序习惯
+    # LC_NUMERIC : 数字
 
 # We are using a recursive build, so we need to do a little thinking
 # to get the ordering right.
@@ -608,6 +610,9 @@ KBUILD_CFLAGS_KERNEL :=
 KBUILD_AFLAGS   := -D__ASSEMBLY__
 KBUILD_AFLAGS_MODULE  := -DMODULE
 KBUILD_CFLAGS_MODULE  := -DMODULE
+
+    # -T参数指定模块的链接脚本文件
+
 KBUILD_LDFLAGS_MODULE := -T $(srctree)/scripts/module-common.lds
 
 # Read KERNELRELEASE from include/config/kernel.release (if it exists)
@@ -673,9 +678,10 @@ PHONY += outputmakefile
 # separate output directory. This allows convenient use of make in the
 # output directory.
 
-	# 当KBUILD_SRC不为空时，则说明是将编译目标文件输出到另外一个目录
-	# 创建一个source目录链接到内核源码目录
-	# 使用脚本mkmakefile在输出目录下构造一个Makefile文件
+    # 当KBUILD_SRC不为空时，则说明是将编译目标文件输出到另外一个目录
+    # 创建一个source目录链接到内核源码目录
+    # 使用脚本mkmakefile在输出目录下构造一个Makefile文件
+    # 参考脚本mkmakefile，传递的4个参数
 
 outputmakefile:
 ifneq ($(KBUILD_SRC),)
@@ -746,9 +752,12 @@ ifeq ($(mixed-targets),1)
 # We're called with mixed targets (*config and build targets).
 # Handle them one by one.
 
-	# 双冒号规则(Double-colon rules)
-	# 逐个make命令行中的参数目标
-	# $@匹配第一个目标
+    # 到这里判断是混合目标
+    # 则一个一个的进行处理
+
+    # 双冒号规则(Double-colon rules)
+    # 逐个make命令行中的参数目标
+    # $@匹配第一个目标
 
 %:: FORCE
 	$(Q)$(MAKE) -C $(srctree) KBUILD_SRC= $@
@@ -827,7 +836,9 @@ ifeq ($(dot-config),1)
 
 ifeq ($(KBUILD_EXTMOD),)
 
-	# 尝试包含include/config/auto.conf.cmd文件
+    # 尝试包含include/config/auto.conf.cmd文件
+    # 该文件内主要包含include/config/auto.conf对所有的*/Kconfig文件的依赖规则
+    # 以确保include/config/auto.conf中的变量定义都是最新的
 
 # Read in dependencies to all Kconfig* files, make sure to run
 # oldconfig if changes are detected.
