@@ -2275,15 +2275,15 @@ extern struct exec_domain	default_exec_domain;
 保存在连续的2个物理页框内
 
 +-----------------------+ 高地址
-|		堆栈			|
-|						|
-|						|
+|	堆栈		|
+|			|
+|			|
 +-----------------------+
-|						| <-- esp
-|						|
-|	thread_info结构		|
+|			| <-- esp
+|			|
+|    thread_info结构	|
 +-----------------------+ 低地址
-	
+
 */
 union thread_union {
 	struct thread_info thread_info;

@@ -25,7 +25,11 @@ struct pt_regs;
 /*
  * This structure is used to hold the arguments that are used when loading binaries.
  */
+/*
+保存可执行程序装入的一些信息
+*/
 struct linux_binprm {
+	/* 可执行文件的前128个字节 */
 	char buf[BINPRM_BUF_SIZE];
 #ifdef CONFIG_MMU
 	struct vm_area_struct *vma;
@@ -46,11 +50,14 @@ struct linux_binprm {
 	unsigned int taso:1;
 #endif
 	unsigned int recursion_depth;
+	/* 要执行的文件 */
 	struct file * file;
 	struct cred *cred;	/* new credentials */
 	int unsafe;		/* how unsafe this exec is (mask of LSM_UNSAFE_*) */
 	unsigned int per_clear;	/* bits to clear in current->personality */
+	/* 命令行参数数目和环境变量数目*/
 	int argc, envc;
+	/* 要执行的文件的名称 */
 	const char * filename;	/* Name of binary as seen by procps */
 	const char * interp;	/* Name of the binary really executed. Most
 				   of the time same as filename, but could be

@@ -2502,6 +2502,12 @@ out_filp:
 	goto out;
 }
 
+/*
+@dfd		: default file directory
+@pathname	:
+@op		:
+@flags		:
+*/
 struct file *do_filp_open(int dfd, const char *pathname,
 		const struct open_flags *op, int flags)
 {

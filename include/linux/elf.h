@@ -25,12 +25,21 @@ typedef __u64	Elf64_Xword;
 typedef __s64	Elf64_Sxword;
 
 /* These constants are for the segment types stored in the image headers */
+/* 表示未被使用的程序段 */
 #define PT_NULL    0
+/* 表示该程序段在程序运行时应该被加载 */
 #define PT_LOAD    1
+/* 表示该程序段包含动态连接信息 */
 #define PT_DYNAMIC 2
+/* 表示该程序段内包含程序加载器的名称
+Linux下常见的加载器为ld-linux.so.2
+*/
 #define PT_INTERP  3
+/* 表示该程序段内包含程序的说明信息 */
 #define PT_NOTE    4
+/* 保留的程序头类型，未在ELF ABI文档内定义 */
 #define PT_SHLIB   5
+/* 表示该程序段内包含程序的头信息 */
 #define PT_PHDR    6
 #define PT_TLS     7               /* Thread local storage segment */
 #define PT_LOOS    0x60000000      /* OS-specific */
@@ -203,15 +212,36 @@ typedef struct elf64_sym {
 
 #define EI_NIDENT	16
 
+/*
+52bytes
+*/
 typedef struct elf32_hdr{
+/* 16 */
   unsigned char	e_ident[EI_NIDENT];
+/* 2
+文件类型
+REL (Relocatable file) 可重定向文件
+EXEC (Executable file) 可执行文件
+DYN (Shared object file) 共享目标文件
+*/
   Elf32_Half	e_type;
+/* 2 */
   Elf32_Half	e_machine;
+/* 4 */
   Elf32_Word	e_version;
+/* 4 */
   Elf32_Addr	e_entry;  /* Entry point */
+/* 4
+program header offset
+*/
   Elf32_Off	e_phoff;
+/* 4
+section headers offset
+*/
   Elf32_Off	e_shoff;
+/* 4 */
   Elf32_Word	e_flags;
+/* 2*6 = 12 */
   Elf32_Half	e_ehsize;
   Elf32_Half	e_phentsize;
   Elf32_Half	e_phnum;
@@ -220,15 +250,27 @@ typedef struct elf32_hdr{
   Elf32_Half	e_shstrndx;
 } Elf32_Ehdr;
 
+/*
+64bytes
+*/
 typedef struct elf64_hdr {
+/* 16 */
   unsigned char	e_ident[EI_NIDENT];	/* ELF "magic number" */
+/* 2 */
   Elf64_Half e_type;
+/* 2 */
   Elf64_Half e_machine;
+/* 4 */
   Elf64_Word e_version;
+/* 8 */
   Elf64_Addr e_entry;		/* Entry point virtual address */
+/* 8 */
   Elf64_Off e_phoff;		/* Program header table file offset */
+/* 8 */
   Elf64_Off e_shoff;		/* Section header table file offset */
+/* 4 */
   Elf64_Word e_flags;
+/* 2*6 = 12 */
   Elf64_Half e_ehsize;
   Elf64_Half e_phentsize;
   Elf64_Half e_phnum;
@@ -243,6 +285,10 @@ typedef struct elf64_hdr {
 #define PF_W		0x2
 #define PF_X		0x1
 
+/*
+program header
+4*8 = 32bytes
+*/
 typedef struct elf32_phdr{
   Elf32_Word	p_type;
   Elf32_Off	p_offset;
@@ -299,6 +345,10 @@ typedef struct elf64_phdr {
 #define SHN_COMMON	0xfff2
 #define SHN_HIRESERVE	0xffff
  
+/*
+section header
+4*10 = 40bytes
+*/
 typedef struct elf32_shdr {
   Elf32_Word	sh_name;
   Elf32_Word	sh_type;

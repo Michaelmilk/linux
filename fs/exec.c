@@ -81,6 +81,10 @@ static atomic_t call_count = ATOMIC_INIT(1);
 static LIST_HEAD(formats);
 static DEFINE_RWLOCK(binfmt_lock);
 
+/*
+将@fmt链入formats链表
+链头或链尾
+*/
 void __register_binfmt(struct linux_binfmt * fmt, int insert)
 {
 	BUG_ON(!fmt);
@@ -253,17 +257,38 @@ static void flush_arg_page(struct linux_binprm *bprm, unsigned long pos,
 	flush_cache_page(bprm->vma, pos, page_to_pfn(page));
 }
 
+/*
+
+|		|
+|		|
++---------------+ 3G	<- vma->vm_end = STACK_TOP_MAX;
+|		|	<- bprm->p = vma->vm_end - sizeof(void *);
+|		|	<- vma->vm_start = vma->vm_end - PAGE_SIZE;
+|		|
++		|
+|		|
+|		|
+|		|
++		|
+|		|
+|		|
+|		|
++---------------+ 0
+
+*/
 static int __bprm_mm_init(struct linux_binprm *bprm)
 {
 	int err;
 	struct vm_area_struct *vma = NULL;
 	struct mm_struct *mm = bprm->mm;
 
+	/* 分配虚拟内存管理结构 */
 	bprm->vma = vma = kmem_cache_zalloc(vm_area_cachep, GFP_KERNEL);
 	if (!vma)
 		return -ENOMEM;
 
 	down_write(&mm->mmap_sem);
+	/* 指向所属的mm */
 	vma->vm_mm = mm;
 
 	/*
@@ -273,6 +298,7 @@ static int __bprm_mm_init(struct linux_binprm *bprm)
 	 * configured yet.
 	 */
 	BUILD_BUG_ON(VM_STACK_FLAGS & VM_STACK_INCOMPLETE_SETUP);
+	/* 用户空间进程虚拟地址上限 */
 	vma->vm_end = STACK_TOP_MAX;
 	vma->vm_start = vma->vm_end - PAGE_SIZE;
 	vma->vm_flags = VM_STACK_FLAGS | VM_STACK_INCOMPLETE_SETUP;
@@ -438,16 +464,19 @@ static int count(struct user_arg_ptr argv, int max)
 {
 	int i = 0;
 
+	/* 参数或环境变量 */
 	if (argv.ptr.native != NULL) {
 		for (;;) {
 			const char __user *p = get_user_arg_ptr(argv, i);
 
+			/* NULL，表示已经结束 */
 			if (!p)
 				break;
 
 			if (IS_ERR(p))
 				return -EFAULT;
 
+			/* 达到个数上限 */
 			if (i++ >= max)
 				return -E2BIG;
 
@@ -761,6 +790,10 @@ EXPORT_SYMBOL(setup_arg_pages);
 
 #endif /* CONFIG_MMU */
 
+/*
+打开文件@name
+建立内核需要的各种数据结构，struct file等
+*/
 struct file *open_exec(const char *name)
 {
 	struct file *file;
@@ -797,6 +830,9 @@ exit:
 }
 EXPORT_SYMBOL(open_exec);
 
+/*
+从@file偏移@offset处开始读取@count字节到@addr中
+*/
 int kernel_read(struct file *file, loff_t offset,
 		char *addr, unsigned long count)
 {
@@ -804,10 +840,15 @@ int kernel_read(struct file *file, loff_t offset,
 	loff_t pos = offset;
 	int result;
 
+	/* 保存原来的上限值 */
 	old_fs = get_fs();
+	/* 将上限设置为内核空间虚拟地址上限
+	   这样在vfs_read()函数中对虚拟地址上限的检查便可以通过了
+	*/
 	set_fs(get_ds());
 	/* The cast to a user pointer is valid due to the set_fs() */
 	result = vfs_read(file, (void __user *)addr, count, &pos);
+	/* 写回原来的值 */
 	set_fs(old_fs);
 	return result;
 }
@@ -1313,6 +1354,7 @@ int prepare_binprm(struct linux_binprm *bprm)
 	bprm->cred_prepared = 1;
 
 	memset(bprm->buf, 0, BINPRM_BUF_SIZE);
+	/* 读入文件的前128个字节 */
 	return kernel_read(bprm->file, 0, bprm->buf, BINPRM_BUF_SIZE);
 }
 
@@ -1388,7 +1430,9 @@ int search_binary_handler(struct linux_binprm *bprm,struct pt_regs *regs)
 	retval = -ENOENT;
 	for (try=0; try<2; try++) {
 		read_lock(&binfmt_lock);
+		/* 遍历注册的可执行文件格式链表 */
 		list_for_each_entry(fmt, &formats, lh) {
+			/* 例如load_elf_binary() */
 			int (*fn)(struct linux_binprm *, struct pt_regs *) = fmt->load_binary;
 			if (!fn)
 				continue;
@@ -1470,6 +1514,7 @@ static int do_execve_common(const char *filename,
 	 * don't check setuid() return code.  Here we additionally recheck
 	 * whether NPROC limit is still exceeded.
 	 */
+	/* 检查用户运行进程数目是否达到上限 */
 	if ((current->flags & PF_NPROC_EXCEEDED) &&
 	    atomic_read(&cred->user->processes) > rlimit(RLIMIT_NPROC)) {
 		retval = -EAGAIN;
@@ -1478,6 +1523,7 @@ static int do_execve_common(const char *filename,
 
 	/* We're below the limit (still or again), so we don't want to make
 	 * further execve() calls fail. */
+	/* 去掉PF_NPROC_EXCEEDED标志 */
 	current->flags &= ~PF_NPROC_EXCEEDED;
 
 	retval = unshare_files(&displaced);
@@ -1514,10 +1560,12 @@ static int do_execve_common(const char *filename,
 	if (retval)
 		goto out_file;
 
+	/* 计算参数个数 */
 	bprm->argc = count(argv, MAX_ARG_STRINGS);
 	if ((retval = bprm->argc) < 0)
 		goto out;
 
+	/* 计算环境变量个数 */
 	bprm->envc = count(envp, MAX_ARG_STRINGS);
 	if ((retval = bprm->envc) < 0)
 		goto out;

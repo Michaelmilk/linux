@@ -695,7 +695,7 @@ syscall_trace_entry:
 	movl $-ENOSYS,PT_EAX(%esp)
 	movl %esp, %eax
 	call syscall_trace_enter
-	/* What it returned is what we'll actually use.  */
+	/* What it returned is what we''ll actually use.  */
 	cmpl $(NR_syscalls), %eax
 	jnae syscall_call
 	jmp syscall_exit

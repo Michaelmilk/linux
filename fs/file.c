@@ -312,6 +312,9 @@ static int count_open_files(struct fdtable *fdt)
  * passed in files structure.
  * errorp will be valid only when the returned files_struct is NULL.
  */
+/*
+复制@oldf
+*/
 struct files_struct *dup_fd(struct files_struct *oldf, int *errorp)
 {
 	struct files_struct *newf;
@@ -320,6 +323,7 @@ struct files_struct *dup_fd(struct files_struct *oldf, int *errorp)
 	struct fdtable *old_fdt, *new_fdt;
 
 	*errorp = -ENOMEM;
+	/* 从缓存中分配一个实例空间 */
 	newf = kmem_cache_alloc(files_cachep, GFP_KERNEL);
 	if (!newf)
 		goto out;

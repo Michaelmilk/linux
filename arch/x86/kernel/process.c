@@ -327,6 +327,7 @@ long sys_execve(const char __user *name,
 	long error;
 	char *filename;
 
+	/* 在内核空间申请一块区域保存用户态的字符串名称 */
 	filename = getname(name);
 	error = PTR_ERR(filename);
 	if (IS_ERR(filename))
@@ -340,6 +341,7 @@ long sys_execve(const char __user *name,
         }
 #endif
 
+	/* 释放空间，放回缓存 */
 	putname(filename);
 	return error;
 }

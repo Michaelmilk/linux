@@ -585,32 +585,42 @@ static int load_elf_binary(struct linux_binprm *bprm, struct pt_regs *regs)
 	}
 	
 	/* Get the exec-header */
+	/* prepare_binprm()中读入的可执行文件前128个字节
+	   将该信息头部复制到loc->elf_ex字段
+	*/
 	loc->elf_ex = *((struct elfhdr *)bprm->buf);
 
 	retval = -ENOEXEC;
 	/* First of all, some simple consistency checks */
+	/* 检查文件头4个字节的magic */
 	if (memcmp(loc->elf_ex.e_ident, ELFMAG, SELFMAG) != 0)
 		goto out;
 
 	if (loc->elf_ex.e_type != ET_EXEC && loc->elf_ex.e_type != ET_DYN)
 		goto out;
+	/* 检查机器架构 */
 	if (!elf_check_arch(&loc->elf_ex))
 		goto out;
 	if (!bprm->file->f_op || !bprm->file->f_op->mmap)
 		goto out;
 
 	/* Now read in all of the header information */
+	/* 检查program header结构大小是否一致 */
 	if (loc->elf_ex.e_phentsize != sizeof(struct elf_phdr))
 		goto out;
+	/* 检查program header个数 */
 	if (loc->elf_ex.e_phnum < 1 ||
 	 	loc->elf_ex.e_phnum > 65536U / sizeof(struct elf_phdr))
 		goto out;
+	/* program header所占字节数 */
 	size = loc->elf_ex.e_phnum * sizeof(struct elf_phdr);
 	retval = -ENOMEM;
+	/* 分配总的program headers空间 */
 	elf_phdata = kmalloc(size, GFP_KERNEL);
 	if (!elf_phdata)
 		goto out;
 
+	/* 从program header offset处读入 */
 	retval = kernel_read(bprm->file, loc->elf_ex.e_phoff,
 			     (char *)elf_phdata, size);
 	if (retval != size) {
@@ -628,6 +638,7 @@ static int load_elf_binary(struct linux_binprm *bprm, struct pt_regs *regs)
 	start_data = 0;
 	end_data = 0;
 
+	/* 遍历program headers寻找程序加载器 */
 	for (i = 0; i < loc->elf_ex.e_phnum; i++) {
 		if (elf_ppnt->p_type == PT_INTERP) {
 			/* This is the program interpreter used for
@@ -640,11 +651,13 @@ static int load_elf_binary(struct linux_binprm *bprm, struct pt_regs *regs)
 				goto out_free_ph;
 
 			retval = -ENOMEM;
+			/* 程序加载器名称空间 */
 			elf_interpreter = kmalloc(elf_ppnt->p_filesz,
 						  GFP_KERNEL);
 			if (!elf_interpreter)
 				goto out_free_ph;
 
+			/* 读入程序加载器名称 */
 			retval = kernel_read(bprm->file, elf_ppnt->p_offset,
 					     elf_interpreter,
 					     elf_ppnt->p_filesz);
@@ -658,6 +671,7 @@ static int load_elf_binary(struct linux_binprm *bprm, struct pt_regs *regs)
 			if (elf_interpreter[elf_ppnt->p_filesz - 1] != '\0')
 				goto out_free_interp;
 
+			/* 打开程序加载器 */
 			interpreter = open_exec(elf_interpreter);
 			retval = PTR_ERR(interpreter);
 			if (IS_ERR(interpreter))
@@ -670,6 +684,7 @@ static int load_elf_binary(struct linux_binprm *bprm, struct pt_regs *regs)
 			 */
 			would_dump(bprm, interpreter);
 
+			/* 读入程序加载器前128字节 */
 			retval = kernel_read(interpreter, 0, bprm->buf,
 					     BINPRM_BUF_SIZE);
 			if (retval != BINPRM_BUF_SIZE) {

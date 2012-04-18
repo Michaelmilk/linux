@@ -529,6 +529,9 @@ static struct mm_struct *mm_init(struct mm_struct *mm, struct task_struct *p)
 /*
  * Allocate and initialize an mm_struct.
  */
+/*
+分配并初始化进程的内存管理结构
+*/
 struct mm_struct *mm_alloc(void)
 {
 	struct mm_struct *mm;
@@ -1838,6 +1841,10 @@ bad_unshare_out:
  *	the exec layer of the kernel.
  */
 
+/*
+从当前进程复制一份struct files_struct
+由2级指针@displaced返回
+*/
 int unshare_files(struct files_struct **displaced)
 {
 	struct task_struct *task = current;

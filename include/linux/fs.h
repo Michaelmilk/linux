@@ -231,6 +231,7 @@ struct inodes_stat_t {
 #define S_SYNC		1	/* Writes are synced at once */
 #define S_NOATIME	2	/* Do not update access times */
 #define S_APPEND	4	/* Append-only file */
+/* immutable: 不可变的 */
 #define S_IMMUTABLE	8	/* Immutable file */
 #define S_DEAD		16	/* removed, but still open directory */
 #define S_NOQUOTA	32	/* Inode is not counted to quota */

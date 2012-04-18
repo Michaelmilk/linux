@@ -2292,6 +2292,9 @@ void exit_mmap(struct mm_struct *mm)
  * and into the inode's i_mmap tree.  If vm_file is non-NULL
  * then i_mmap_mutex is taken here.
  */
+/*
+将@vma链入@mm的mmap链表，并加入mm_rb红黑树
+*/
 int insert_vm_struct(struct mm_struct * mm, struct vm_area_struct * vma)
 {
 	struct vm_area_struct * __vma, * prev;

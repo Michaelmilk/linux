@@ -44,13 +44,20 @@ struct pt_regs {
 该结构存放着进入内核空间前各寄存器的内容
 */
 struct pt_regs {
+	/* 执行系统调用execve时，保存可执行文件的路径指针
+	*/
 	unsigned long bx;
+	/* 执行系统调用execve时，保存命令行参数指针
+	*/
 	unsigned long cx;
+	/* 执行系统调用execve时，保存环境变量指针
+	*/
 	unsigned long dx;
 	unsigned long si;
 	unsigned long di;
 	unsigned long bp;
-	/* 对于fork系统调用，新进程为0；父进程为新进程的pid */
+	/* eax寄存器保存返回值
+	   对于fork系统调用，新进程为0；父进程为新进程的pid */
 	unsigned long ax;
 	unsigned long ds;
 	unsigned long es;
