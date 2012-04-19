@@ -29,19 +29,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
-
-/*
-得到主机序保存的一个32位整数
-@p	: 从p开始的是一个4字节整数，主机序存储
-*/
-static uint32_t getle32(const void *p)
-{
-	const uint8_t *cp = p;
-
-	/* 低字节在前，逐个移位相加得到4字节整数的值 */
-	return (uint32_t)cp[0] + ((uint32_t)cp[1] << 8) +
-		((uint32_t)cp[2] << 16) + ((uint32_t)cp[3] << 24);
-}
+#include <tools/le_byteshift.h>
 
 /*
 使用mkpiggy程序把压缩过的vmlinux中的长度偏移信息提取出来，写入piggy.S
@@ -84,7 +72,7 @@ int main(int argc, char *argv[])
 	/* 通过文件指针的移动，这里便得到了压缩后文件的长度 */
 	ilen = ftell(f);
 	/* 压缩文件的最后4个字节保存的是原始文件的长度 */
-	olen = getle32(&olen);
+	olen = get_unaligned_le32(&olen);
 	fclose(f);
 
 	/*

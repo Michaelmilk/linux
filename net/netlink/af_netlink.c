@@ -978,10 +978,7 @@ int netlink_attachskb(struct sock *sk, struct sk_buff *skb,
 	return 0;
 }
 
-/*
-注意这个是内核全局函数, 非static
-*/
-int netlink_sendskb(struct sock *sk, struct sk_buff *skb)
+static int __netlink_sendskb(struct sock *sk, struct sk_buff *skb)
 {
 	int len = skb->len;
 
@@ -989,6 +986,17 @@ int netlink_sendskb(struct sock *sk, struct sk_buff *skb)
 	skb_queue_tail(&sk->sk_receive_queue, skb);
 	/* 调用netlink sock的sk_data_ready函数处理 */
 	sk->sk_data_ready(sk, len);
+	return len;
+}
+
+/*
+注意这个是内核全局函数, 非static
+*/
+
+int netlink_sendskb(struct sock *sk, struct sk_buff *skb)
+{
+	int len = __netlink_sendskb(sk, skb);
+
 	sock_put(sk);
 	return len;
 }
@@ -1124,14 +1132,7 @@ static int netlink_broadcast_deliver(struct sock *sk, struct sk_buff *skb)
 	if (atomic_read(&sk->sk_rmem_alloc) <= sk->sk_rcvbuf &&
 	    !test_bit(0, &nlk->state)) {
 		skb_set_owner_r(skb, sk);
-		/* 添加到接收队列尾, 由于是本机内部通信, 可以自己找到要发送的目的方,
-		   所以直接将数据扔给目的方, 所以是接收队列
-		*/
-		skb_queue_tail(&sk->sk_receive_queue, skb);
-		/* 调用netlink sock的sk_data_ready函数处理, 
-		   由此进入内核中netlink各协议的回调处理
-		*/
-		sk->sk_data_ready(sk, skb->len);
+		__netlink_sendskb(sk, skb);
 		return atomic_read(&sk->sk_rmem_alloc) > (sk->sk_rcvbuf >> 1);
 	}
 	return -1;
@@ -1954,10 +1955,8 @@ static int netlink_dump(struct sock *sk)
 
 		if (sk_filter(sk, skb))
 			kfree_skb(skb);
-		else {
-			skb_queue_tail(&sk->sk_receive_queue, skb);
-			sk->sk_data_ready(sk, skb->len);
-		}
+		else
+			__netlink_sendskb(sk, skb);
 		return 0;
 	}
 
@@ -1971,10 +1970,8 @@ static int netlink_dump(struct sock *sk)
 
 	if (sk_filter(sk, skb))
 		kfree_skb(skb);
-	else {
-		skb_queue_tail(&sk->sk_receive_queue, skb);
-		sk->sk_data_ready(sk, skb->len);
-	}
+	else
+		__netlink_sendskb(sk, skb);
 
 	if (cb->done)
 		cb->done(cb);

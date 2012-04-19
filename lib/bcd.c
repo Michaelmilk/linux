@@ -1,5 +1,5 @@
 #include <linux/bcd.h>
-#include <linux/module.h>
+#include <linux/export.h>
 
 /*
 BCD: Binary-Coded Decimal

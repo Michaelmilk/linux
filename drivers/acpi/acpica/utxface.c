@@ -146,6 +146,8 @@ acpi_status acpi_enable_subsystem(u32 flags)
 
 	ACPI_FUNCTION_TRACE(acpi_enable_subsystem);
 
+#if (!ACPI_REDUCED_HARDWARE)
+
 	/* Enable ACPI mode */
 
 	if (!(flags & ACPI_NO_ACPI_ENABLE)) {
@@ -170,6 +172,7 @@ acpi_status acpi_enable_subsystem(u32 flags)
 		ACPI_WARNING((AE_INFO, "Could not map the FACS table"));
 		return_ACPI_STATUS(status);
 	}
+#endif				/* !ACPI_REDUCED_HARDWARE */
 
 	/*
 	 * Install the default op_region handlers. These are installed unless
@@ -185,7 +188,7 @@ acpi_status acpi_enable_subsystem(u32 flags)
 			return_ACPI_STATUS(status);
 		}
 	}
-
+#if (!ACPI_REDUCED_HARDWARE)
 	/*
 	 * Initialize ACPI Event handling (Fixed and General Purpose)
 	 *
@@ -221,6 +224,7 @@ acpi_status acpi_enable_subsystem(u32 flags)
 			return_ACPI_STATUS(status);
 		}
 	}
+#endif				/* !ACPI_REDUCED_HARDWARE */
 
 	return_ACPI_STATUS(status);
 }

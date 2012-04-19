@@ -308,6 +308,7 @@ comment "Digest"
 config CRYPTO_CRC32C
 	tristate "CRC32c CRC algorithm"
 	select CRYPTO_HASH
+	select CRC32
 	help
 	  Castagnoli, et al Cyclic Redundancy-Check Algorithm.  Used
 	  by iSCSI for header and data digests and by others.
@@ -626,7 +627,7 @@ config CRYPTO_BLOWFISH_COMMON
 
 config CRYPTO_BLOWFISH_X86_64
 	tristate "Blowfish cipher algorithm (x86_64)"
-	depends on (X86 || UML_X86) && 64BIT
+	depends on X86 && 64BIT
 	select CRYPTO_ALGAPI
 	select CRYPTO_BLOWFISH_COMMON
 	help
@@ -656,7 +657,7 @@ config CRYPTO_CAMELLIA
 
 config CRYPTO_CAMELLIA_X86_64
 	tristate "Camellia cipher algorithm (x86_64)"
-	depends on (X86 || UML_X86) && 64BIT
+	depends on X86 && 64BIT
 	depends on CRYPTO
 	select CRYPTO_ALGAPI
 	select CRYPTO_LRW
@@ -892,7 +893,7 @@ config CRYPTO_TWOFISH_X86_64
 
 config CRYPTO_TWOFISH_X86_64_3WAY
 	tristate "Twofish cipher algorithm (x86_64, 3-way parallel)"
-	depends on (X86 || UML_X86) && 64BIT
+	depends on X86 && 64BIT
 	select CRYPTO_ALGAPI
 	select CRYPTO_TWOFISH_COMMON
 	select CRYPTO_TWOFISH_X86_64

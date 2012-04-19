@@ -98,12 +98,6 @@
 #endif
 .endm
 
-#ifdef CONFIG_VM86
-#define resume_userspace_sig	check_userspace
-#else
-#define resume_userspace_sig	resume_userspace
-#endif
-
 /*
  * User gs save/restore
  *
@@ -339,11 +333,20 @@ ret_from_exception:
 ret_from_intr:
 	/* 将当前进程的thread_info结构体的指针存入ebp帧寄存器中 */
 	GET_THREAD_INFO(%ebp)
-check_userspace:
+resume_userspace_sig:
+#ifdef CONFIG_VM86
 	movl PT_EFLAGS(%esp), %eax	# mix EFLAGS and CS
 	movb PT_CS(%esp), %al
 	/* 是否运行在VM86模式或者用户态 */
 	andl $(X86_EFLAGS_VM | SEGMENT_RPL_MASK), %eax
+#else
+	/*
+	 * We can be coming here from a syscall done in the kernel space,
+	 * e.g. a failed kernel_execve().
+	 */
+	movl PT_CS(%esp), %eax
+	andl $SEGMENT_RPL_MASK, %eax
+#endif
 	cmpl $USER_RPL, %eax
 	/* 从中断返回时，有两种情况，一是返回内核态，二是返回用户态。
 	   中断或异常发生时,处于内核空间,则返回内核空间;否则返回用户空间

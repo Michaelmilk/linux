@@ -2,6 +2,7 @@
 #define _LINUX_PID_NS_H
 
 #include <linux/sched.h>
+#include <linux/bug.h>
 #include <linux/mm.h>
 #include <linux/threads.h>
 #include <linux/nsproxy.h>
@@ -40,6 +41,7 @@ struct pid_namespace {
 #endif
 	gid_t pid_gid;
 	int hide_pid;
+	int reboot;	/* group exit code if this pidns was rebooted */
 };
 
 extern struct pid_namespace init_pid_ns;
@@ -55,6 +57,7 @@ static inline struct pid_namespace *get_pid_ns(struct pid_namespace *ns)
 extern struct pid_namespace *copy_pid_ns(unsigned long flags, struct pid_namespace *ns);
 extern void free_pid_ns(struct kref *kref);
 extern void zap_pid_ns_processes(struct pid_namespace *pid_ns);
+extern int reboot_pid_ns(struct pid_namespace *pid_ns, int cmd);
 
 /*
 @ns的引用计数减1，减1后计数为0则释放该实例
@@ -85,10 +88,14 @@ static inline void put_pid_ns(struct pid_namespace *ns)
 {
 }
 
-
 static inline void zap_pid_ns_processes(struct pid_namespace *ns)
 {
 	BUG();
+}
+
+static inline int reboot_pid_ns(struct pid_namespace *pid_ns, int cmd)
+{
+	return 0;
 }
 #endif /* CONFIG_PID_NS */
 

@@ -21,7 +21,7 @@
 */
 
 #include <linux/rbtree.h>
-#include <linux/module.h>
+#include <linux/export.h>
 
 /*
 ×óÐý

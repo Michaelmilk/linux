@@ -6,7 +6,7 @@
  *  Manage the dynamic fd arrays in the process files_struct.
  */
 
-#include <linux/module.h>
+#include <linux/export.h>
 #include <linux/fs.h>
 #include <linux/mm.h>
 #include <linux/mmzone.h>
@@ -40,7 +40,7 @@ int sysctl_nr_open_max = 1024 * 1024; /* raised later */
  */
 static DEFINE_PER_CPU(struct fdtable_defer, fdtable_defer_list);
 
-static void *alloc_fdmem(unsigned int size)
+static void *alloc_fdmem(size_t size)
 {
 	/*
 	 * Very large allocations can stress page reclaim, so fall back to
@@ -154,7 +154,7 @@ static void copy_fdtable(struct fdtable *nfdt, struct fdtable *ofdt)
 static struct fdtable * alloc_fdtable(unsigned int nr)
 {
 	struct fdtable *fdt;
-	char *data;
+	void *data;
 
 	/*
 	 * Figure out how many fds we actually want to support in this fdtable.
@@ -186,17 +186,18 @@ static struct fdtable * alloc_fdtable(unsigned int nr)
 	data = alloc_fdmem(nr * sizeof(struct file *));
 	if (!data)
 		goto out_fdt;
-	fdt->fd = (struct file **)data;
+	fdt->fd = data;
+
 	/* 分配2个位图空间，不小于一级cache的大小 */
-	data = alloc_fdmem(max_t(unsigned int,
+	data = alloc_fdmem(max_t(size_t,
 				 2 * nr / BITS_PER_BYTE, L1_CACHE_BYTES));
 	if (!data)
 		goto out_arr;
 	/* 指向第一个位图空间 */
-	fdt->open_fds = (fd_set *)data;
+	fdt->open_fds = data;
 	data += nr / BITS_PER_BYTE;
 	/* 指向第二个位图空间 */
-	fdt->close_on_exec = (fd_set *)data;
+	fdt->close_on_exec = data;
 	fdt->next = NULL;
 
 	return fdt;
@@ -299,11 +300,11 @@ static int count_open_files(struct fdtable *fdt)
 	int i;
 
 	/* Find the last open fd */
-	for (i = size/(8*sizeof(long)); i > 0; ) {
-		if (fdt->open_fds->fds_bits[--i])
+	for (i = size / BITS_PER_LONG; i > 0; ) {
+		if (fdt->open_fds[--i])
 			break;
 	}
-	i = (i+1) * 8 * sizeof(long);
+	i = (i + 1) * BITS_PER_LONG;
 	return i;
 }
 
@@ -334,8 +335,8 @@ struct files_struct *dup_fd(struct files_struct *oldf, int *errorp)
 	newf->next_fd = 0;
 	new_fdt = &newf->fdtab;
 	new_fdt->max_fds = NR_OPEN_DEFAULT;
-	new_fdt->close_on_exec = (fd_set *)&newf->close_on_exec_init;
-	new_fdt->open_fds = (fd_set *)&newf->open_fds_init;
+	new_fdt->close_on_exec = newf->close_on_exec_init;
+	new_fdt->open_fds = newf->open_fds_init;
 	new_fdt->fd = &newf->fd_array[0];
 	new_fdt->next = NULL;
 
@@ -378,10 +379,8 @@ struct files_struct *dup_fd(struct files_struct *oldf, int *errorp)
 	old_fds = old_fdt->fd;
 	new_fds = new_fdt->fd;
 
-	memcpy(new_fdt->open_fds->fds_bits,
-		old_fdt->open_fds->fds_bits, open_files/8);
-	memcpy(new_fdt->close_on_exec->fds_bits,
-		old_fdt->close_on_exec->fds_bits, open_files/8);
+	memcpy(new_fdt->open_fds, old_fdt->open_fds, open_files / 8);
+	memcpy(new_fdt->close_on_exec, old_fdt->close_on_exec, open_files / 8);
 
 	for (i = open_files; i != 0; i--) {
 		struct file *f = *old_fds++;
@@ -394,7 +393,7 @@ struct files_struct *dup_fd(struct files_struct *oldf, int *errorp)
 			 * is partway through open().  So make sure that this
 			 * fd is available to the new process.
 			 */
-			FD_CLR(open_files - i, new_fdt->open_fds);
+			__clear_open_fd(open_files - i, new_fdt);
 		}
 		rcu_assign_pointer(*new_fds++, f);
 	}
@@ -407,11 +406,11 @@ struct files_struct *dup_fd(struct files_struct *oldf, int *errorp)
 	memset(new_fds, 0, size);
 
 	if (new_fdt->max_fds > open_files) {
-		int left = (new_fdt->max_fds-open_files)/8;
-		int start = open_files / (8 * sizeof(unsigned long));
+		int left = (new_fdt->max_fds - open_files) / 8;
+		int start = open_files / BITS_PER_LONG;
 
-		memset(&new_fdt->open_fds->fds_bits[start], 0, left);
-		memset(&new_fdt->close_on_exec->fds_bits[start], 0, left);
+		memset(&new_fdt->open_fds[start], 0, left);
+		memset(&new_fdt->close_on_exec[start], 0, left);
 	}
 
 	rcu_assign_pointer(newf->fdt, new_fdt);
@@ -447,8 +446,8 @@ struct files_struct init_files = {
 	.fdtab		= {
 		.max_fds	= NR_OPEN_DEFAULT,
 		.fd		= &init_files.fd_array[0],
-		.close_on_exec	= (fd_set *)&init_files.close_on_exec_init,
-		.open_fds	= (fd_set *)&init_files.open_fds_init,
+		.close_on_exec	= init_files.close_on_exec_init,
+		.open_fds	= init_files.open_fds_init,
 	},
 	.file_lock	= __SPIN_LOCK_UNLOCKED(init_task.file_lock),
 };
@@ -474,8 +473,7 @@ repeat:
 		fd = files->next_fd;
 
 	if (fd < fdt->max_fds)
-		fd = find_next_zero_bit(fdt->open_fds->fds_bits,
-					   fdt->max_fds, fd);
+		fd = find_next_zero_bit(fdt->open_fds, fdt->max_fds, fd);
 
 	error = expand_files(files, fd);
 	if (error < 0)
@@ -491,11 +489,11 @@ repeat:
 	if (start <= files->next_fd)
 		files->next_fd = fd + 1;
 
-	FD_SET(fd, fdt->open_fds);
+	__set_open_fd(fd, fdt);
 	if (flags & O_CLOEXEC)
-		FD_SET(fd, fdt->close_on_exec);
+		__set_close_on_exec(fd, fdt);
 	else
-		FD_CLR(fd, fdt->close_on_exec);
+		__clear_close_on_exec(fd, fdt);
 	error = fd;
 #if 1
 	/* Sanity check */

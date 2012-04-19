@@ -22,6 +22,7 @@ LDFLAGS := -m elf_$(UTS_MACHINE)
 LDFLAGS_vmlinux := -T
 
 hostprogs-y	:= mkpiggy
+HOST_EXTRACFLAGS += -I$(srctree)/tools/include
 
 	# $(obj)即当前文件所在的目录
 	# 解决完各个依赖后

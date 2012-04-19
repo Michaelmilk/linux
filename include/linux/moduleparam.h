@@ -49,9 +49,6 @@ struct kernel_param_ops {
 	void (*free)(void *arg);
 };
 
-/* Flag bits for kernel_param.flags */
-#define KPARAM_ISBOOL		2
-
 struct kernel_param {
 	/* 参数名称 */
 	const char *name;
@@ -59,7 +56,7 @@ struct kernel_param {
 	const struct kernel_param_ops *ops;
 	/* 参数出现在/sys目录下的文件权限 */
 	u16 perm;
-	u16 flags;
+	s16 level;
 	/* 传递给操作函数指针的参数 */
 	union {
 		void *arg;
@@ -143,8 +140,40 @@ param_check_##type()展开后为一个静态内联函数，没有调用处，会被编译器优化掉
  * The ops can have NULL set or get functions.
  */
 #define module_param_cb(name, ops, arg, perm)				      \
-	__module_param_call(MODULE_PARAM_PREFIX,			      \
-			    name, ops, arg, __same_type((arg), bool *), perm)
+	__module_param_call(MODULE_PARAM_PREFIX, name, ops, arg, perm, 0)
+
+/**
+ * <level>_param_cb - general callback for a module/cmdline parameter
+ *                    to be evaluated before certain initcall level
+ * @name: a valid C identifier which is the parameter name.
+ * @ops: the set & get operations for this parameter.
+ * @perm: visibility in sysfs.
+ *
+ * The ops can have NULL set or get functions.
+ */
+#define __level_param_cb(name, ops, arg, perm, level)			\
+	__module_param_call(MODULE_PARAM_PREFIX, name, ops, arg, perm, level)
+
+#define core_param_cb(name, ops, arg, perm)		\
+	__level_param_cb(name, ops, arg, perm, 1)
+
+#define postcore_param_cb(name, ops, arg, perm)		\
+	__level_param_cb(name, ops, arg, perm, 2)
+
+#define arch_param_cb(name, ops, arg, perm)		\
+	__level_param_cb(name, ops, arg, perm, 3)
+
+#define subsys_param_cb(name, ops, arg, perm)		\
+	__level_param_cb(name, ops, arg, perm, 4)
+
+#define fs_param_cb(name, ops, arg, perm)		\
+	__level_param_cb(name, ops, arg, perm, 5)
+
+#define device_param_cb(name, ops, arg, perm)		\
+	__level_param_cb(name, ops, arg, perm, 6)
+
+#define late_param_cb(name, ops, arg, perm)		\
+	__level_param_cb(name, ops, arg, perm, 7)
 
 /* On alpha, ia64 and ppc64 relocations to global data cannot go into
    read-only sections (which is part of respective UNIX ABI on these
@@ -158,6 +187,7 @@ param_check_##type()展开后为一个静态内联函数，没有调用处，会被编译器优化掉
 
 /* This is the fundamental function for registering boot/module
    parameters. */
+
 /*
 @prefix	: 前缀
 @name	: 变量名称
@@ -167,7 +197,8 @@ param_check_##type()展开后为一个静态内联函数，没有调用处，会被编译器优化掉
 定义一个struct kernel_param结构，名称为__param_##name
 并初始化其中的字段
 */
-#define __module_param_call(prefix, name, ops, arg, isbool, perm)	\
+
+#define __module_param_call(prefix, name, ops, arg, perm, level)	\
 	/* Default value instead of permissions? */			\
 	static int __param_perm_check_##name __attribute__((unused)) =	\
 	BUILD_BUG_ON_ZERO((perm) < 0 || (perm) > 0777 || ((perm) & 2))	\
@@ -176,8 +207,7 @@ param_check_##type()展开后为一个静态内联函数，没有调用处，会被编译器优化掉
 	static struct kernel_param __moduleparam_const __param_##name	\
 	__used								\
     __attribute__ ((unused,__section__ ("__param"),aligned(sizeof(void *)))) \
-	= { __param_str_##name, ops, perm, isbool ? KPARAM_ISBOOL : 0,	\
-	    { arg } }
+	= { __param_str_##name, ops, perm, level, { arg } }
 
 /* Obsolete - use module_param_cb() */
 #define module_param_call(name, set, get, arg, perm)			\
@@ -185,8 +215,7 @@ param_check_##type()展开后为一个静态内联函数，没有调用处，会被编译器优化掉
 		 { (void *)set, (void *)get };				\
 	__module_param_call(MODULE_PARAM_PREFIX,			\
 			    name, &__param_ops_##name, arg,		\
-			    __same_type(arg, bool *),			\
-			    (perm) + sizeof(__check_old_set_param(set))*0)
+			    (perm) + sizeof(__check_old_set_param(set))*0, 0)
 
 /* We don't get oldget: it's often a new-style param_get_uint, etc. */
 static inline int
@@ -266,8 +295,7 @@ static inline void __kernel_param_unlock(void)
  */
 #define core_param(name, var, type, perm)				\
 	param_check_##type(name, &(var));				\
-	__module_param_call("", name, &param_ops_##type,		\
-			    &var, __same_type(var, bool), perm)
+	__module_param_call("", name, &param_ops_##type, &var, perm, 0)
 #endif /* !MODULE */
 
 /**
@@ -285,7 +313,7 @@ static inline void __kernel_param_unlock(void)
 		= { len, string };					\
 	__module_param_call(MODULE_PARAM_PREFIX, name,			\
 			    &param_ops_string,				\
-			    .str = &__param_string_##name, 0, perm);	\
+			    .str = &__param_string_##name, perm, 0);	\
 	__MODULE_PARM_TYPE(name, "string")
 
 /**
@@ -313,6 +341,8 @@ extern int parse_args(const char *name,
 		      char *args,
 		      const struct kernel_param *params,
 		      unsigned num,
+		      s16 level_min,
+		      s16 level_max,
 		      int (*unknown)(char *param, char *val));
 
 /* Called by module remove. */
@@ -434,7 +464,7 @@ extern int param_set_bint(const char *val, const struct kernel_param *kp);
 	__module_param_call(MODULE_PARAM_PREFIX, name,			\
 			    &param_array_ops,				\
 			    .arr = &__param_arr_##name,			\
-			    __same_type(array[0], bool), perm);		\
+			    perm, 0);					\
 	__MODULE_PARM_TYPE(name, "array of " #type)
 
 extern struct kernel_param_ops param_array_ops;
