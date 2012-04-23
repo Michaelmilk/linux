@@ -152,11 +152,18 @@ enum {
 	RB_BUFFERS_DISABLED	= 1 << RB_BUFFERS_DISABLED_BIT,
 };
 
+/*
+控制ring buffer的使能标志
+*/
 static unsigned long ring_buffer_flags __read_mostly = RB_BUFFERS_ON;
 
 /* Used for individual buffers (after the counter) */
 #define RB_BUFFER_OFF		(1 << 20)
 
+/*
+通过struct buffer_data_page中data字段的偏移
+得出头部的大小
+*/
 #define BUF_PAGE_HDR_SIZE offsetof(struct buffer_data_page, data)
 
 /**
@@ -169,6 +176,11 @@ void tracing_off_permanent(void)
 {
 	set_bit(RB_BUFFERS_DISABLED_BIT, &ring_buffer_flags);
 }
+
+/*
+通过struct ring_buffer_event中array字段的偏移
+得出头部的大小
+*/
 
 #define RB_EVNT_HDR_SIZE (offsetof(struct ring_buffer_event, array))
 #define RB_ALIGNMENT		4U
@@ -292,6 +304,9 @@ unsigned ring_buffer_event_length(struct ring_buffer_event *event)
 }
 EXPORT_SYMBOL_GPL(ring_buffer_event_length);
 
+/*
+返回@event中实际存放数据的位置指针
+*/
 /* inline for ring buffer fast paths */
 static void *
 rb_event_data(struct ring_buffer_event *event)
@@ -328,9 +343,17 @@ EXPORT_SYMBOL_GPL(ring_buffer_event_data);
 /* Missed count stored at end */
 #define RB_MISSED_STORED	(1 << 30)
 
+/*
+每个page的页头
+*/
 struct buffer_data_page {
+	/* 页面第一次被写时的时间戳 */
 	u64		 time_stamp;	/* page time stamp */
+	/* 提交的位置 */
 	local_t		 commit;	/* write committed index */
+	/* 0长度数组，便与通过data字段访问后面的空间
+	   数据的缓存区
+	*/
 	unsigned char	 data[];	/* data of buffer page */
 };
 
@@ -343,9 +366,13 @@ struct buffer_data_page {
  * lockless.
  */
 struct buffer_page {
+	/* 形成链表 */
 	struct list_head list;		/* list of buffer pages */
+	/* 写的位置 */
 	local_t		 write;		/* index for next write */
+	/* 读的位置 */
 	unsigned	 read;		/* index for next read */
+	/* 页面中有多少项数据 */
 	local_t		 entries;	/* entries on this page */
 	unsigned long	 real_end;	/* real end of data */
 	struct buffer_data_page *page;	/* Actual data page */
@@ -368,6 +395,7 @@ struct buffer_page {
 
 static void rb_init_page(struct buffer_data_page *bpage)
 {
+	/* 提交位置初始化从0开始 */
 	local_set(&bpage->commit, 0);
 }
 
@@ -403,7 +431,17 @@ static inline int test_time_stamp(u64 delta)
 	return 0;
 }
 
+/*
+减去头部的大小
+剩余一页中buf可以使用的大小
+*/
 #define BUF_PAGE_SIZE (PAGE_SIZE - BUF_PAGE_HDR_SIZE)
+
+/*
+header 8个字节
+参考struct ring_buffer_event
+ring_buffer_event_length()
+*/
 
 /* Max payload is BUF_PAGE_SIZE - header (8bytes) */
 #define BUF_MAX_DATA_SIZE (BUF_PAGE_SIZE - (sizeof(u32) * 2))
@@ -443,19 +481,29 @@ int ring_buffer_print_page_header(struct trace_seq *s)
  * head_page == tail_page && head == tail then buffer is empty.
  */
 struct ring_buffer_per_cpu {
+	/* 该buffer所属cpu */
 	int				cpu;
+	/* 禁用标志 */
 	atomic_t			record_disabled;
+	/* 该buffer所属的rb */
 	struct ring_buffer		*buffer;
+	/* 自旋锁控制并发 */
 	raw_spinlock_t			reader_lock;	/* serialize readers */
 	arch_spinlock_t			lock;
 	struct lock_class_key		lock_key;
+	/* buffer页面链表 */
 	struct list_head		*pages;
+	/* 起始读位置 */
 	struct buffer_page		*head_page;	/* read from head */
+	/* 写位置 */
 	struct buffer_page		*tail_page;	/* write to tail */
+	/* 提交位置，只有当被写的页面提交过后，才允许被读 */
 	struct buffer_page		*commit_page;	/* committed pages */
+	/* reader页面，用来交换读页面 */
 	struct buffer_page		*reader_page;
 	unsigned long			lost_events;
 	unsigned long			last_overrun;
+	/* 所有条目占用的字节数 */
 	local_t				entries_bytes;
 	local_t				commit_overrun;
 	local_t				overrun;
@@ -464,26 +512,44 @@ struct ring_buffer_per_cpu {
 	local_t				commits;
 	unsigned long			read;
 	unsigned long			read_bytes;
+	/* 最新的页面commit时间 */
 	u64				write_stamp;
+	/* 最新的页面read时间 */
 	u64				read_stamp;
 };
 
 struct ring_buffer {
+	/* rb中的页面数 */
 	unsigned			pages;
+	/* rb的标志，目前只有RB_FL_OVERWRITE可用
+	   参考函数__ring_buffer_alloc()的注释
+	*/
 	unsigned			flags;
+	/* rb中包含的cpu个数 */
 	int				cpus;
+	/* 整个rb的禁用标志，使用原子变量控制并发 */
 	atomic_t			record_disabled;
+	/* cpu位图
+	   参数__ring_buffer_alloc()函数中的赋值
+	   每个置位的cpu都会为其分配struct ring_buffer_per_cpu空间等
+	*/
 	cpumask_var_t			cpumask;
 
 	struct lock_class_key		*reader_lock_key;
 
+	/* 访问锁 */
 	struct mutex			mutex;
 
+	/* 每个cpu的缓存页面，cpumask中每个cpu对应1个 */
 	struct ring_buffer_per_cpu	**buffers;
 
 #ifdef CONFIG_HOTPLUG_CPU
+	/* cpu热插拔的通知链 */
 	struct notifier_block		cpu_notify;
 #endif
+	/* 取时钟的函数指针
+	   函数返回的值单位纳秒
+	*/
 	u64				(*clock)(void);
 };
 
@@ -1044,9 +1110,11 @@ rb_allocate_cpu_buffer(struct ring_buffer *buffer, int cpu)
 	rb_check_bpage(cpu_buffer, bpage);
 
 	cpu_buffer->reader_page = bpage;
+	/* 分配1页 */
 	page = alloc_pages_node(cpu_to_node(cpu), GFP_KERNEL, 0);
 	if (!page)
 		goto fail_free_reader;
+	/* 取控制结构page所描述的对应页的虚拟地址 */
 	bpage->page = page_address(page);
 	rb_init_page(bpage->page);
 
@@ -1116,6 +1184,7 @@ struct ring_buffer *__ring_buffer_alloc(unsigned long size, unsigned flags,
 	int cpu;
 
 	/* keep it in its own cache line */
+	/* 将申请的空间大小按一级cache线对齐 */
 	buffer = kzalloc(ALIGN(sizeof(*buffer), cache_line_size()),
 			 GFP_KERNEL);
 	if (!buffer)
@@ -1124,6 +1193,7 @@ struct ring_buffer *__ring_buffer_alloc(unsigned long size, unsigned flags,
 	if (!alloc_cpumask_var(&buffer->cpumask, GFP_KERNEL))
 		goto fail_free_buffer;
 
+	/* 计算需要几个页 */
 	buffer->pages = DIV_ROUND_UP(size, BUF_PAGE_SIZE);
 	buffer->flags = flags;
 	buffer->clock = trace_clock_local;
@@ -1146,12 +1216,20 @@ struct ring_buffer *__ring_buffer_alloc(unsigned long size, unsigned flags,
 #endif
 	buffer->cpus = nr_cpu_ids;
 
+	/* 每个cpu一个指针，计算空间大小
+	   32位机void *的大小为4字节
+	   64位机为8字节
+	*/
 	bsize = sizeof(void *) * nr_cpu_ids;
+	/* 分配指针空间 */
 	buffer->buffers = kzalloc(ALIGN(bsize, cache_line_size()),
 				  GFP_KERNEL);
 	if (!buffer->buffers)
 		goto fail_free_cpumask;
 
+	/* 根据buffer->cpumask遍历各个cpu
+	   为其分配buffer控制结构空间，页面page空间等
+	*/
 	for_each_buffer_cpu(buffer, cpu) {
 		buffer->buffers[cpu] =
 			rb_allocate_cpu_buffer(buffer, cpu);
@@ -1162,6 +1240,7 @@ struct ring_buffer *__ring_buffer_alloc(unsigned long size, unsigned flags,
 #ifdef CONFIG_HOTPLUG_CPU
 	buffer->cpu_notify.notifier_call = rb_cpu_notify;
 	buffer->cpu_notify.priority = 0;
+	/* 注册到cpu热插拔通知链中 */
 	register_cpu_notifier(&buffer->cpu_notify);
 #endif
 
@@ -1790,6 +1869,11 @@ rb_handle_head_page(struct ring_buffer_per_cpu *cpu_buffer,
 	return 0;
 }
 
+/*
+@length	: 需要预留的数据长度
+
+计算带上event后的总长度
+*/
 static unsigned rb_calculate_event_length(unsigned length)
 {
 	struct ring_buffer_event event; /* Used only for sizeof array */
@@ -1984,6 +2068,14 @@ rb_move_tail(struct ring_buffer_per_cpu *cpu_buffer,
 	return NULL;
 }
 
+/*
+@cpu_buffer	:
+@length		: 含带上event头的长度
+@ts		: 当前时间戳，纳秒
+@delta		: 与前一次的差值
+@add_timestamp	: 是否在event头内增加时间戳
+
+*/
 static struct ring_buffer_event *
 __rb_reserve_next(struct ring_buffer_per_cpu *cpu_buffer,
 		  unsigned long length, u64 ts,
@@ -2002,6 +2094,7 @@ __rb_reserve_next(struct ring_buffer_per_cpu *cpu_buffer,
 		length += RB_LEN_TIME_EXTEND;
 
 	tail_page = cpu_buffer->tail_page;
+	/* 更新可写位置 */
 	write = local_add_return(length, &tail_page->write);
 
 	/* set write to only the index of the write */
@@ -2009,6 +2102,9 @@ __rb_reserve_next(struct ring_buffer_per_cpu *cpu_buffer,
 	tail = write - length;
 
 	/* See if we shot pass the end of this buffer page */
+	/* 当前页剩余部分大小不够
+	   跳到下一个页中
+	*/
 	if (unlikely(write > BUF_PAGE_SIZE))
 		return rb_move_tail(cpu_buffer, length, tail,
 				    tail_page, ts);
@@ -2031,6 +2127,7 @@ __rb_reserve_next(struct ring_buffer_per_cpu *cpu_buffer,
 	/* account for these added bytes */
 	local_add(length, &cpu_buffer->entries_bytes);
 
+	/* 返回这个预留的event头 */
 	return event;
 }
 
@@ -2157,6 +2254,7 @@ rb_reserve_next_event(struct ring_buffer *buffer,
 	if (RB_WARN_ON(cpu_buffer, ++nr_loops > 1000))
 		goto out_fail;
 
+	/* 取当前时间戳，纳秒 */
 	ts = rb_time_stamp(cpu_buffer->buffer);
 	diff = ts - cpu_buffer->write_stamp;
 
@@ -2279,8 +2377,10 @@ ring_buffer_lock_reserve(struct ring_buffer *buffer, unsigned long length)
 	if (trace_recursive_lock())
 		goto out_nocheck;
 
+	/* 取当前运行的cpu号 */
 	cpu = raw_smp_processor_id();
 
+	/* 检查cpumask，确保分配过buffer */
 	if (!cpumask_test_cpu(cpu, buffer->cpumask))
 		goto out;
 
@@ -2289,6 +2389,7 @@ ring_buffer_lock_reserve(struct ring_buffer *buffer, unsigned long length)
 	if (atomic_read(&cpu_buffer->record_disabled))
 		goto out;
 
+	/* 预留长度不能大于最大值 */
 	if (length > BUF_MAX_DATA_SIZE)
 		goto out;
 
@@ -2338,6 +2439,7 @@ rb_update_write_stamp(struct ring_buffer_per_cpu *cpu_buffer,
 static void rb_commit(struct ring_buffer_per_cpu *cpu_buffer,
 		      struct ring_buffer_event *event)
 {
+	/* 条数加1 */
 	local_inc(&cpu_buffer->entries);
 	rb_update_write_stamp(cpu_buffer, event);
 	rb_end_commit(cpu_buffer);
@@ -3584,6 +3686,11 @@ ring_buffer_read(struct ring_buffer_iter *iter, u64 *ts)
 }
 EXPORT_SYMBOL_GPL(ring_buffer_read);
 
+/*
+ring_buffer中可以使用的缓冲区大小
+不包含每页头部的控制结构struct buffer_data_page
+*/
+
 /**
  * ring_buffer_size - return the size of the ring buffer (in bytes)
  * @buffer: The ring buffer.
@@ -4068,6 +4175,9 @@ EXPORT_SYMBOL_GPL(ring_buffer_read_page);
 static int rb_cpu_notify(struct notifier_block *self,
 			 unsigned long action, void *hcpu)
 {
+	/* 取struct notifier_block的容器结构指针
+	   其是内嵌在struct ring_buffer中的
+	*/
 	struct ring_buffer *buffer =
 		container_of(self, struct ring_buffer, cpu_notify);
 	long cpu = (long)hcpu;
@@ -4075,6 +4185,10 @@ static int rb_cpu_notify(struct notifier_block *self,
 	switch (action) {
 	case CPU_UP_PREPARE:
 	case CPU_UP_PREPARE_FROZEN:
+		/* 已经置位，说明初始化时分配过空间了
+		   并且下面cpu移除时并不释放buffer
+		   所以当其再次up时已经有buffer使用
+		*/
 		if (cpumask_test_cpu(cpu, buffer->cpumask))
 			return NOTIFY_OK;
 
@@ -4086,6 +4200,7 @@ static int rb_cpu_notify(struct notifier_block *self,
 			return NOTIFY_OK;
 		}
 		smp_wmb();
+		/* 在位图中标记 */
 		cpumask_set_cpu(cpu, buffer->cpumask);
 		break;
 	case CPU_DOWN_PREPARE:
@@ -4095,6 +4210,7 @@ static int rb_cpu_notify(struct notifier_block *self,
 		 *  If we were to free the buffer, then the user would
 		 *  lose any trace that was in the buffer.
 		 */
+		/* cpu移除时不会清除buffer */
 		break;
 	default:
 		break;

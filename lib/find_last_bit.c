@@ -17,6 +17,14 @@
 
 #ifndef find_last_bit
 
+/*
+@addr	: 位图起始地址
+@size	: 位图中位的个数
+
+返回@addr指向的空间中前@size个位中最后置1的位下标，该数从0开始
+例如@addr指向一个数字8(1<<3)的时候，返回3，也就是2的幂次
+但是返回值不会超过位图中有效位的个数@size
+*/
 unsigned long find_last_bit(const unsigned long *addr, unsigned long size)
 {
 	unsigned long words;

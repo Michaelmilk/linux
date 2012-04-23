@@ -3060,6 +3060,7 @@ static void __init dcache_init_early(void)
 	if (hashdist)
 		return;
 
+	/* 建立dentry的哈希表 */
 	dentry_hashtable =
 		alloc_large_system_hash("Dentry cache",
 					sizeof(struct hlist_bl_head),
@@ -3083,6 +3084,7 @@ static void __init dcache_init(void)
 	 * but it is probably not worth it because of the cache nature
 	 * of the dcache. 
 	 */
+	/* 建立结构dentry的slab缓存 */
 	dentry_cache = KMEM_CACHE(dentry,
 		SLAB_RECLAIM_ACCOUNT|SLAB_PANIC|SLAB_MEM_SPREAD);
 

@@ -32,6 +32,7 @@
 
 static struct vfsmount *debugfs_mount;
 static int debugfs_mount_count;
+/* 标记debugfs文件系统是否已经注册 */
 static bool debugfs_registered;
 
 static struct inode *debugfs_get_inode(struct super_block *sb, umode_t mode, dev_t dev,
@@ -675,10 +676,12 @@ static int __init debugfs_init(void)
 {
 	int retval;
 
+	/* 创建目录/sys/kernel/debug */
 	debug_kobj = kobject_create_and_add("debug", kernel_kobj);
 	if (!debug_kobj)
 		return -EINVAL;
 
+	/* 注册debugfs文件系统 */
 	retval = register_filesystem(&debug_fs_type);
 	if (retval)
 		kobject_put(debug_kobj);

@@ -29,6 +29,7 @@ typedef struct cpumask { DECLARE_BITMAP(bits, NR_CPUS); } cpumask_t;
 #if NR_CPUS == 1
 #define nr_cpu_ids		1
 #else
+/* cpu的个数 */
 extern int nr_cpu_ids;
 #endif
 
@@ -479,6 +480,10 @@ static inline void cpumask_shift_left(struct cpumask *dstp,
 					      nr_cpumask_bits);
 }
 
+/*
+复制struct cpumask结构的辅助函数
+*/
+
 /**
  * cpumask_copy - *dstp = *srcp
  * @dstp: the result
@@ -638,6 +643,9 @@ static inline size_t cpumask_size(void)
  * cpumask_copy() provide safe copy functionality.
  */
 #ifdef CONFIG_CPUMASK_OFFSTACK
+/*
+定义为指向struct cpumask的指针，以此定义的变量需要动态分配struct cpumask结构空间
+*/
 typedef struct cpumask *cpumask_var_t;
 
 bool alloc_cpumask_var_node(cpumask_var_t *mask, gfp_t flags, int node);
@@ -649,6 +657,9 @@ void free_cpumask_var(cpumask_var_t mask);
 void free_bootmem_cpumask_var(cpumask_var_t mask);
 
 #else
+/*
+类型定义为一个数组，以此定义的变量便有了struct cpumask的空间
+*/
 typedef struct cpumask cpumask_var_t[1];
 
 static inline bool alloc_cpumask_var(cpumask_var_t *mask, gfp_t flags)

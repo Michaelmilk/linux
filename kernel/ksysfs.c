@@ -164,6 +164,9 @@ static struct bin_attribute notes_attr = {
 	.read = &notes_read,
 };
 
+/*
+¶ÔÓ¦Ä¿Â¼/sys/kernel
+*/
 struct kobject *kernel_kobj;
 EXPORT_SYMBOL_GPL(kernel_kobj);
 

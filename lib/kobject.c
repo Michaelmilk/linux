@@ -608,6 +608,10 @@ static struct kobj_type dynamic_kobj_ktype = {
 	.sysfs_ops	= &kobj_sysfs_ops,
 };
 
+/*
+动态创建一个kobject
+*/
+
 /**
  * kobject_create - create a struct kobject dynamically
  *
@@ -623,6 +627,7 @@ struct kobject *kobject_create(void)
 {
 	struct kobject *kobj;
 
+	/* 分配一个kobject对象 */
 	kobj = kzalloc(sizeof(*kobj), GFP_KERNEL);
 	if (!kobj)
 		return NULL;

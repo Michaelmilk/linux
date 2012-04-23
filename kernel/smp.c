@@ -672,6 +672,9 @@ EXPORT_SYMBOL(nr_cpu_ids);
 */
 void __init setup_nr_cpu_ids(void)
 {
+	/* 从位图中计算出cpu的个数
+	   这里需要+1，因为find_last_bit()返回的是从0开始的下标
+	*/
 	nr_cpu_ids = find_last_bit(cpumask_bits(cpu_possible_mask),NR_CPUS) + 1;
 }
 

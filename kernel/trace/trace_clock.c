@@ -38,6 +38,9 @@ u64 notrace trace_clock_local(void)
 	 * lockless clock. It is not guaranteed to be coherent across
 	 * CPUs, nor across CPU idle events.
 	 */
+	/* sched_clock()依赖于平台实现
+	   返回的是当前cpu的运行纳秒数
+	*/
 	preempt_disable_notrace();
 	clock = sched_clock();
 	preempt_enable_notrace();

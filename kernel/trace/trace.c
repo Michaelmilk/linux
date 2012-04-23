@@ -125,6 +125,9 @@ static int tracing_set_tracer(const char *buf);
 static char bootup_tracer_buf[MAX_TRACER_SIZE] __initdata;
 static char *default_bootup_tracer;
 
+/*
+内核启动时的命令行参数ftrace
+*/
 static int __init set_cmdline_ftrace(char *str)
 {
 	strncpy(bootup_tracer_buf, str, MAX_TRACER_SIZE);
@@ -4312,18 +4315,22 @@ static const struct file_operations tracing_dyn_info_fops = {
 };
 #endif
 
+/* 对应/sys/kernel/debug/tracing目录 */
 static struct dentry *d_tracer;
 
 struct dentry *tracing_init_dentry(void)
 {
 	static int once;
 
+	/* 避免重复创建 */
 	if (d_tracer)
 		return d_tracer;
 
+	/* 依赖于debugfs文件系统 */
 	if (!debugfs_initialized())
 		return NULL;
 
+	/* 建立/sys/kernel/debug/tracing目录 */
 	d_tracer = debugfs_create_dir("tracing", NULL);
 
 	if (!d_tracer && !once) {
@@ -4335,6 +4342,7 @@ struct dentry *tracing_init_dentry(void)
 	return d_tracer;
 }
 
+/* 对应/sys/kernel/debug/tracing/per_cpu目录 */
 static struct dentry *d_percpu;
 
 struct dentry *tracing_dentry_percpu(void)
@@ -4350,6 +4358,7 @@ struct dentry *tracing_dentry_percpu(void)
 	if (!d_tracer)
 		return NULL;
 
+	/* 创建/sys/kernel/debug/tracing/per_cpu目录 */
 	d_percpu = debugfs_create_dir("per_cpu", d_tracer);
 
 	if (!d_percpu && !once) {
@@ -4368,6 +4377,7 @@ static void tracing_init_debugfs_percpu(long cpu)
 	char cpu_dir[30]; /* 30 characters should be more than enough */
 
 	snprintf(cpu_dir, 30, "cpu%ld", cpu);
+	/* 创建/sys/kernel/debug/tracing/per_cpu/cpu0目录 */
 	d_cpu = debugfs_create_dir(cpu_dir, d_percpu);
 	if (!d_cpu) {
 		pr_warning("Could not create debugfs '%s' entry\n", cpu_dir);
@@ -4514,8 +4524,10 @@ struct dentry *trace_create_file(const char *name,
 static struct dentry *trace_options_init_dentry(void)
 {
 	struct dentry *d_tracer;
+	/* 静态变量 */
 	static struct dentry *t_options;
 
+	/* 避免重复创建 */
 	if (t_options)
 		return t_options;
 
@@ -4523,6 +4535,7 @@ static struct dentry *trace_options_init_dentry(void)
 	if (!d_tracer)
 		return NULL;
 
+	/* 建立/sys/kernel/debug/tracing/options目录 */
 	t_options = debugfs_create_dir("options", d_tracer);
 	if (!t_options) {
 		pr_warning("Could not create debugfs directory 'options'\n");
@@ -4608,6 +4621,7 @@ create_trace_option_core_file(const char *option, long index)
 	if (!t_options)
 		return NULL;
 
+	/* 在/sys/kernel/debug/tracing/options目录下建立各个options文件 */
 	return trace_create_file(option, 0644, t_options, (void *)index,
 				    &trace_options_core_fops);
 }
@@ -4682,6 +4696,8 @@ static __init int tracer_init_debugfs(void)
 	trace_access_lock_init();
 
 	d_tracer = tracing_init_dentry();
+
+	/* 在目录/sys/kernel/debug/tracing下创建以下文件 */
 
 	trace_create_file("tracing_enabled", 0644, d_tracer,
 			&global_trace, &tracing_ctrl_fops);
@@ -5035,6 +5051,11 @@ __init static int clear_boot_tracer(void)
 
 	return 0;
 }
+
+/*
+trace框架的3个初始化函数
+按序调用
+*/
 
 early_initcall(tracer_alloc_buffers);
 fs_initcall(tracer_init_debugfs);
