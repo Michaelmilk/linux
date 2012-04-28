@@ -478,6 +478,9 @@ static void start_wakeup_tracer(struct trace_array *tr)
 {
 	int ret;
 
+	/* 这些函数由宏DEFINE_EVENT()定义
+	   调用tracepoint_probe_register()函数
+	*/
 	ret = register_trace_sched_wakeup(probe_wakeup, NULL);
 	if (ret) {
 		pr_info("wakeup trace: Couldn't activate tracepoint"

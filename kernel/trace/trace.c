@@ -123,6 +123,12 @@ static int tracing_set_tracer(const char *buf);
 
 #define MAX_TRACER_SIZE		100
 static char bootup_tracer_buf[MAX_TRACER_SIZE] __initdata;
+/*
+系统引导时grub命令行设置的tracer名称
+使用的bootup_tracer_buf是放在__initdata节中的
+在系统引导后default_bootup_tracer指针由clear_boot_tracer()函数置空
+以免指向无效的数据
+*/
 static char *default_bootup_tracer;
 
 /*
@@ -248,6 +254,8 @@ static struct tracer		*trace_types __read_mostly;
 
 /* current_trace points to the tracer that is currently active */
 static struct tracer		*current_trace __read_mostly;
+
+/* 保护trace_types链表的并发访问 */
 
 /*
  * trace_types_lock is used to protect the trace_types list.
@@ -778,6 +786,10 @@ update_max_tr_single(struct trace_array *tr, struct task_struct *tsk, int cpu)
 }
 #endif /* CONFIG_TRACER_MAX_TRACE */
 
+/*
+将@type加入trace_types链表
+*/
+
 /**
  * register_tracer - register a tracer with the ftrace system.
  * @type - the plugin for the tracer
@@ -805,6 +817,7 @@ __acquires(kernel_lock)
 
 	tracing_selftest_running = true;
 
+	/* 遍历trace_types链表，根据tracer名称检查是否重复 */
 	for (t = trace_types; t; t = t->next) {
 		if (strcmp(type->name, t->name) == 0) {
 			/* already found */
@@ -815,6 +828,7 @@ __acquires(kernel_lock)
 		}
 	}
 
+	/* 设置一些默认函数 */
 	if (!type->set_flag)
 		type->set_flag = &dummy_set_flag;
 	if (!type->flags)
@@ -866,6 +880,7 @@ __acquires(kernel_lock)
 	}
 #endif
 
+	/* 加入链表，新增项成为链头 */
 	type->next = trace_types;
 	trace_types = type;
 
@@ -876,6 +891,10 @@ __acquires(kernel_lock)
 	if (ret || !default_bootup_tracer)
 		goto out_unlock;
 
+	/* 检查是否与命令行参数ftrace传递的名称一致
+	   不一致的话则直接返回
+	   一致的话则会调用tracing_set_tracer()函数使能该tracer
+	*/
 	if (strncmp(default_bootup_tracer, type->name, MAX_TRACER_SIZE))
 		goto out_unlock;
 
@@ -899,6 +918,7 @@ void unregister_tracer(struct tracer *type)
 	struct tracer **t;
 
 	mutex_lock(&trace_types_lock);
+	/* 遍历trace_types链表 */
 	for (t = &trace_types; *t; t = &(*t)->next) {
 		if (*t == type)
 			goto found;
@@ -907,8 +927,10 @@ void unregister_tracer(struct tracer *type)
 	goto out;
 
  found:
+ 	/* 通过2级指针控制指向下一节点，跳过节点@type，将其从链表中移除 */
 	*t = (*t)->next;
 
+	/* 如果@type当前正在使用，并且开启了tracer */
 	if (type == current_trace && tracer_enabled) {
 		tracer_enabled = 0;
 		tracing_stop();
@@ -3097,6 +3119,7 @@ destroy_trace_option_files(struct trace_option_dentry *topts);
 
 static int tracing_set_tracer(const char *buf)
 {
+	/* 静态变量，记录当前创建的/sys/kernel/debug/tracing/options目录下的文件 */
 	static struct trace_option_dentry *topts;
 	struct trace_array *tr = &global_trace;
 	struct tracer *t;
@@ -3111,18 +3134,22 @@ static int tracing_set_tracer(const char *buf)
 		ret = 0;
 	}
 
+	/* 遍历trace_types链表，根据名称查找tracer */
 	for (t = trace_types; t; t = t->next) {
 		if (strcmp(t->name, buf) == 0)
 			break;
 	}
+	/* 未找到 */
 	if (!t) {
 		ret = -EINVAL;
 		goto out;
 	}
+	/* 已经是当前的tracer了 */
 	if (t == current_trace)
 		goto out;
 
 	trace_branch_disable();
+	/* 调用reset()函数，重置 */
 	if (current_trace && current_trace->reset)
 		current_trace->reset(tr);
 	if (current_trace && current_trace->use_max_tr) {
@@ -3134,10 +3161,13 @@ static int tracing_set_tracer(const char *buf)
 		ring_buffer_resize(max_tr.buffer, 1);
 		max_tr.entries = 1;
 	}
+	/* 移除先前的options文件 */
 	destroy_trace_option_files(topts);
 
+	/* 设置为当前的tracer */
 	current_trace = t;
 
+	/* 记录新创建的options文件 */
 	topts = create_trace_option_files(current_trace);
 	if (current_trace->use_max_tr) {
 		ret = ring_buffer_resize(max_tr.buffer, global_trace.entries);
@@ -3146,6 +3176,10 @@ static int tracing_set_tracer(const char *buf)
 		max_tr.entries = global_trace.entries;
 	}
 
+	/* 调用tracer的init()函数
+	   例如function_trace_init()
+	   wakeup_tracer_init()
+	*/
 	if (t->init) {
 		ret = tracer_init(t, tr);
 		if (ret)
@@ -3159,6 +3193,11 @@ static int tracing_set_tracer(const char *buf)
 	return ret;
 }
 
+/*
+/sys/kernel/debug/tracing/current_tracer文件的写函数
+
+echo nop > current_tracer
+*/
 static ssize_t
 tracing_set_trace_write(struct file *filp, const char __user *ubuf,
 			size_t cnt, loff_t *ppos)
@@ -3919,6 +3958,12 @@ static const struct file_operations tracing_ctrl_fops = {
 	.llseek		= generic_file_llseek,
 };
 
+/*
+/sys/kernel/debug/tracing/current_tracer文件的操作函数
+
+例如使用echo nop > current_tracer
+设置当前的tracer为nop
+*/
 static const struct file_operations set_tracer_fops = {
 	.open		= tracing_open_generic,
 	.read		= tracing_set_trace_read,
@@ -4687,6 +4732,12 @@ static const struct file_operations rb_simple_fops = {
 	.write		= rb_simple_write,
 	.llseek		= default_llseek,
 };
+
+/*
+在debugfs下建立一些文件
+用来和用户态交互
+用户通过读写这些文件来控制trace的进行
+*/
 
 static __init int tracer_init_debugfs(void)
 {

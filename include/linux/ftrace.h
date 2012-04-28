@@ -163,6 +163,12 @@ static inline int ftrace_function_local_disabled(struct ftrace_ops *ops)
 	return *this_cpu_ptr(ops->disabled);
 }
 
+/*
+默认的ftrace函数
+例如arch\x86\kernel\entry_32.S中定义的ftrace_stub
+什么也不做，简单的ret指令
+*/
+
 extern void ftrace_stub(unsigned long a0, unsigned long a1);
 
 #else /* !CONFIG_FUNCTION_TRACER */

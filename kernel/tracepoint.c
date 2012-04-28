@@ -59,9 +59,13 @@ static struct hlist_head tracepoint_table[TRACEPOINT_TABLE_SIZE];
  * Tracepoint entries modifications are protected by the tracepoints_mutex.
  */
 struct tracepoint_entry {
+	/* 链入tracepoint_table哈希表 */
 	struct hlist_node hlist;
+	/* 指向一个struct tracepoint_func的数组 */
 	struct tracepoint_func *funcs;
+	/* funcs数组中的函数个数 */
 	int refcount;	/* Number of times armed. 0 if disarmed. */
+	/* 0长度数组，分配空间的时候保存名称 */
 	char name[0];
 };
 
@@ -75,6 +79,7 @@ struct tp_probes {
 
 static inline void *allocate_probes(int count)
 {
+	/* 一起分配struct tp_probes作为控制 */
 	struct tp_probes *p  = kmalloc(count * sizeof(struct tracepoint_func)
 			+ sizeof(struct tp_probes), GFP_KERNEL);
 	return p == NULL ? NULL : p->probes;
@@ -105,6 +110,9 @@ static void debug_print_probes(struct tracepoint_entry *entry)
 		printk(KERN_DEBUG "Probe %d : %p\n", i, entry->funcs[i].func);
 }
 
+/*
+将@probe函数指针加入@entry的funcs字段所指的数组下
+*/
 static struct tracepoint_func *
 tracepoint_entry_add_probe(struct tracepoint_entry *entry,
 			   void *probe, void *data)
@@ -116,6 +124,7 @@ tracepoint_entry_add_probe(struct tracepoint_entry *entry,
 
 	debug_print_probes(entry);
 	old = entry->funcs;
+	/* 检查是否有重复项 */
 	if (old) {
 		/* (N -> N+1), (N != 0, 1) probes */
 		for (nr_probes = 0; old[nr_probes].func; nr_probes++)
@@ -131,10 +140,14 @@ tracepoint_entry_add_probe(struct tracepoint_entry *entry,
 		memcpy(new, old, nr_probes * sizeof(struct tracepoint_func));
 	new[nr_probes].func = probe;
 	new[nr_probes].data = data;
+	/* 遍历的结束标志 */
 	new[nr_probes + 1].func = NULL;
 	entry->refcount = nr_probes + 1;
 	entry->funcs = new;
 	debug_print_probes(entry);
+	/* 返回原来的指针
+	   NULL或者是先前allocate_probes()动态申请的空间
+	*/
 	return old;
 }
 
@@ -196,7 +209,9 @@ static struct tracepoint_entry *get_tracepoint(const char *name)
 	struct tracepoint_entry *e;
 	u32 hash = jhash(name, strlen(name), 0);
 
+	/* 取桶头节点 */
 	head = &tracepoint_table[hash & (TRACEPOINT_TABLE_SIZE - 1)];
+	/* 遍历桶下的链表，根据名称查找 */
 	hlist_for_each_entry(e, node, head, hlist) {
 		if (!strcmp(name, e->name))
 			return e;
@@ -216,6 +231,7 @@ static struct tracepoint_entry *add_tracepoint(const char *name)
 	size_t name_len = strlen(name) + 1;
 	u32 hash = jhash(name, name_len-1, 0);
 
+	/* 先检查是否有重复 */
 	head = &tracepoint_table[hash & (TRACEPOINT_TABLE_SIZE - 1)];
 	hlist_for_each_entry(e, node, head, hlist) {
 		if (!strcmp(name, e->name)) {
@@ -231,9 +247,11 @@ static struct tracepoint_entry *add_tracepoint(const char *name)
 	e = kmalloc(sizeof(struct tracepoint_entry) + name_len, GFP_KERNEL);
 	if (!e)
 		return ERR_PTR(-ENOMEM);
+	/* 保存名称 */
 	memcpy(&e->name[0], name, name_len);
 	e->funcs = NULL;
 	e->refcount = 0;
+	/* 加入哈希链表 */
 	hlist_add_head(&e->hlist, head);
 	return e;
 }
@@ -308,8 +326,21 @@ static void tracepoint_update_probe_range(struct tracepoint * const *begin,
 	if (!begin)
 		return;
 
+	/* 遍历struct tracepoint指针空间
+	   比如由宏DEFINE_TRACE_FN静态定义的一些结构指针
+	   放在__start___tracepoints_ptrs和__stop___tracepoints_ptrs之间
+	   根据名称查找已经注册进tracepoint_table哈希表的tracepoint_entry
+	*/
 	for (iter = begin; iter < end; iter++) {
 		mark_entry = get_tracepoint((*iter)->name);
+		/* 该iter对应名称的tracepoint_entry在哈希表中
+		   说明该tracepoint_entry项中含有前面注册进的函数
+		   例如start_wakeup_tracer()中为sched_wakeup注册的
+		   register_trace_sched_wakeup(probe_wakeup, NULL)
+		   probe_wakeup()函数
+		   将该函数指针存入遍历到的tracepoint的funcs字段
+		   这样在__DO_TRACE宏中便调用注册的函数了
+		*/
 		if (mark_entry) {
 			set_tracepoint(&mark_entry, *iter,
 					!!mark_entry->refcount);
@@ -354,17 +385,26 @@ tracepoint_add_probe(const char *name, void *probe, void *data)
 	struct tracepoint_entry *entry;
 	struct tracepoint_func *old;
 
+	/* 先查找 */
 	entry = get_tracepoint(name);
 	if (!entry) {
 		entry = add_tracepoint(name);
 		if (IS_ERR(entry))
 			return (struct tracepoint_func *)entry;
 	}
+	/* entry为从哈希表中找到的或新分配的 */
 	old = tracepoint_entry_add_probe(entry, probe, data);
 	if (IS_ERR(old) && !entry->refcount)
 		remove_tracepoint(entry);
 	return old;
 }
+
+/*
+查找
+或申请一个以@name命名的新struct tracepoint_entry项并加入tracepoint_table哈希表
+
+将@probe函数加入该entry
+*/
 
 /**
  * tracepoint_probe_register -  Connect a probe to a tracepoint
@@ -378,6 +418,7 @@ int tracepoint_probe_register(const char *name, void *probe, void *data)
 {
 	struct tracepoint_func *old;
 
+	/* 控制tracepoint_table哈希表的并发 */
 	mutex_lock(&tracepoints_mutex);
 	old = tracepoint_add_probe(name, probe, data);
 	if (IS_ERR(old)) {
@@ -386,6 +427,7 @@ int tracepoint_probe_register(const char *name, void *probe, void *data)
 	}
 	tracepoint_update_probes();		/* may update entry */
 	mutex_unlock(&tracepoints_mutex);
+	/* 释放先前申请的空间 */
 	release_probes(old);
 	return 0;
 }

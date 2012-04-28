@@ -152,11 +152,13 @@ struct trace_array_cpu {
  */
 struct trace_array {
 	struct ring_buffer	*buffer;
+	/* buffer中的空间大小 */
 	unsigned long		entries;
 	int			cpu;
 	int			buffer_disabled;
 	cycle_t			time_start;
 	struct task_struct	*waiter;
+	/* 指向每cpu变量global_trace_cpu */
 	struct trace_array_cpu	*data[NR_CPUS];
 };
 
@@ -251,6 +253,7 @@ struct tracer_flags {
  * @flags: your private flags
  */
 struct tracer {
+	/* tracer的名称 */
 	const char		*name;
 	int			(*init)(struct trace_array *tr);
 	void			(*reset)(struct trace_array *tr);

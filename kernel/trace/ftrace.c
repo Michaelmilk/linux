@@ -3070,12 +3070,14 @@ int register_ftrace_command(struct ftrace_func_command *cmd)
 	int ret = 0;
 
 	mutex_lock(&ftrace_cmd_mutex);
+	/* 遍历ftrace_commands链表，根据名称检查重复项 */
 	list_for_each_entry(p, &ftrace_commands, list) {
 		if (strcmp(cmd->name, p->name) == 0) {
 			ret = -EBUSY;
 			goto out_unlock;
 		}
 	}
+	/* 将@cmd加入ftrace_commands链表 */
 	list_add(&cmd->list, &ftrace_commands);
  out_unlock:
 	mutex_unlock(&ftrace_cmd_mutex);

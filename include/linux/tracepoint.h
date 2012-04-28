@@ -179,6 +179,14 @@ static inline void tracepoint_synchronize_unregister(void)
 	}
 
 /*
+1. 一个静态的字符串名称
+2. 一个全局的struct tracepoint结构实例
+3. 一个静态的struct tracepoint指针指向2.中的结构实例
+   这个指针放在只读代码段的__tracepoints_ptrs节
+   __start___tracepoints_ptrs和__stop___tracepoints_ptrs指针之间
+*/
+
+/*
  * We have no guarantee that gcc and the linker won't up-align the tracepoint
  * structures, so we create an array of pointers that will be used for iteration
  * on the tracepoints.
@@ -202,6 +210,9 @@ static inline void tracepoint_synchronize_unregister(void)
 	EXPORT_SYMBOL(__tracepoint_##name)
 
 #else /* !CONFIG_TRACEPOINTS */
+
+/* 未定义CONFIG_TRACEPOINTS时将这些函数定义为空 */
+
 #define __DECLARE_TRACE(name, proto, args, cond, data_proto, data_args) \
 	static inline void trace_##name(proto)				\
 	{ }								\
@@ -368,6 +379,18 @@ static inline void tracepoint_synchronize_unregister(void)
  */
 
 #define DECLARE_EVENT_CLASS(name, proto, args, tstruct, assign, print)
+
+/*
+定义一些静态内联函数
+
+trace_##name()
+trace_##name##_rcuidle()
+register_trace_##name()			=> tracepoint_probe_register()
+unregister_trace_##name()		=> tracepoint_probe_unregister()
+check_trace_callback_type_##name()
+
+*/
+
 #define DEFINE_EVENT(template, name, proto, args)		\
 	DECLARE_TRACE(name, PARAMS(proto), PARAMS(args))
 #define DEFINE_EVENT_PRINT(template, name, proto, args, print)	\
