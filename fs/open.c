@@ -889,6 +889,7 @@ static inline int build_open_flags(int flags, umode_t mode, struct open_flags *o
 		mode = 0;
 	op->mode = mode;
 
+	/* 去掉FMODE_NONOTIFY标志 */
 	/* Must never be set by userspace */
 	flags &= ~FMODE_NONOTIFY;
 
@@ -977,6 +978,7 @@ long do_sys_open(int dfd, const char __user *filename, int flags, umode_t mode)
 {
 	struct open_flags op;
 	int lookup = build_open_flags(flags, mode, &op);
+	/* 内核空间中申请的名称空间 */
 	char *tmp = getname(filename);
 	int fd = PTR_ERR(tmp);
 
@@ -1001,6 +1003,7 @@ SYSCALL_DEFINE3(open, const char __user *, filename, int, flags, umode_t, mode)
 {
 	long ret;
 
+	/* 64位系统支持大文件 */
 	if (force_o_largefile())
 		flags |= O_LARGEFILE;
 
