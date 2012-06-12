@@ -43,12 +43,18 @@ struct dst_entry {
 	struct net_device       *dev;
 	struct  dst_ops	        *ops;
 	unsigned long		_metrics;
+
 	/* 一个超时时间值，
 	   定时器rt_periodic_timer定期扫描路由缓存表rt_hash_table，
 	   如果发现expires值为0，或者小于当前系统时间值，
 	   并符合其它超时条件，则把该路由从缓存表中删除
 	*/
-	unsigned long		expires;
+
+	union {
+		unsigned long           expires;
+		/* point to where the dst_entry copied from */
+		struct dst_entry        *from;
+	};
 	struct dst_entry	*path;
 	struct neighbour __rcu	*_neighbour;
 #ifdef CONFIG_XFRM
@@ -69,6 +75,8 @@ struct dst_entry {
 #define DST_NOCACHE		0x0010
 #define DST_NOCOUNT		0x0020
 #define DST_NOPEER		0x0040
+#define DST_FAKE_RTABLE		0x0080
+#define DST_XFRM_TUNNEL		0x0100
 
 	short			error;
 	short			obsolete;

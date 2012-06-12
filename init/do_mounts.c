@@ -1,3 +1,13 @@
+/*
+ * Many of the syscalls used in this file expect some of the arguments
+ * to be __user pointers not __kernel pointers.  To limit the sparse
+ * noise, turn off sparse checking for this file.
+ */
+#ifdef __CHECKER__
+#undef __CHECKER__
+#warning "Sparse checking disabled for this file"
+#endif
+
 #include <linux/module.h>
 #include <linux/sched.h>
 #include <linux/ctype.h>
@@ -340,7 +350,7 @@ static int __init do_mount_root(char *name, char *fs, int flags, void *data)
 	if (err)
 		return err;
 
-	sys_chdir((const char __user __force *)"/root");
+	sys_chdir("/root");
 	s = current->fs->pwd.dentry->d_sb;
 	ROOT_DEV = s->s_dev;
 	printk(KERN_INFO
@@ -482,7 +492,7 @@ void __init change_floppy(char *fmt, ...)
 void __init mount_root(void)
 {
 #ifdef CONFIG_ROOT_NFS
-	if (MAJOR(ROOT_DEV) == UNNAMED_MAJOR) {
+	if (ROOT_DEV == Root_NFS) {
 		if (mount_nfs_root())
 			return;
 
@@ -578,5 +588,5 @@ out:
 	   这样，根文件系统的挂载点就成为了我们在用户空间所看到的"/"了。
 	*/
 	sys_mount(".", "/", NULL, MS_MOVE, NULL);
-	sys_chroot((const char __user __force *)".");
+	sys_chroot(".");
 }

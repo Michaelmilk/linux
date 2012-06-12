@@ -571,8 +571,9 @@ void __init pidhash_init(void)
 
 	pid_hash = alloc_large_system_hash("PID", sizeof(*pid_hash), 0, 18,
 					   HASH_EARLY | HASH_SMALL,
-					   &pidhash_shift, NULL, 4096);
 	/* pidhash_shift保存了哈希表大小的幂次 */
+					   &pidhash_shift, NULL,
+					   0, 4096);
 	pidhash_size = 1U << pidhash_shift;
 
 	/* 将哈希表头节点指针first初始化为NULL */

@@ -157,7 +157,7 @@ static unsigned int ip4_hashfn(struct inet_frag_queue *q)
 	return ipqhashfn(ipq->id, ipq->saddr, ipq->daddr, ipq->protocol);
 }
 
-static int ip4_frag_match(struct inet_frag_queue *q, void *a)
+static bool ip4_frag_match(struct inet_frag_queue *q, void *a)
 {
 	struct ipq *qp;
 	struct ip4_create_arg *arg = a;
@@ -166,10 +166,10 @@ static int ip4_frag_match(struct inet_frag_queue *q, void *a)
 	qp = container_of(q, struct ipq, q);
 	/* 判断新报文的各项参数是否与存在的ipq参数一致 */
 	return	qp->id == arg->iph->id &&
-			qp->saddr == arg->iph->saddr &&
-			qp->daddr == arg->iph->daddr &&
-			qp->protocol == arg->iph->protocol &&
-			qp->user == arg->user;
+		qp->saddr == arg->iph->saddr &&
+		qp->daddr == arg->iph->daddr &&
+		qp->protocol == arg->iph->protocol &&
+		qp->user == arg->user;
 }
 
 /* Memory Tracking Functions. */
@@ -617,6 +617,7 @@ static int ip_frag_reasm(struct ipq *qp, struct sk_buff *prev,
 	int len;
 	int ihlen;
 	int err;
+	int sum_truesize;
 	u8 ecn;
 
 	ipq_kill(qp);
@@ -650,7 +651,7 @@ static int ip_frag_reasm(struct ipq *qp, struct sk_buff *prev,
 		head->next = qp->q.fragments->next;
 
 		/* 释放原来的头节点 */
-		kfree_skb(qp->q.fragments);
+		consume_skb(qp->q.fragments);
 		/* 记录新的头节点 */
 		qp->q.fragments = head;
 	}
@@ -696,23 +697,36 @@ static int ip_frag_reasm(struct ipq *qp, struct sk_buff *prev,
 		atomic_add(clone->truesize, &qp->q.net->mem);
 	}
 
-	/* 将分片链表中其余的节点加入head的frag_list链表 */
-	skb_shinfo(head)->frag_list = head->next;
 	/* 调整data指针 */
 	skb_push(head, head->data - skb_network_header(head));
 
+	sum_truesize = head->truesize;
 	/* 调整skb数据总长度，计算校验码 */
-	for (fp=head->next; fp; fp = fp->next) {
-		head->data_len += fp->len;
-		head->len += fp->len;
+	for (fp = head->next; fp;) {
+		bool headstolen;
+		int delta;
+		struct sk_buff *next = fp->next;
+
+		sum_truesize += fp->truesize;
 		if (head->ip_summed != fp->ip_summed)
 			head->ip_summed = CHECKSUM_NONE;
 		else if (head->ip_summed == CHECKSUM_COMPLETE)
 			head->csum = csum_add(head->csum, fp->csum);
-		head->truesize += fp->truesize;
+
+		if (skb_try_coalesce(head, fp, &headstolen, &delta)) {
+			kfree_skb_partial(fp, headstolen);
+		} else {
+			if (!skb_shinfo(head)->frag_list)
+				skb_shinfo(head)->frag_list = fp;
+			head->data_len += fp->len;
+			head->len += fp->len;
+			head->truesize += fp->truesize;
+		}
+		fp = next;
 	}
+
 	/* 从分片记录的内存信息中减去完成组片的大包空间 */
-	atomic_sub(head->truesize, &qp->q.net->mem);
+	atomic_sub(sum_truesize, &qp->q.net->mem);
 
 	head->next = NULL;
 	head->dev = dev;
@@ -734,8 +748,7 @@ out_nomem:
 	err = -ENOMEM;
 	goto out_fail;
 out_oversize:
-	if (net_ratelimit())
-		pr_info("Oversized IP packet from %pI4\n", &qp->saddr);
+	net_info_ratelimited("Oversized IP packet from %pI4\n", &qp->saddr);
 out_fail:
 	IP_INC_STATS_BH(net, IPSTATS_MIB_REASMFAILS);
 	return err;
@@ -877,7 +890,7 @@ static int __net_init ip4_frags_ns_ctl_register(struct net *net)
 		table[2].data = &net->ipv4.frags.timeout;
 	}
 
-	hdr = register_net_sysctl_table(net, net_ipv4_ctl_path, table);
+	hdr = register_net_sysctl(net, "net/ipv4", table);
 	if (hdr == NULL)
 		goto err_reg;
 
@@ -902,7 +915,7 @@ static void __net_exit ip4_frags_ns_ctl_unregister(struct net *net)
 
 static void ip4_frags_ctl_register(void)
 {
-	register_net_sysctl_rotable(net_ipv4_ctl_path, ip4_frags_ctl_table);
+	register_net_sysctl(&init_net, "net/ipv4", ip4_frags_ctl_table);
 }
 #else
 static inline int ip4_frags_ns_ctl_register(struct net *net)

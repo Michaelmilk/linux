@@ -37,7 +37,7 @@ static inline int should_deliver(const struct net_bridge_port *p,
 		p->state == BR_STATE_FORWARDING);
 }
 
-static inline unsigned packet_length(const struct sk_buff *skb)
+static inline unsigned int packet_length(const struct sk_buff *skb)
 {
 	return skb->len - (skb->protocol == htons(ETH_P_8021Q) ? VLAN_HLEN : 0);
 }
@@ -50,6 +50,8 @@ int br_dev_queue_push_xmit(struct sk_buff *skb)
 		kfree_skb(skb);
 	} else {
 		skb_push(skb, ETH_HLEN);
+		br_drop_fake_rtable(skb);
+
 		/* 此处调用dev设备的hard_start_xmit()函数
 		   此时skb->dev指向的应该是实际的物理口
 		   使用该接口驱动程序中注册的hard_start_xmit进行发送报文

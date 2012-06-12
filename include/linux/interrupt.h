@@ -98,36 +98,38 @@ typedef irqreturn_t (*irq_handler_t)(int, void *);
 /**
  * struct irqaction - per interrupt action descriptor
  * @handler:	interrupt handler function
- * @flags:	flags (see IRQF_* above)
  * @name:	name of the device
  * @dev_id:	cookie to identify the device
  * @percpu_dev_id:	cookie to identify the device
  * @next:	pointer to the next irqaction for shared interrupts
  * @irq:	interrupt number
- * @dir:	pointer to the proc/irq/NN/name entry
+ * @flags:	flags (see IRQF_* above)
  * @thread_fn:	interrupt handler function for threaded interrupts
  * @thread:	thread pointer for threaded interrupts
  * @thread_flags:	flags related to @thread
  * @thread_mask:	bitmask for keeping track of @thread activity
+ * @dir:	pointer to the proc/irq/NN/name entry
  */
 struct irqaction {
 	/* 指向设备的中断响应函数，它在系统初始化时被置入
 	   当中断发生时，系统将自动调用该函数 */
 	irq_handler_t		handler;
-	/* 指明中断类型，如正常中断、快速中断等 */
-	unsigned long		flags;
+
 	/* 与设备相关的数据类型
 	   中断响应函数可以根据需要将它转化成所需的数据结构
 	   从而达到访问系统数据的功能
 	   用于共享中断线
 	   如果无需共享中断线，那么将该参数赋值为空值(NULL)就可以了 */
+
 	void			*dev_id;
 	void __percpu		*percpu_dev_id;
 	/* 指向下一个irqaction */
 	struct irqaction	*next;
-	int			irq;
 	irq_handler_t		thread_fn;
 	struct task_struct	*thread;
+	unsigned int		irq;
+	/* 指明中断类型，如正常中断、快速中断等 */
+	unsigned int		flags;
 	unsigned long		thread_flags;
 	unsigned long		thread_mask;
 	/* 设备名 */
@@ -157,8 +159,6 @@ request_any_context_irq(unsigned int irq, irq_handler_t handler,
 extern int __must_check
 request_percpu_irq(unsigned int irq, irq_handler_t handler,
 		   const char *devname, void __percpu *percpu_dev_id);
-
-extern void exit_irq_thread(void);
 #else
 
 extern int __must_check
@@ -192,8 +192,6 @@ request_percpu_irq(unsigned int irq, irq_handler_t handler,
 {
 	return request_irq(irq, handler, 0, devname, percpu_dev_id);
 }
-
-static inline void exit_irq_thread(void) { }
 #endif
 
 extern void free_irq(unsigned int, void *);

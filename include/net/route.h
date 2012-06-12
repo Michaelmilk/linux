@@ -64,6 +64,7 @@ struct rtable {
 	__be32			rt_key_src;
 
 	int			rt_genid;
+
 	/* rt_flags是一组标志位，按目的入口查询的执行顺序：
 	   如果路由使用本地环回接口，则rt_flags上加标志RTCF_LOCAL，
 	   如果路由结果类型是广播，则加标志RTCF_BROADCAST和RTCF_LOCAL，
@@ -75,7 +76,8 @@ struct rtable {
 	   并且输出设备不是环回接口设备，则使用输出函数ip_mc_output，
 	   否则使用输出函数ip_output。
 	*/
-	unsigned		rt_flags;
+	unsigned int		rt_flags;
+
 	/* rt_type是路由类型，
 	   如果路由是LOOPBACK，则置类型为RTN_LOCAL，
 	   单播路由类型为RTN_UNICAST，
@@ -224,8 +226,8 @@ extern unsigned short	ip_rt_frag_needed(struct net *net, const struct iphdr *iph
 					  unsigned short new_mtu, struct net_device *dev);
 extern void		ip_rt_send_redirect(struct sk_buff *skb);
 
-extern unsigned		inet_addr_type(struct net *net, __be32 addr);
-extern unsigned		inet_dev_addr_type(struct net *net, const struct net_device *dev, __be32 addr);
+extern unsigned int		inet_addr_type(struct net *net, __be32 addr);
+extern unsigned int		inet_dev_addr_type(struct net *net, const struct net_device *dev, __be32 addr);
 extern void		ip_rt_multicast_event(struct in_device *);
 extern int		ip_rt_ioctl(struct net *, unsigned int cmd, void __user *arg);
 extern void		ip_rt_get_source(u8 *src, struct sk_buff *skb, struct rtable *rt);

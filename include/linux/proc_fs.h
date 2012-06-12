@@ -59,9 +59,9 @@ struct proc_dir_entry {
 	umode_t mode;
 	nlink_t nlink;
 	/* 用户id */
-	uid_t uid;
+	kuid_t uid;
 	/* 组id */
-	gid_t gid;
+	kgid_t gid;
 	/* 文件的字节单位大小 */
 	loff_t size;
 	/* proc索引节点inode的操作函数*/

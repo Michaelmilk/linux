@@ -383,7 +383,7 @@ lookup_protocol:
 	err = 0;
 	sk->sk_no_check = answer_no_check;
 	if (INET_PROTOSW_REUSE & answer_flags)
-		sk->sk_reuse = 1;
+		sk->sk_reuse = SK_CAN_REUSE;
 
 	/* 取struct inet_sock结构的指针
 	   例如struct tcp_sock结构中内嵌的第一项成员便是struct inet_sock结构 */
@@ -588,7 +588,7 @@ out:
 }
 EXPORT_SYMBOL(inet_bind);
 
-int inet_dgram_connect(struct socket *sock, struct sockaddr * uaddr,
+int inet_dgram_connect(struct socket *sock, struct sockaddr *uaddr,
 		       int addr_len, int flags)
 {
 	struct sock *sk = sock->sk;

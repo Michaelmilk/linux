@@ -262,7 +262,7 @@ forward:
 	case BR_STATE_LEARNING:
 		/* 接收的skb目的mac为网桥接口，标记为PACKET_HOST
 		   如桥br0上配置了IP地址进行通信时 */
-		if (!compare_ether_addr(p->br->dev->dev_addr, dest))
+		if (ether_addr_equal(p->br->dev->dev_addr, dest))
 			skb->pkt_type = PACKET_HOST;
 
 		/* ebt_nat_in() NF_BR_PRI_NAT_DST_BRIDGED
