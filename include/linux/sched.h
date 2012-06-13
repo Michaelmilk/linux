@@ -2275,7 +2275,10 @@ extern struct exec_domain	default_exec_domain;
 */
 union thread_union {
 	struct thread_info thread_info;
-	/* 8KB栈，共2048项 */
+	/* 对于8KB栈
+	   32位机long为4字节，共2048项
+	   64位机long为8字节，共1024项
+	*/
 	unsigned long stack[THREAD_SIZE/sizeof(long)];
 };
 
