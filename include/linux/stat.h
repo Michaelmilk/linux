@@ -11,14 +11,19 @@
 
 /* 文件类型的bit位掩码 */
 #define S_IFMT  00170000
+/* socket文件 */
 #define S_IFSOCK 0140000
+/* 链接文件 */
 #define S_IFLNK	 0120000
 /* 普通文件 */
 #define S_IFREG  0100000
+/* 块设备 */
 #define S_IFBLK  0060000
 /* 目录文件 */
 #define S_IFDIR  0040000
+/* 字符设备 */
 #define S_IFCHR  0020000
+/* 管道文件 */
 #define S_IFIFO  0010000
 #define S_ISUID  0004000
 #define S_ISGID  0002000
