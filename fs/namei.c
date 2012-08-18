@@ -2549,7 +2549,11 @@ struct file *do_file_open_root(struct dentry *dentry, struct vfsmount *mnt,
 
 struct dentry *kern_path_create(int dfd, const char *pathname, struct path *path, int is_dir)
 {
+	/* 赋个错误初始值 */
 	struct dentry *dentry = ERR_PTR(-EEXIST);
+	/* 局部变量结构
+	   用于辅助查找
+	*/
 	struct nameidata nd;
 	int error = do_path_lookup(dfd, pathname, LOOKUP_PARENT, &nd);
 	if (error)
@@ -2599,8 +2603,13 @@ out:
 }
 EXPORT_SYMBOL(kern_path_create);
 
+/*
+根据路径名称建立一个dentry结构
+来缓存该路径对应的虚拟文件系统中的节点等结构信息
+*/
 struct dentry *user_path_create(int dfd, const char __user *pathname, struct path *path, int is_dir)
 {
+	/* 在内核空间申请一段空间保存路径名称信息 */
 	char *tmp = getname(pathname);
 	struct dentry *res;
 	if (IS_ERR(tmp))
@@ -2662,6 +2671,7 @@ SYSCALL_DEFINE4(mknodat, int, dfd, const char __user *, filename, umode_t, mode,
 	struct path path;
 	int error;
 
+	/* 不可以创建目录文件 */
 	if (S_ISDIR(mode))
 		return -EPERM;
 
@@ -2701,6 +2711,16 @@ out_dput:
 
 	return error;
 }
+
+/*
+创建一个inode节点
+例如mknod /dev/sda1 b 8 1
+
+@filename	: 文件名称
+@mode		: 访问权限和节点类型的位组合，例如S_IFCHR S_IFBLK
+@dev		: 如果是S_IFCHR或S_IFBLK的话，则@dev不是设备的主次设备号
+		  其他的类型该字段会被忽略
+*/
 
 SYSCALL_DEFINE3(mknod, const char __user *, filename, umode_t, mode, unsigned, dev)
 {
