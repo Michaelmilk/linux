@@ -218,6 +218,14 @@ asmlinkage void __do_softirq(void)
 	__u32 pending;
 	int max_restart = MAX_SOFTIRQ_RESTART;
 	int cpu;
+	unsigned long old_flags = current->flags;
+
+	/*
+	 * Mask out PF_MEMALLOC s current task context is borrowed for the
+	 * softirq. A softirq handled such as network RX might set PF_MEMALLOC
+	 * again if the socket is related to swap
+	 */
+	current->flags &= ~PF_MEMALLOC;
 
 	/* 得到当前所有pending的软中断 */
 	pending = local_softirq_pending();
@@ -339,6 +347,7 @@ restart:
 	   注意:这里使用的不是local_bh_enable()，不会再次触发do_softirq()的调用。
 	*/
 	__local_bh_enable(SOFTIRQ_OFFSET);
+	tsk_restore_flags(current, old_flags, PF_MEMALLOC);
 }
 
 #ifndef __ARCH_HAS_DO_SOFTIRQ

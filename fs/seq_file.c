@@ -427,15 +427,13 @@ EXPORT_SYMBOL(seq_escape);
 函数seq_printf是最常用的输出函数，
 它用于把给定参数按照给定的格式输出到seq_file文件。
 */
-int seq_printf(struct seq_file *m, const char *f, ...)
+
+int seq_vprintf(struct seq_file *m, const char *f, va_list args)
 {
-	va_list args;
 	int len;
 
 	if (m->count < m->size) {
-		va_start(args, f);
 		len = vsnprintf(m->buf + m->count, m->size - m->count, f, args);
-		va_end(args);
 		if (m->count + len < m->size) {
 			m->count += len;
 			return 0;
@@ -443,6 +441,19 @@ int seq_printf(struct seq_file *m, const char *f, ...)
 	}
 	seq_set_overflow(m);
 	return -1;
+}
+EXPORT_SYMBOL(seq_vprintf);
+
+int seq_printf(struct seq_file *m, const char *f, ...)
+{
+	int ret;
+	va_list args;
+
+	va_start(args, f);
+	ret = seq_vprintf(m, f, args);
+	va_end(args);
+
+	return ret;
 }
 EXPORT_SYMBOL(seq_printf);
 

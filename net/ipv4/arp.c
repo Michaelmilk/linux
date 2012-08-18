@@ -501,8 +501,7 @@ int arp_find(unsigned char *haddr, struct sk_buff *skb)
 		return 1;
 	}
 
-	paddr = skb_rtable(skb)->rt_gateway;
-
+	paddr = rt_nexthop(skb_rtable(skb), ip_hdr(skb)->daddr);
 	if (arp_set_predefined(inet_addr_type(dev_net(dev), paddr), haddr,
 			       paddr, dev))
 		return 0;
@@ -851,7 +850,8 @@ static int arp_process(struct sk_buff *skb)
  *	addresses.  If this is one such, delete it.
  */
 	/* 不解析回环地址和组播地址 */
-	if (ipv4_is_loopback(tip) || ipv4_is_multicast(tip))
+	if (ipv4_is_multicast(tip) ||
+	    (!IN_DEV_ROUTE_LOCALNET(in_dev) && ipv4_is_loopback(tip)))
 		goto out;
 
 /*

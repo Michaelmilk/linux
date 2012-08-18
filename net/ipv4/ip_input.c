@@ -208,17 +208,16 @@ static int ip_local_deliver_finish(struct sk_buff *skb)
 		   例如IPPROTO_TCP IPPROTO_UDP
 		*/
 		int protocol = ip_hdr(skb)->protocol;
-		int hash, raw;
 		const struct net_protocol *ipprot;
+		int raw;
 
 	resubmit:
 		raw = raw_local_deliver(skb, protocol);
 
-		hash = protocol & (MAX_INET_PROTOS - 1);
 		/* 取对应协议处理结构
 		   例如tcp_protocol udp_protocol
 		*/
-		ipprot = rcu_dereference(inet_protos[hash]);
+		ipprot = rcu_dereference(inet_protos[protocol]);
 		/* 对应的传输层协议有注册 */
 		if (ipprot != NULL) {
 			int ret;
@@ -355,28 +354,37 @@ drop:
 	return true;
 }
 
+int sysctl_ip_early_demux __read_mostly = 1;
+EXPORT_SYMBOL(sysctl_ip_early_demux);
+
 static int ip_rcv_finish(struct sk_buff *skb)
 {
 	/* 取ip头指针 */
 	const struct iphdr *iph = ip_hdr(skb);
 	struct rtable *rt;
 
+	if (sysctl_ip_early_demux && !skb_dst(skb)) {
+		const struct net_protocol *ipprot;
+		int protocol = iph->protocol;
+
+		ipprot = rcu_dereference(inet_protos[protocol]);
+		if (ipprot && ipprot->early_demux) {
+			ipprot->early_demux(skb);
+			/* must reload iph, skb->head might have changed */
+			iph = ip_hdr(skb);
+		}
+	}
+
 	/*
 	 *	Initialise the virtual path cache for the packet. It describes
 	 *	how the packet travels inside Linux networking.
 	 */
-	if (skb_dst(skb) == NULL) {
+	if (!skb_dst(skb)) {
 		int err = ip_route_input_noref(skb, iph->daddr, iph->saddr,
 					       iph->tos, skb->dev);
 		if (unlikely(err)) {
 			/* 统计信息 */
-			if (err == -EHOSTUNREACH)
-				IP_INC_STATS_BH(dev_net(skb->dev),
-						IPSTATS_MIB_INADDRERRORS);
-			else if (err == -ENETUNREACH)
-				IP_INC_STATS_BH(dev_net(skb->dev),
-						IPSTATS_MIB_INNOROUTES);
-			else if (err == -EXDEV)
+			if (err == -EXDEV)
 				NET_INC_STATS_BH(dev_net(skb->dev),
 						 LINUX_MIB_IPRPFILTER);
 			goto drop;

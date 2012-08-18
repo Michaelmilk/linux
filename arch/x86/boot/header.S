@@ -338,8 +338,10 @@ _start:
 	# Part 2 of the header, from the old setup.S
 
 		.ascii	"HdrS"		# header signature
-		/* 协议版本2.10 */
-		.word	0x020a		# header version number (>= 0x0105)
+
+		/* 协议版本2.11 */
+
+		.word	0x020b		# header version number (>= 0x0105)
 					# or else old loadlin-1.5 will fail)
 		.globl realmode_swtch
 realmode_swtch:	.word	0, 0		# default_switch, SETUPSEG
@@ -460,6 +462,8 @@ pref_address:		.quad LOAD_PHYSICAL_ADDR	# preferred load addr
 #define INIT_SIZE VO_INIT_SIZE
 #endif
 init_size:		.long INIT_SIZE		# kernel initialization size
+handover_offset:	.long 0x30		# offset to the handover
+						# protocol entry point
 
 # End of setup header #####################################################
 
@@ -469,16 +473,7 @@ init_size:		.long INIT_SIZE		# kernel initialization size
 此时依然处于实模式
 */
 	.section ".entrytext", "ax"
-
 start_of_setup:
-
-#ifdef SAFE_RESET_DISK_CONTROLLER
-# Reset the disk controller.
-	movw	$0x0000, %ax		# Reset disk controller
-	movb	$0x80, %dl		# All disks
-	int	$0x13
-#endif
-
 # Force %es = %ds
 	/* grub跳转到_start时，ds内值为0x9000 */
 	movw	%ds, %ax

@@ -33,11 +33,18 @@
 必须是2的幂次
 可以在计算哈希值时使用-1位与的方式
 */
-#define MAX_INET_PROTOS	256		/* Must be a power of 2		*/
 
+/* Must be a power of 2		*/
+
+/* This is one larger than the largest protocol value that can be
+ * found in an ipv4 or ipv6 header.  Since in both cases the protocol
+ * value is presented in a __u8, this is defined to be 256.
+ */
+#define MAX_INET_PROTOS		256
 
 /* This is used to register protocols. */
 struct net_protocol {
+	void			(*early_demux)(struct sk_buff *skb);
 	int			(*handler)(struct sk_buff *skb);
 	void			(*err_handler)(struct sk_buff *skb, u32 info);
 	int			(*gso_send_check)(struct sk_buff *skb);
@@ -52,6 +59,8 @@ struct net_protocol {
 
 #if IS_ENABLED(CONFIG_IPV6)
 struct inet6_protocol {
+	void	(*early_demux)(struct sk_buff *skb);
+
 	int	(*handler)(struct sk_buff *skb);
 
 	void	(*err_handler)(struct sk_buff *skb,

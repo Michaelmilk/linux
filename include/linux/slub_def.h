@@ -48,7 +48,6 @@ struct kmem_cache_cpu {
 	unsigned long tid;	/* Globally unique transaction id */
 	struct page *page;	/* The slab from which we are allocating */
 	struct page *partial;	/* Partially allocated frozen slabs */
-	int node;		/* The node of the page (or -1 for debug) */
 #ifdef CONFIG_SLUB_STATS
 	unsigned stat[NR_SLUB_STAT_ITEMS];
 #endif
@@ -97,7 +96,7 @@ struct kmem_cache {
 	/* 对象对齐后占用的空间大小，包含元数据 */
 	int size;		/* The size of an object including meta data */
 	/* 对象本身的大小 */
-	int objsize;		/* The size of an object without meta data */
+	int object_size;	/* The size of an object without meta data */
 	/* 指针在对象空间中的偏移 */
 	int offset;		/* Free pointer offset. */
 	/* 首选的page分配策略 */

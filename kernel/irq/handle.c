@@ -133,7 +133,7 @@ irqreturn_t
 handle_irq_event_percpu(struct irq_desc *desc, struct irqaction *action)
 {
 	irqreturn_t retval = IRQ_NONE;
-	unsigned int random = 0, irq = desc->irq_data.irq;
+	unsigned int flags = 0, irq = desc->irq_data.irq;
 
 	/* 依次调用action队列中所有的中断服务子程序。其实这个过程并不需要很长的时间。
 	   因为每个具体的中断服务程序中都会一开始检查各自的中断源，
@@ -168,7 +168,7 @@ handle_irq_event_percpu(struct irq_desc *desc, struct irqaction *action)
 
 			/* Fall through to add to randomness */
 		case IRQ_HANDLED:
-			random |= action->flags;
+			flags |= action->flags;
 			break;
 
 		default:
@@ -179,8 +179,7 @@ handle_irq_event_percpu(struct irq_desc *desc, struct irqaction *action)
 		action = action->next;
 	} while (action);
 
-	if (random & IRQF_SAMPLE_RANDOM)
-		add_interrupt_randomness(irq);
+	add_interrupt_randomness(irq, flags);
 
 	if (!noirqdebug)
 		note_interrupt(irq, desc, retval);

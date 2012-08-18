@@ -270,6 +270,8 @@ static struct inet_frag_queue *inet_frag_alloc(struct netns_frags *nf,
 	if (q == NULL)
 		return NULL;
 
+	/* 记录所属的命名空间分片结构 */
+	q->net = nf;
 	/* 依据函数ipfrag_init()为ip4_frags的constructor赋值为
 	   ip4_frag_init()
 	   在新分配的节点q中记录新报文的各项参数 */
@@ -281,8 +283,6 @@ static struct inet_frag_queue *inet_frag_alloc(struct netns_frags *nf,
 	spin_lock_init(&q->lock);
 	/* 引用记录置为1 */
 	atomic_set(&q->refcnt, 1);
-	/* 记录所属的命名空间分片结构 */
-	q->net = nf;
 
 	/* 返回新节点 */
 	return q;

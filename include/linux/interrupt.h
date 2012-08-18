@@ -42,7 +42,6 @@
  *
  * IRQF_DISABLED - keep irqs disabled when calling the action handler.
  *                 DEPRECATED. This flag is a NOOP and scheduled to be removed
- * IRQF_SAMPLE_RANDOM - irq is used to feed the random generator
  * IRQF_SHARED - allow sharing the irq among several devices
  * IRQF_PROBE_SHARED - set by callers when they expect sharing mismatches to occur
  * IRQF_TIMER - Flag to mark this interrupt as timer interrupt
@@ -64,8 +63,10 @@
 在本地处理器上，快速中断处理程序在禁止所有中断的情况下运行。
 除了时钟中断外，绝大多数中断都不使用该标志。 */
 #define IRQF_DISABLED		0x00000020
+
 /* 该位指出产生的中断能对/dev/random 设备和/dev/urandom 设备使用的熵池有贡献 */
-#define IRQF_SAMPLE_RANDOM	0x00000040
+/* #define IRQF_SAMPLE_RANDOM	0x00000040 */
+
 /* 该位表示中断可以在设备之间共享 */
 #define IRQF_SHARED		0x00000080
 #define IRQF_PROBE_SHARED	0x00000100

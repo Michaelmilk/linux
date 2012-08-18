@@ -535,8 +535,9 @@ EXPORT_SYMBOL(neigh_lookup_nodev);
 也就是说，当在 neighbour table 中找不到 neighbour 的时候，
 调用此函数来创建一个新的 neighbour
 */
-struct neighbour *neigh_create(struct neigh_table *tbl, const void *pkey,
-			       struct net_device *dev)
+
+struct neighbour *__neigh_create(struct neigh_table *tbl, const void *pkey,
+				 struct net_device *dev, bool want_ref)
 {
 	u32 hash_val;
 	int key_len = tbl->key_len;
@@ -600,7 +601,8 @@ struct neighbour *neigh_create(struct neigh_table *tbl, const void *pkey,
 	     n1 = rcu_dereference_protected(n1->next,
 			lockdep_is_held(&tbl->lock))) {
 		if (dev == n1->dev && !memcmp(n1->primary_key, pkey, key_len)) {
-			neigh_hold(n1);
+			if (want_ref)
+				neigh_hold(n1);
 			rc = n1;
 			goto out_tbl_unlock;
 		}
@@ -608,7 +610,8 @@ struct neighbour *neigh_create(struct neigh_table *tbl, const void *pkey,
 
 	/* 置0激活 */
 	n->dead = 0;
-	neigh_hold(n);
+	if (want_ref)
+		neigh_hold(n);
 	rcu_assign_pointer(n->next,
 			   rcu_dereference_protected(nht->hash_buckets[hash_val],
 						     lockdep_is_held(&tbl->lock)));
@@ -624,7 +627,7 @@ out_neigh_release:
 	neigh_release(n);
 	goto out;
 }
-EXPORT_SYMBOL(neigh_create);
+EXPORT_SYMBOL(__neigh_create);
 
 static u32 pneigh_hash(const void *pkey, int key_len)
 {
@@ -1271,10 +1274,23 @@ int neigh_update(struct neighbour *neigh, const u8 *lladdr, u8 new,
 			write_unlock_bh(&neigh->lock);
 
 			rcu_read_lock();
-			/* On shaper/eql skb->dst->neighbour != neigh :( */
-			if (dst && (n2 = dst_get_neighbour_noref(dst)) != NULL)
-				n1 = n2;
+
+			/* Why not just use 'neigh' as-is?  The problem is that
+			 * things such as shaper, eql, and sch_teql can end up
+			 * using alternative, different, neigh objects to output
+			 * the packet in the output path.  So what we need to do
+			 * here is re-lookup the top-level neigh in the path so
+			 * we can reinject the packet there.
+			 */
+			n2 = NULL;
+			if (dst) {
+				n2 = dst_neigh_lookup_skb(dst, skb);
+				if (n2)
+					n1 = n2;
+			}
 			n1->output(n1, skb);
+			if (n2)
+				neigh_release(n2);
 			rcu_read_unlock();
 
 			write_lock_bh(&neigh->lock);
@@ -2310,9 +2326,7 @@ static int neigh_dump_table(struct neigh_table *tbl, struct sk_buff *skb,
 	rcu_read_lock_bh();
 	nht = rcu_dereference_bh(tbl->nht);
 
-	for (h = 0; h < (1 << nht->hash_shift); h++) {
-		if (h < s_h)
-			continue;
+	for (h = s_h; h < (1 << nht->hash_shift); h++) {
 		if (h > s_h)
 			s_idx = 0;
 		for (n = rcu_dereference_bh(nht->hash_buckets[h]), idx = 0;
@@ -2351,9 +2365,7 @@ static int pneigh_dump_table(struct neigh_table *tbl, struct sk_buff *skb,
 
 	read_lock_bh(&tbl->lock);
 
-	for (h = 0; h <= PNEIGH_HASHMASK; h++) {
-		if (h < s_h)
-			continue;
+	for (h = s_h; h <= PNEIGH_HASHMASK; h++) {
 		if (h > s_h)
 			s_idx = 0;
 		for (n = tbl->phash_buckets[h], idx = 0; n; n = n->next) {
@@ -2388,7 +2400,7 @@ static int neigh_dump_info(struct sk_buff *skb, struct netlink_callback *cb)
 	struct neigh_table *tbl;
 	int t, family, s_t;
 	int proxy = 0;
-	int err = 0;
+	int err;
 
 	read_lock(&neigh_tbl_lock);
 	family = ((struct rtgenmsg *) nlmsg_data(cb->nlh))->rtgen_family;
@@ -2402,7 +2414,7 @@ static int neigh_dump_info(struct sk_buff *skb, struct netlink_callback *cb)
 
 	s_t = cb->args[0];
 
-	for (tbl = neigh_tables, t = 0; tbl && (err >= 0);
+	for (tbl = neigh_tables, t = 0; tbl;
 	     tbl = tbl->next, t++) {
 		if (t < s_t || (family && tbl->family != family))
 			continue;
@@ -2413,6 +2425,8 @@ static int neigh_dump_info(struct sk_buff *skb, struct netlink_callback *cb)
 			err = pneigh_dump_table(tbl, skb, cb);
 		else
 			err = neigh_dump_table(tbl, skb, cb);
+		if (err < 0)
+			break;
 	}
 	read_unlock(&neigh_tbl_lock);
 

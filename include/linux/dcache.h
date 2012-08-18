@@ -164,7 +164,7 @@ struct dentry {
 	struct list_head d_subdirs;	/* our children */
 	/* 链入struct inode的i_dentry链表
 	   该链表表示关联相同文件的各个dentry项，例如文件的硬链接 */
-	struct list_head d_alias;	/* inode alias list */
+	struct hlist_node d_alias;	/* inode alias list */
 };
 
 /*
@@ -181,7 +181,7 @@ enum dentry_d_lock_class
 
 struct dentry_operations {
 	/* 确保数据一致性 */
-	int (*d_revalidate)(struct dentry *, struct nameidata *);
+	int (*d_revalidate)(struct dentry *, unsigned int);
 	/* 哈希函数，计算哈希值 */
 	int (*d_hash)(const struct dentry *, const struct inode *,
 			struct qstr *);
