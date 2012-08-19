@@ -13,16 +13,27 @@
 # define __SYSCALL_X32(nr, sym, compat) /* nothing */
 #endif
 
+/*
+先将宏定义为把系统调用展开成函数声明
+这样在包含生成的头文件syscalls_64.h
+先展开的为函数声明
+*/
 #define __SYSCALL_64(nr, sym, compat) extern asmlinkage void sym(void) ;
 #include <asm/syscalls_64.h>
 #undef __SYSCALL_64
 
+/*
+定义为数组中项的初始化
+这样下面包含生成的头文件syscalls_64.h时
+初始化数组sys_call_table[]的各项
+*/
 #define __SYSCALL_64(nr, sym, compat) [nr] = sym,
 
 typedef void (*sys_call_ptr_t)(void);
 
 extern void sys_ni_syscall(void);
 
+/* 系统调用的函数指针数组 */
 const sys_call_ptr_t sys_call_table[__NR_syscall_max+1] = {
 	/*
 	 * Smells like a compiler bug -- it doesn't work
