@@ -1382,7 +1382,9 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 			goto bad_fork_cleanup_io;
 	}
 
+	/* 进程的pid号 */
 	p->pid = pid_nr(pid);
+	/* 进程的组id号 */
 	p->tgid = p->pid;
 	/* 如果设置了同在一个线程组则继承TGID。
 	   对于普通进程来说TGID和PID相等，
@@ -1444,6 +1446,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 * Ok, make it visible to the rest of the system.
 	 * We dont wake it up yet.
 	 */
+	/* 线程组的主进程先初始化为自身 */
 	p->group_leader = p;
 	INIT_LIST_HEAD(&p->thread_group);
 	p->task_works = NULL;
@@ -1484,6 +1487,9 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 		goto bad_fork_free_pid;
 	}
 
+	/* 如果是创建线程
+	   该线程的组主进程设置为当前进程的组主进程
+	*/
 	if (clone_flags & CLONE_THREAD) {
 		current->signal->nr_threads++;
 		atomic_inc(&current->signal->live);

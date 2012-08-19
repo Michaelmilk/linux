@@ -1461,6 +1461,12 @@ SYSCALL_DEFINE1(alarm, unsigned int, seconds)
  * should be moved into arch/i386 instead?
  */
 
+/*
+返回当前进程的pid号
+
+同一个线程组内返回的都是组主进程pid号
+*/
+
 /**
  * sys_getpid - return the thread group id of the current process
  *

@@ -170,6 +170,9 @@ static void set_last_pid(struct pid_namespace *pid_ns, int base, int pid)
 	} while ((prev != last_write) && (pid_before(base, last_write, pid)));
 }
 
+/*
+从pid号的位图中找出一个可以使用的pid号
+*/
 static int alloc_pidmap(struct pid_namespace *pid_ns)
 {
 	int i, offset, max_scan, pid, last = pid_ns->last_pid;
@@ -180,16 +183,25 @@ static int alloc_pidmap(struct pid_namespace *pid_ns)
 	/* 如果达到最大值了，则回绕，从预留的值后面开始 */
 	if (pid >= pid_max)
 		pid = RESERVED_PIDS;
+	/* 该pid号在其所属位图页中的偏移 */
 	offset = pid & BITS_PER_PAGE_MASK;
+	/* pid号对应的位图页结构 */
 	map = &pid_ns->pidmap[pid/BITS_PER_PAGE];
 	/*
 	 * If last_pid points into the middle of the map->page we
 	 * want to scan this bitmap block twice, the second time
 	 * we start with offset == 0 (or RESERVED_PIDS).
 	 */
+	/* 循环控制能够把所有的bit页都扫描到
+	   0   1   2   3
+	        |^ ...
+	    ^...|
+	*/
 	max_scan = DIV_ROUND_UP(pid_max, BITS_PER_PAGE) - !offset;
 	for (i = 0; i <= max_scan; ++i) {
+		/* 该位图页还未分配空间 */
 		if (unlikely(!map->page)) {
+			/* 分配一页的空间作为位图 */
 			void *page = kzalloc(PAGE_SIZE, GFP_KERNEL);
 			/*
 			 * Free the page if someone raced with us
@@ -197,35 +209,50 @@ static int alloc_pidmap(struct pid_namespace *pid_ns)
 			 */
 			spin_lock_irq(&pidmap_lock);
 			if (!map->page) {
+				/* 记录该页
+				   这里没有初始化字段nr_free
+				   因为create_pid_namespace()中初始化过了
+				*/
 				map->page = page;
 				page = NULL;
 			}
 			spin_unlock_irq(&pidmap_lock);
 			kfree(page);
+			/* 分配失败 */
 			if (unlikely(!map->page))
 				break;
 		}
 		/* 读可用pid的数量 */
 		if (likely(atomic_read(&map->nr_free))) {
 			do {
+				/* 找到一个未使用的pid号 */
 				if (!test_and_set_bit(offset, map->page)) {
+					/* 可用数减1 */
 					atomic_dec(&map->nr_free);
+					/* 记录最后使用的pid号 */
 					set_last_pid(pid_ns, last, pid);
+					/* 返回该可用的pid号 */
 					return pid;
 				}
+				/* 下一个为0的bit */
 				offset = find_next_offset(map, offset);
+				/* 该offset处bit对应的pid号 */
 				pid = mk_pid(pid_ns, map, offset);
+			/* 循环直到该页内的bit都检查完 */
 			} while (offset < BITS_PER_PAGE && pid < pid_max);
 		}
 		if (map < &pid_ns->pidmap[(pid_max-1)/BITS_PER_PAGE]) {
+		/* 下一个页面中的位图 */
 			++map;
 			offset = 0;
 		} else {
+		/* 回头从第一个bit页面中查找 */
 			map = &pid_ns->pidmap[0];
 			offset = RESERVED_PIDS;
 			if (unlikely(last == offset))
 				break;
 		}
+		/* 该offset处bit对应的pid号 */
 		pid = mk_pid(pid_ns, map, offset);
 	}
 	return -1;
@@ -291,6 +318,10 @@ void free_pid(struct pid *pid)
 	call_rcu(&pid->rcu, delayed_put_pid);
 }
 
+/*
+在命名空间@ns内分配一个pid结构实例
+在命名空间不同层级中分别分配pid号
+*/
 struct pid *alloc_pid(struct pid_namespace *ns)
 {
 	struct pid *pid;
@@ -305,22 +336,33 @@ struct pid *alloc_pid(struct pid_namespace *ns)
 		goto out;
 
 	tmp = ns;
+	/* 遍历到深度0级
+	   由此看出进程在不同层级的命名空间中pid号可以不同
+	*/
 	for (i = ns->level; i >= 0; i--) {
+		/* 在该命名空间内获取一个pid号 */
 		nr = alloc_pidmap(tmp);
 		if (nr < 0)
 			goto out_free;
 
+		/* 记录pid号和所属命名空间 */
 		pid->numbers[i].nr = nr;
 		pid->numbers[i].ns = tmp;
+		/* 上一级命名空间 */
 		tmp = tmp->parent;
 	}
 
+	/* 增加命名空间的引用计数 */
 	get_pid_ns(ns);
+	/* 深度 */
 	pid->level = ns->level;
+	/* 该pid实例的引用计数 */
 	atomic_set(&pid->count, 1);
+	/* 初始化哈希表 */
 	for (type = 0; type < PIDTYPE_MAX; ++type)
 		INIT_HLIST_HEAD(&pid->tasks[type]);
 
+	/* 将使用的pid加入pid_hash哈希表 */
 	upid = pid->numbers + ns->level;
 	spin_lock_irq(&pidmap_lock);
 	for ( ; upid >= pid->numbers; --upid)

@@ -63,8 +63,15 @@ struct pid
 	/* 该pid实例在命名空间中的深度，该值从0开始 ... */
 	unsigned int level;
 	/* lists of tasks that use this pid */
+	/* 使用了本pid结构实例的进程task_struct会通过其pids字段链入这个哈希表
+	   可以知道哪些进程使用了该pid结构实例
+	*/
 	struct hlist_head tasks[PIDTYPE_MAX];
 	struct rcu_head rcu;
+	/* 数组大小与level有关
+	   参见函数create_pid_cachep()及其调用
+	   记录该pid实例在不同深度level中使用的pid号及其命名空间
+	*/
 	struct upid numbers[1];
 };
 
@@ -174,6 +181,9 @@ static inline bool is_child_reaper(struct pid *pid)
  * see also task_xid_nr() etc in include/linux/sched.h
  */
 
+/*
+返回其在level 0中使用的pid号
+*/
 static inline pid_t pid_nr(struct pid *pid)
 {
 	pid_t nr = 0;

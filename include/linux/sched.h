@@ -1464,6 +1464,10 @@ struct task_struct {
 	struct list_head ptrace_entry;
 
 	/* PID/PID hash table linkage. */
+	/* 参考函数attach_pid()
+	   记录该进程使用的pid结构实例
+	   并会链入pid结构实例对应的哈希表
+	*/
 	struct pid_link pids[PIDTYPE_MAX];
 	struct list_head thread_group;
 
@@ -1786,6 +1790,9 @@ static inline struct pid *task_tgid(struct task_struct *task)
  * the result of task_pgrp/task_session even if task == current,
  * we can race with another thread doing sys_setsid/sys_setpgid.
  */
+/*
+返回@task所属进程组的组主进程pid实例指针
+*/
 static inline struct pid *task_pgrp(struct task_struct *task)
 {
 	return task->group_leader->pids[PIDTYPE_PGID].pid;

@@ -80,6 +80,7 @@ static struct pid_namespace *create_pid_namespace(struct pid_namespace *parent_p
 	if (ns == NULL)
 		goto out;
 
+	/* 为第一个位图分配1页的空间 */
 	ns->pidmap[0].page = kzalloc(PAGE_SIZE, GFP_KERNEL);
 	if (!ns->pidmap[0].page)
 		goto out_free;
@@ -88,13 +89,19 @@ static struct pid_namespace *create_pid_namespace(struct pid_namespace *parent_p
 	if (ns->pid_cachep == NULL)
 		goto out_free_map;
 
+	/* 引用计数初始化为1 */
 	kref_init(&ns->kref);
 	ns->level = level;
 	ns->parent = get_pid_ns(parent_pid_ns);
 
+	/* pid号0对应的位图标记已用 */
 	set_bit(0, ns->pidmap[0].page);
+	/* 设置可用的pid号个数  */
 	atomic_set(&ns->pidmap[0].nr_free, BITS_PER_PAGE - 1);
 
+	/* 初始化未使用的个数
+	   这样在alloc_pidmap()只需分配新的page空间
+	*/
 	for (i = 1; i < PIDMAP_ENTRIES; i++)
 		atomic_set(&ns->pidmap[i].nr_free, BITS_PER_PAGE);
 
