@@ -300,6 +300,7 @@ static inline struct rq *__task_rq_lock(struct task_struct *p)
 	lockdep_assert_held(&p->pi_lock);
 
 	for (;;) {
+		/* 根据进程所在cpu取对应的运行队列 */
 		rq = task_rq(p);
 		raw_spin_lock(&rq->lock);
 		if (likely(rq == task_rq(p)))
@@ -714,6 +715,10 @@ static void enqueue_task(struct rq *rq, struct task_struct *p, int flags)
 {
 	update_rq_clock(rq);
 	sched_info_queued(p);
+	/* enqueue_task_fair()
+	   enqueue_task_rt()
+	   enqueue_task_stop()
+	*/
 	p->sched_class->enqueue_task(rq, p, flags);
 }
 
@@ -1696,6 +1701,10 @@ int wake_up_state(struct task_struct *p, unsigned int state)
 }
 
 /*
+初始化跟进程调度相关的字段
+*/
+
+/*
  * Perform scheduler related setup for a newly forked process p.
  * p is forked by current.
  *
@@ -1766,6 +1775,7 @@ void sched_fork(struct task_struct *p)
 		p->sched_reset_on_fork = 0;
 	}
 
+	/* 非实时进程，调度类设置为完全公平调度类 */
 	if (!rt_prio(p->prio))
 		p->sched_class = &fair_sched_class;
 
@@ -1780,6 +1790,7 @@ void sched_fork(struct task_struct *p)
 	 * Silence PROVE_RCU.
 	 */
 	raw_spin_lock_irqsave(&p->pi_lock, flags);
+	/* 设置进程所在cpu */
 	set_task_cpu(p, cpu);
 	raw_spin_unlock_irqrestore(&p->pi_lock, flags);
 

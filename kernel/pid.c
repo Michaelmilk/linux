@@ -547,6 +547,9 @@ pid_t pid_vnr(struct pid *pid)
 }
 EXPORT_SYMBOL_GPL(pid_vnr);
 
+/*
+返回进程的pid号
+*/
 pid_t __task_pid_nr_ns(struct task_struct *task, enum pid_type type,
 			struct pid_namespace *ns)
 {
@@ -556,8 +559,10 @@ pid_t __task_pid_nr_ns(struct task_struct *task, enum pid_type type,
 	if (!ns)
 		ns = current->nsproxy->pid_ns;
 	if (likely(pid_alive(task))) {
+		/* 不是PIDTYPE_PID的话，则取其线程组的组主进程 */
 		if (type != PIDTYPE_PID)
 			task = task->group_leader;
+		/* 返回pid号 */
 		nr = pid_nr_ns(task->pids[type].pid, ns);
 	}
 	rcu_read_unlock();

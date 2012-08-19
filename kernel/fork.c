@@ -973,11 +973,14 @@ static int copy_files(unsigned long clone_flags, struct task_struct *tsk)
 	if (!oldf)
 		goto out;
 
+	/* 共享已打开的文件 */
 	if (clone_flags & CLONE_FILES) {
+		/* 增加引用计数 */
 		atomic_inc(&oldf->count);
 		goto out;
 	}
 
+	/* 复制打开的文件，创建新的files_struct结构实例 */
 	newf = dup_fd(oldf, &error);
 	if (!newf)
 		goto out;
@@ -1014,19 +1017,28 @@ static int copy_io(unsigned long clone_flags, struct task_struct *tsk)
 	return 0;
 }
 
+/*
+复制信号处理函数
+*/
 static int copy_sighand(unsigned long clone_flags, struct task_struct *tsk)
 {
 	struct sighand_struct *sig;
 
+	/* 共享信号处理函数 */
 	if (clone_flags & CLONE_SIGHAND) {
+		/* 引用计数增1 */
 		atomic_inc(&current->sighand->count);
 		return 0;
 	}
+	/* 从缓存中分配sighand_struct结构实例 */
 	sig = kmem_cache_alloc(sighand_cachep, GFP_KERNEL);
+	/* 指针赋值 */
 	rcu_assign_pointer(tsk->sighand, sig);
 	if (!sig)
 		return -ENOMEM;
+	/* 引用计数置1 */
 	atomic_set(&sig->count, 1);
+	/* 复制处理函数 */
 	memcpy(sig->action, current->sighand->action, sizeof(sig->action));
 	return 0;
 }
@@ -1480,6 +1492,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 * thread can't slip out of an OOM kill (or normal SIGKILL).
 	*/
 	recalc_sigpending();
+	/* 当前进程有待决信号 */
 	if (signal_pending(current)) {
 		spin_unlock(&current->sighand->siglock);
 		write_unlock_irq(&tasklist_lock);
@@ -1513,6 +1526,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 			list_add_tail_rcu(&p->tasks, &init_task.tasks);
 			__this_cpu_inc(process_counts);
 		}
+		/* 设置进程pid */
 		attach_pid(p, PIDTYPE_PID, pid);
 		nr_threads++;
 	}
@@ -1702,6 +1716,7 @@ long do_fork(unsigned long clone_flags,
 	} else {
 		nr = PTR_ERR(p);
 	}
+	/* 返回新进程的pid号 */
 	return nr;
 }
 

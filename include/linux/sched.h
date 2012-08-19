@@ -1832,6 +1832,9 @@ static inline pid_t task_pid_nr_ns(struct task_struct *tsk,
 	return __task_pid_nr_ns(tsk, PIDTYPE_PID, ns);
 }
 
+/*
+返回进程的pid号
+*/
 static inline pid_t task_pid_vnr(struct task_struct *tsk)
 {
 	return __task_pid_nr_ns(tsk, PIDTYPE_PID, NULL);

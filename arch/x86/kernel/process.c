@@ -268,6 +268,9 @@ void __switch_to_xtra(struct task_struct *prev_p, struct task_struct *next_p,
 	propagate_user_return_notify(prev_p, next_p);
 }
 
+/*
+系统调用fork
+*/
 int sys_fork(struct pt_regs *regs)
 {
 	return do_fork(SIGCHLD, regs->sp, regs, 0, NULL, NULL);
