@@ -8,6 +8,8 @@
  * See the file COPYING for more details.
  */
 
+/* 系统调用接口，架构无关的 */
+
 #ifndef _LINUX_SYSCALLS_H
 #define _LINUX_SYSCALLS_H
 
@@ -77,6 +79,9 @@ struct file_handle;
 #include <linux/key.h>
 #include <trace/syscall.h>
 
+/*
+参数类型和名称
+*/
 #define __SC_DECL1(t1, a1)	t1 a1
 #define __SC_DECL2(t2, a2, ...) t2 a2, __SC_DECL1(__VA_ARGS__)
 #define __SC_DECL3(t3, a3, ...) t3 a3, __SC_DECL2(__VA_ARGS__)
@@ -189,9 +194,18 @@ extern struct trace_event_functions exit_syscall_print_funcs;
 	 *__p_syscall_meta_##sname = &__syscall_meta__##sname;	\
 	asmlinkage long sys_##sname(void)
 #else
+/*
+使用堆栈传递参数
+字符串连接成sys_开头的函数名称
+例如sys_getpid
+0表示没有参数
+*/
 #define SYSCALL_DEFINE0(name)	   asmlinkage long sys_##name(void)
 #endif
 
+/*
+含有不同参数个数的系统调用
+*/
 #define SYSCALL_DEFINE1(name, ...) SYSCALL_DEFINEx(1, _##name, __VA_ARGS__)
 #define SYSCALL_DEFINE2(name, ...) SYSCALL_DEFINEx(2, _##name, __VA_ARGS__)
 #define SYSCALL_DEFINE3(name, ...) SYSCALL_DEFINEx(3, _##name, __VA_ARGS__)
@@ -208,6 +222,9 @@ extern struct trace_event_functions exit_syscall_print_funcs;
 #define SYSCALL_ALIAS(alias, name)					\
 	asm ( #alias " = " #name "\n\t.globl " #alias)
 #else
+/*
+函数别名
+*/
 #define SYSCALL_ALIAS(alias, name)					\
 	asm ("\t.globl " #alias "\n\t.set " #alias ", " #name)
 #endif
@@ -245,11 +262,23 @@ extern struct trace_event_functions exit_syscall_print_funcs;
 
 #else /* CONFIG_HAVE_SYSCALL_WRAPPERS */
 
+/*
+函数名称定义
+*/
 #define SYSCALL_DEFINE(name) asmlinkage long sys_##name
+/*
+展开成上面定义的宏__SC_DECL1等
+再用这些宏把参数展开
+形成一个完整的函数名称及参数的定义
+*/
 #define __SYSCALL_DEFINEx(x, name, ...)					\
 	asmlinkage long sys##name(__SC_DECL##x(__VA_ARGS__))
 
 #endif /* CONFIG_HAVE_SYSCALL_WRAPPERS */
+
+/*
+系统调用的函数声明
+*/
 
 asmlinkage long sys_time(time_t __user *tloc);
 asmlinkage long sys_stime(time_t __user *tptr);
