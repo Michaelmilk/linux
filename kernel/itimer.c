@@ -118,12 +118,16 @@ SYSCALL_DEFINE2(getitimer, int, which, struct itimerval __user *, value)
 /*
  * The timer is automagically restarted, when interval != 0
  */
+/*
+interval timer的处理函数
+*/
 enum hrtimer_restart it_real_fn(struct hrtimer *timer)
 {
 	struct signal_struct *sig =
 		container_of(timer, struct signal_struct, real_timer);
 
 	trace_itimer_expire(ITIMER_REAL, sig->leader_pid, 0);
+	/* 向进程发送SIGALRM信号 */
 	kill_pid_info(SIGALRM, SEND_SIG_PRIV, sig->leader_pid);
 
 	return HRTIMER_NORESTART;
@@ -181,6 +185,8 @@ static void set_cpu_itimer(struct task_struct *tsk, unsigned int clock_id,
 	}
 }
 
+/* canonical:标准 */
+
 /*
  * Returns true if the timeval is in canonical form
  */
@@ -189,6 +195,7 @@ static void set_cpu_itimer(struct task_struct *tsk, unsigned int clock_id,
 
 int do_setitimer(int which, struct itimerval *value, struct itimerval *ovalue)
 {
+	/* 当前进程 */
 	struct task_struct *tsk = current;
 	struct hrtimer *timer;
 	ktime_t expires;
@@ -204,7 +211,9 @@ int do_setitimer(int which, struct itimerval *value, struct itimerval *ovalue)
 	case ITIMER_REAL:
 again:
 		spin_lock_irq(&tsk->sighand->siglock);
+		/* 取该进程ITIMER_REAL的定时器 */
 		timer = &tsk->signal->real_timer;
+		/* 记录原先剩余的值 */
 		if (ovalue) {
 			ovalue->it_value = itimer_get_remtime(timer);
 			ovalue->it_interval
@@ -215,10 +224,15 @@ again:
 			spin_unlock_irq(&tsk->sighand->siglock);
 			goto again;
 		}
+		/* 第一次定时器到期时间 */
 		expires = timeval_to_ktime(value->it_value);
 		if (expires.tv64 != 0) {
+			/* 设置间隔时间 */
 			tsk->signal->it_real_incr =
 				timeval_to_ktime(value->it_interval);
+			/* 启动定时器
+			   为相对时间
+			*/
 			hrtimer_start(timer, expires, HRTIMER_MODE_REL);
 		} else
 			tsk->signal->it_real_incr.tv64 = 0;
@@ -275,6 +289,13 @@ unsigned int alarm_setitimer(unsigned int seconds)
 	return it_old.it_value.tv_sec;
 }
 
+/*
+系统调用setitimer
+
+@which	: 定时器计时类型，如ITIMER_REAL
+@value	: 设置的定时器值，相对时间
+@ovalue	: 非空的话，保存原先剩余的值
+*/
 SYSCALL_DEFINE3(setitimer, int, which, struct itimerval __user *, value,
 		struct itimerval __user *, ovalue)
 {
@@ -282,9 +303,11 @@ SYSCALL_DEFINE3(setitimer, int, which, struct itimerval __user *, value,
 	int error;
 
 	if (value) {
+	/* 将用户态的值复制进内核态 */
 		if(copy_from_user(&set_buffer, value, sizeof(set_buffer)))
 			return -EFAULT;
 	} else {
+	/* NULL的话，定时器设置为0 */
 		memset(&set_buffer, 0, sizeof(set_buffer));
 		printk_once(KERN_WARNING "%s calls setitimer() with new_value NULL pointer."
 			    " Misfeature support will be removed\n",
@@ -295,6 +318,7 @@ SYSCALL_DEFINE3(setitimer, int, which, struct itimerval __user *, value,
 	if (error || !ovalue)
 		return error;
 
+	/* 将原先剩余的值复制到用户态 */
 	if (copy_to_user(ovalue, &get_buffer, sizeof(get_buffer)))
 		return -EFAULT;
 	return 0;

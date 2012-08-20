@@ -1078,6 +1078,7 @@ static int copy_signal(unsigned long clone_flags, struct task_struct *tsk)
 {
 	struct signal_struct *sig;
 
+	/* 创建线程，signal_struct结构共享 */
 	if (clone_flags & CLONE_THREAD)
 		return 0;
 
@@ -1099,6 +1100,7 @@ static int copy_signal(unsigned long clone_flags, struct task_struct *tsk)
 	hrtimer_init(&sig->real_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	sig->real_timer.function = it_real_fn;
 
+	/* 复制资源限制的设定值 */
 	task_lock(current->group_leader);
 	memcpy(sig->rlim, current->signal->rlim, sizeof sig->rlim);
 	task_unlock(current->group_leader);

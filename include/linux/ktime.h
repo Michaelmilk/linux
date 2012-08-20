@@ -44,8 +44,10 @@
  * config switch CONFIG_KTIME_SCALAR.
  */
 union ktime {
+	/* 64位机使用tv64表示纳秒数 */
 	s64	tv64;
 #if BITS_PER_LONG != 64 && !defined(CONFIG_KTIME_SCALAR)
+	/* 为了优化，32位机使用秒和纳秒分开表示时间 */
 	struct {
 # ifdef __BIG_ENDIAN
 	s32	sec, nsec;
@@ -125,6 +127,7 @@ static inline ktime_t timeval_to_ktime(struct timeval tv)
 #define ktime_to_timespec(kt)		ns_to_timespec((kt).tv64)
 
 /* Map the ktime_t to timeval conversion to ns_to_timeval function */
+/* 将64位的纳秒转换为timeval结构 */
 #define ktime_to_timeval(kt)		ns_to_timeval((kt).tv64)
 
 /* Convert ktime_t to nanoseconds - NOP in the scalar storage format: */
@@ -259,6 +262,7 @@ static inline struct timespec ktime_to_timespec(const ktime_t kt)
  */
 static inline struct timeval ktime_to_timeval(const ktime_t kt)
 {
+	/* 32位机将字段nsec转换为微秒 */
 	return (struct timeval) {
 		.tv_sec = (time_t) kt.tv.sec,
 		.tv_usec = (suseconds_t) (kt.tv.nsec / NSEC_PER_USEC) };

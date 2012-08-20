@@ -74,6 +74,9 @@ void timerqueue_del(struct timerqueue_head *head, struct timerqueue_node *node)
 	WARN_ON_ONCE(RB_EMPTY_NODE(&node->node));
 
 	/* update next pointer */
+	/* 如果@node是最先超时的节点
+	   则移除后需要更新next指针，以便next指针记录最先超时的节点
+	*/
 	if (head->next == node) {
 		struct rb_node *rbn = rb_next(&node->node);
 

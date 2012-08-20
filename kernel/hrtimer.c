@@ -872,6 +872,7 @@ static int enqueue_hrtimer(struct hrtimer *timer,
 {
 	debug_activate(timer);
 
+	/* 加入红黑树 */
 	timerqueue_add(&base->active, &timer->node);
 	base->cpu_base->active_bases |= 1 << base->index;
 
@@ -881,6 +882,7 @@ static int enqueue_hrtimer(struct hrtimer *timer,
 	 */
 	timer->state |= HRTIMER_STATE_ENQUEUED;
 
+	/* 返回是否为最左节点 */
 	return (&timer->node == base->active.next);
 }
 
@@ -902,8 +904,11 @@ static void __remove_hrtimer(struct hrtimer *timer,
 	if (!(timer->state & HRTIMER_STATE_ENQUEUED))
 		goto out;
 
+	/* 记录最先超时的节点 */
 	next_timer = timerqueue_getnext(&base->active);
+	/* 从红黑树中移除 */
 	timerqueue_del(&base->active, &timer->node);
+	/* @timer便是最先超时的节点 */
 	if (&timer->node == next_timer) {
 #ifdef CONFIG_HIGH_RES_TIMERS
 		/* Reprogram the clock event device. if enabled */
@@ -917,6 +922,9 @@ static void __remove_hrtimer(struct hrtimer *timer,
 		}
 #endif
 	}
+	/* 没有定时器了
+	   去掉标志位
+	*/
 	if (!timerqueue_getnext(&base->active))
 		base->cpu_base->active_bases &= ~(1 << base->index);
 out:
@@ -949,6 +957,7 @@ remove_hrtimer(struct hrtimer *timer, struct hrtimer_clock_base *base)
 		 * otherwise we could move the timer base in
 		 * switch_hrtimer_base.
 		 */
+		/* 标记该定时器进入回调函数处理状态 */
 		state = timer->state & HRTIMER_STATE_CALLBACK;
 		__remove_hrtimer(timer, base, state, reprogram);
 		return 1;
@@ -961,9 +970,11 @@ int __hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
 		int wakeup)
 {
 	struct hrtimer_clock_base *base, *new_base;
+	/* 关中断时记录原来的标志 */
 	unsigned long flags;
 	int ret, leftmost;
 
+	/* 取进程所在cpu的定时器的根 */
 	base = lock_hrtimer_base(timer, &flags);
 
 	/* Remove an active timer from the queue: */
@@ -972,7 +983,9 @@ int __hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
 	/* Switch the timer base, if necessary: */
 	new_base = switch_hrtimer_base(timer, base, mode & HRTIMER_MODE_PINNED);
 
+	/* 相对时间转换为绝对时间 */
 	if (mode & HRTIMER_MODE_REL) {
+		/* 与当前时间相加，得到一个绝对时间 */
 		tim = ktime_add_safe(tim, new_base->get_time());
 		/*
 		 * CONFIG_TIME_LOW_RES is a temporary way for architectures
@@ -1149,6 +1162,10 @@ ktime_t hrtimer_get_next_event(void)
 }
 #endif
 
+/*
+copy_signal()中调用时传递CLOCK_MONOTONIC, HRTIMER_MODE_REL
+
+*/
 static void __hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
 			   enum hrtimer_mode mode)
 {
@@ -1163,7 +1180,12 @@ static void __hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
 	if (clock_id == CLOCK_REALTIME && mode != HRTIMER_MODE_ABS)
 		clock_id = CLOCK_MONOTONIC;
 
+	/* CLOCK_MONOTONIC -> HRTIMER_BASE_MONOTONIC
+	   CLOCK_REALTIME -> HRTIMER_BASE_REALTIME
+	   CLOCK_BOOTTIME -> HRTIMER_BASE_BOOTTIME
+	*/
 	base = hrtimer_clockid_to_base(clock_id);
+	/* 记录使用的hrtimer_cpu_base中的clock_base */
 	timer->base = &cpu_base->clock_base[base];
 	timerqueue_init(&timer->node);
 
@@ -1180,6 +1202,11 @@ static void __hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
  * @clock_id:	the clock to be used
  * @mode:	timer mode abs/rel
  */
+
+/*
+copy_signal()中调用时传递CLOCK_MONOTONIC, HRTIMER_MODE_REL
+
+*/
 void hrtimer_init(struct hrtimer *timer, clockid_t clock_id,
 		  enum hrtimer_mode mode)
 {

@@ -31,6 +31,9 @@ extern struct timerqueue_node *timerqueue_iterate_next(
  * Returns a pointer to the timer node that has the
  * earliest expiration time.
  */
+/*
+返回最先超时的节点
+*/
 static inline
 struct timerqueue_node *timerqueue_getnext(struct timerqueue_head *head)
 {

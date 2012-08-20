@@ -261,8 +261,21 @@ static __always_inline void timespec_add_ns(struct timespec *a, u64 ns)
  * Names of the interval timers, and structure
  * defining a timer setting:
  */
+/*
+以系统真实的时间计算
+发送SIGALRM信号
+*/
 #define	ITIMER_REAL		0
+/*
+以该进程在用户态下花费的时间计算
+发送SIGVTALRM信号
+*/
 #define	ITIMER_VIRTUAL		1
+/*
+itimer profile
+以该进程在用户态和内核态下花费的时间计算
+发送SIGPROF信号
+*/
 #define	ITIMER_PROF		2
 
 struct itimerspec {
@@ -270,8 +283,17 @@ struct itimerspec {
 	struct timespec it_value;	/* timer expiration */
 };
 
+/*
+interval timer value
+间隔定时器的值
+
+延迟执行只需设置it_value的值
+间隔执行则it_interval和it_value这2个字段的值都需设置
+*/
 struct itimerval {
+	/* 间隔一段时间执行 */
 	struct timeval it_interval;	/* timer interval */
+	/* 延迟一段时间执行 */
 	struct timeval it_value;	/* current value */
 };
 

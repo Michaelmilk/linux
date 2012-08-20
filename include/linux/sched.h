@@ -579,6 +579,10 @@ struct autogroup;
 struct signal_struct {
 	atomic_t		sigcnt;
 	atomic_t		live;
+	/* 线程个数
+	   单进程的时候为1
+	   创建线程的时候++
+	*/
 	int			nr_threads;
 
 	wait_queue_head_t	wait_chldexit;	/* for wait4() */
@@ -619,8 +623,10 @@ struct signal_struct {
 	struct list_head posix_timers;
 
 	/* ITIMER_REAL timer for the process */
+	/* 使用hrtimer_bases中的HRTIMER_BASE_MONOTONIC */
 	struct hrtimer real_timer;
 	struct pid *leader_pid;
+	/* 间隔时间 */
 	ktime_t it_real_incr;
 
 	/*

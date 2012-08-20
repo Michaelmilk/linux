@@ -108,7 +108,13 @@ enum hrtimer_restart {
 struct hrtimer {
 	struct timerqueue_node		node;
 	ktime_t				_softexpires;
+	/* 回调函数
+	   例如it_real_fn()
+	*/
 	enum hrtimer_restart		(*function)(struct hrtimer *);
+	/* __hrtimer_init()中赋值
+	   指向hrtimer_bases中的一个字段
+	*/
 	struct hrtimer_clock_base	*base;
 	unsigned long			state;
 #ifdef CONFIG_TIMER_STATS
@@ -176,8 +182,12 @@ enum  hrtimer_base_type {
  * @max_hang_time:	Maximum time spent in hrtimer_interrupt
  * @clock_base:		array of clock bases for this cpu
  */
+/*
+高精度定时器每cpu根结构
+*/
 struct hrtimer_cpu_base {
 	raw_spinlock_t			lock;
+	/* 标志位来标记字段clock_base[]数组中哪个下标内有定时器 */
 	unsigned int			active_bases;
 	unsigned int			clock_was_set;
 #ifdef CONFIG_HIGH_RES_TIMERS
