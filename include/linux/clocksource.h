@@ -172,10 +172,14 @@ struct clocksource {
 	 * Hotpath data, fits in a single cache line when the
 	 * clocksource itself is cacheline aligned.
 	 */
-	/* 读取时钟周期的方法，例如读取时间戳计数器的read_tsc()函数 */
+	/* 读取时钟周期的方法，例如读取时间戳计数器的read_tsc()函数
+	   例如clocksource_hpet的read_hpet()函数
+	*/
 	cycle_t (*read)(struct clocksource *cs);
 	cycle_t cycle_last;
+	/* 计数器掩码 */
 	cycle_t mask;
+	/* 参考clocks_calc_mult_shift()注释 */
 	u32 mult;
 	u32 shift;
 	u64 max_idle_ns;
@@ -215,6 +219,10 @@ struct clocksource {
 #define CLOCK_SOURCE_UNSTABLE			0x40
 
 /* simplify initialization of mask field */
+/* 时钟源的掩码
+32位0xffffffff
+64位0xffffffffffffffff
+*/
 #define CLOCKSOURCE_MASK(bits) (cycle_t)((bits) < 64 ? ((1ULL<<(bits))-1) : -1)
 
 /**

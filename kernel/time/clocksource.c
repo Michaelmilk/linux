@@ -130,6 +130,18 @@ EXPORT_SYMBOL_GPL(timecounter_cyc2time);
  * reduce the conversion accuracy by chosing smaller mult and shift
  * factors.
  */
+
+/*
+计算@mult和@shift
+
+因为内核中没有浮点数运算
+除法运算时，小数点后都会被取整舍去掉
+为了提高除法计算的精确度
+先将被除数乘以一个数@mult进行放大
+再运算除法
+得出的商再进行向右移位@shift缩小
+得出最终的比较精确的商
+*/
 void
 clocks_calc_mult_shift(u32 *mult, u32 *shift, u32 from, u32 to, u32 maxsec)
 {
@@ -140,6 +152,10 @@ clocks_calc_mult_shift(u32 *mult, u32 *shift, u32 from, u32 to, u32 maxsec)
 	 * Calculate the shift factor which is limiting the conversion
 	 * range:
 	 */
+	/* __clocksource_updatefreq_scale()中调用时
+	   对于32位掩码
+	   tmp计算出便是0
+	*/
 	tmp = ((u64)maxsec * from) >> 32;
 	while (tmp) {
 		tmp >>=1;
@@ -516,6 +532,7 @@ static u32 clocksource_max_adjustment(struct clocksource *cs)
 	return (u32)ret;
 }
 
+/* deferment: 延期 */
 /**
  * clocksource_max_deferment - Returns max time the clocksource can be deferred
  * @cs:         Pointer to clocksource
@@ -689,7 +706,16 @@ void __clocksource_updatefreq_scale(struct clocksource *cs, u32 scale, u32 freq)
 	 * ~ 0.06ppm granularity for NTP. We apply the same 12.5%
 	 * margin as we do in clocksource_max_deferment()
 	 */
+	/* 比如时钟源
+	   clocksource_hpet
+	   32位掩码计算出为(0xffffffff - 0x1fffffff) = 0xe0000000
+	   即留出的12.5%边界
+	   mask * (1 - 1/8) = mask * 7/8
+	*/
 	sec = (cs->mask - (cs->mask >> 3));
+	/* 计算出计数器在cs->mask掩码下
+	   溢出的时候，能够表示的秒数
+	*/
 	do_div(sec, freq);
 	do_div(sec, scale);
 	if (!sec)
