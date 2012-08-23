@@ -18,6 +18,13 @@
  * This ends up being the most efficient "calling
  * convention" on x86.
  */
+/*
+@n	: 被除数
+@base	: 除数
+
+除完得到的商保存在@n中
+返回值为余数
+*/
 #define do_div(n, base)						\
 ({								\
 	unsigned long __upper, __low, __high, __mod, __base;	\

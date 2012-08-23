@@ -336,6 +336,7 @@ void clockevents_config(struct clock_event_device *dev, u32 freq)
 	if (!sec)
 		sec = 1;
 	else if (sec > 600 && dev->max_delta_ticks > UINT_MAX)
+	/* 10·ÖÖÓ */
 		sec = 600;
 
 	clockevents_calc_mult_shift(dev, freq, sec);

@@ -16,6 +16,10 @@ enum tick_device_mode {
 	TICKDEV_MODE_ONESHOT,
 };
 
+/*
+滴答设备
+每cpu都有一个实例
+*/
 struct tick_device {
 	struct clock_event_device *evtdev;
 	enum tick_device_mode mode;

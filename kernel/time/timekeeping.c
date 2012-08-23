@@ -1327,10 +1327,14 @@ struct timespec get_monotonic_coarse(void)
  * without sampling the sequence number in xtime_lock.
  * jiffies is defined in the linker script...
  */
+/* jiffies_64定义在链接脚本vmlinux.lds.S内 */
 void do_timer(unsigned long ticks)
 {
+	/* 更新jiffy */
 	jiffies_64 += ticks;
+	/*更新墙上时间 */
 	update_wall_time();
+	/* 计算负载 */
 	calc_global_load(ticks);
 }
 

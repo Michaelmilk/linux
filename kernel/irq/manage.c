@@ -90,6 +90,7 @@ int irq_can_set_affinity(unsigned int irq)
 {
 	struct irq_desc *desc = irq_to_desc(irq);
 
+	/* 检查中断控制器是否支持设置cpu亲和力 */
 	if (!desc || !irqd_can_balance(&desc->irq_data) ||
 	    !desc->irq_data.chip || !desc->irq_data.chip->irq_set_affinity)
 		return 0;

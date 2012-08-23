@@ -31,7 +31,12 @@ DEFINE_PER_CPU(struct tick_device, tick_cpu_device);
  * Tick next event: keeps track of the tick time
  */
 ktime_t tick_next_period;
+/* 产生时钟滴答的间隔时间
+例如配置HZ为1000的时候，即每秒产生1000次滴答
+那么tick_period便是10^6纳秒
+*/
 ktime_t tick_period;
+/* 处理时钟中断0产生滴答的cpu */
 int tick_do_timer_cpu __read_mostly = TICK_DO_TIMER_BOOT;
 static DEFINE_RAW_SPINLOCK(tick_device_lock);
 
@@ -62,6 +67,7 @@ int tick_is_oneshot_available(void)
  */
 static void tick_periodic(int cpu)
 {
+	/* 进行滴答处理的cpu */
 	if (tick_do_timer_cpu == cpu) {
 		write_seqlock(&xtime_lock);
 
@@ -184,6 +190,7 @@ static void tick_setup_device(struct tick_device *td,
 	 * When the device is not per cpu, pin the interrupt to the
 	 * current cpu:
 	 */
+	/* 设置中断控制器将该中断发给哪个cpu */
 	if (!cpumask_equal(newdev->cpumask, cpumask))
 		irq_set_affinity(newdev->irq, cpumask);
 
@@ -205,6 +212,10 @@ static void tick_setup_device(struct tick_device *td,
 /*
  * Check, if the new registered device should be used.
  */
+/*
+@newdev	: 例如hpet_clockevent
+
+*/
 static int tick_check_new_device(struct clock_event_device *newdev)
 {
 	struct clock_event_device *curdev;
@@ -251,12 +262,16 @@ static int tick_check_new_device(struct clock_event_device *newdev)
 		/*
 		 * Prefer one shot capable devices !
 		 */
+		/* 原设备支持单次中断，则新设备也要支持 */
 		if ((curdev->features & CLOCK_EVT_FEAT_ONESHOT) &&
 		    !(newdev->features & CLOCK_EVT_FEAT_ONESHOT))
 			goto out_bc;
 		/*
 		 * Check the rating
 		 */
+		/* 新设备优先级小于当前正在使用的设备优先级
+		   则不替换
+		*/
 		if (curdev->rating >= newdev->rating)
 			goto out_bc;
 	}
