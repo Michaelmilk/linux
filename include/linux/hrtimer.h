@@ -191,7 +191,9 @@ struct hrtimer_cpu_base {
 	unsigned int			active_bases;
 	unsigned int			clock_was_set;
 #ifdef CONFIG_HIGH_RES_TIMERS
+	/* 最先到期的定时器时间 */
 	ktime_t				expires_next;
+	/* 该cpu下是否有定时器存在 */
 	int				hres_active;
 	int				hang_detected;
 	unsigned long			nr_events;
