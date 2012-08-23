@@ -16,6 +16,10 @@
 #include <asm/hpet.h>
 #include <asm/time.h>
 
+/*
+时钟源掩码
+0xffffffff
+*/
 #define HPET_MASK			CLOCKSOURCE_MASK(32)
 
 /* FSEC = 10^-15
@@ -234,6 +238,7 @@ static void hpet_reserve_platform_timers(unsigned int id) { }
 /*
  * Common hpet info
  */
+/* 计数器每秒钟增加的次数 */
 static unsigned long hpet_freq;
 
 static void hpet_legacy_set_mode(enum clock_event_mode mode,
@@ -253,6 +258,7 @@ static struct clock_event_device hpet_clockevent = {
 	.rating		= 50,
 };
 
+/* 关闭定时器中断 */
 static void hpet_stop_counter(void)
 {
 	unsigned long cfg = hpet_readl(HPET_CFG);
@@ -260,12 +266,14 @@ static void hpet_stop_counter(void)
 	hpet_writel(cfg, HPET_CFG);
 }
 
+/* 计数器清0 */
 static void hpet_reset_counter(void)
 {
 	hpet_writel(0, HPET_COUNTER);
 	hpet_writel(0, HPET_COUNTER + 4);
 }
 
+/* 开启定时器中断 */
 static void hpet_start_counter(void)
 {
 	unsigned int cfg = hpet_readl(HPET_CFG);
@@ -309,6 +317,7 @@ static void hpet_legacy_clockevent_register(void)
 	 * Start hpet with the boot cpu mask and make it
 	 * global after the IO_APIC has been initialized.
 	 */
+	/* 引导cpu */
 	hpet_clockevent.cpumask = cpumask_of(smp_processor_id());
 	clockevents_config_and_register(&hpet_clockevent, hpet_freq,
 					HPET_MIN_PROG_DELTA, 0x7FFFFFFF);
@@ -748,6 +757,7 @@ static int hpet_cpuhp_notify(struct notifier_block *n,
 /*
  * Clock source related code
  */
+/* 读取高精度事件定时器中计数器的值 */
 static cycle_t read_hpet(struct clocksource *cs)
 {
 	return (cycle_t)hpet_readl(HPET_COUNTER);
@@ -771,6 +781,7 @@ static int hpet_clocksource_register(void)
 	cycle_t t1;
 
 	/* Start the counter */
+	/* 重新启动计数器 */
 	hpet_restart_counter();
 
 	/* Verify whether hpet counter works */
@@ -801,6 +812,7 @@ static int hpet_clocksource_register(void)
 		return -ENODEV;
 	}
 
+	/* 注册高精度事件定时器 */
 	clocksource_register_hz(&clocksource_hpet, (u32)hpet_freq);
 	return 0;
 }
@@ -824,8 +836,12 @@ int __init hpet_enable(void)
 	/*
 	 * Read the period and check for a sane value:
 	 */
+	/* COUNTER_CLK_PERIOD
+	   计数器每隔多少飞秒增1
+	*/
 	hpet_period = hpet_readl(HPET_PERIOD);
 
+	/* spectrum: 范围 */
 	/*
 	 * AMD SB700 based systems with spread spectrum enabled use a
 	 * SMM based HPET emulation to provide proper frequency
@@ -857,6 +873,7 @@ int __init hpet_enable(void)
 	 */
 	freq = FSEC_PER_SEC;
 	do_div(freq, hpet_period);
+	/* 计数器每秒钟增加的次数 */
 	hpet_freq = freq;
 
 	/*
@@ -866,6 +883,7 @@ int __init hpet_enable(void)
 	id = hpet_readl(HPET_ID);
 	hpet_print_config();
 
+	/* 取定时器个数 */
 	last = (id & HPET_ID_NUMBER) >> HPET_ID_NUMBER_SHIFT;
 
 #ifdef CONFIG_HPET_EMULATE_RTC
@@ -884,12 +902,16 @@ int __init hpet_enable(void)
 		*hpet_boot_cfg = cfg;
 	else
 		pr_warn("HPET initial state will not be saved\n");
+	/* 关闭所有定时器中断 */
 	cfg &= ~(HPET_CFG_ENABLE | HPET_CFG_LEGACY);
 	hpet_writel(cfg, HPET_CFG);
 	if (cfg)
 		pr_warn("HPET: Unrecognized bits %#x set in global cfg\n",
 			cfg);
 
+	/* last是表示从0开始的，所以循环中包含等于
+	   先关闭所有定时器中断
+	*/
 	for (i = 0; i <= last; ++i) {
 		cfg = hpet_readl(HPET_Tn_CFG(i));
 		if (hpet_boot_cfg)
