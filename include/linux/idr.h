@@ -38,20 +38,27 @@
 #define IDR_SIZE (1 << IDR_BITS)
 #define IDR_MASK ((1 << IDR_BITS)-1)
 
+/* 最大id号的偏移31 */
 #define MAX_ID_SHIFT (sizeof(int)*8 - 1)
+/* 最大id号0x80000000 */
 #define MAX_ID_BIT (1U << MAX_ID_SHIFT)
+/* 最大id号掩码0x7fffffff */
 #define MAX_ID_MASK (MAX_ID_BIT - 1)
 
 /* Leave the possibility of an incomplete final layer */
+/* 最大层数 */
 #define MAX_LEVEL (MAX_ID_SHIFT + IDR_BITS - 1) / IDR_BITS
 
 /* Number of id_layer structs to leave in free list */
 #define IDR_FREE_MAX MAX_LEVEL + MAX_LEVEL
 
 struct idr_layer {
+	/* 与ary[]使用情况对应的位图 */
 	unsigned long		 bitmap; /* A zero bit means "space here" */
 	struct idr_layer __rcu	*ary[1<<IDR_BITS];
+	/* ary[]使用中的个数 */
 	int			 count;	 /* When zero, we can release it */
+	/* 从叶子算起的层数 */
 	int			 layer;	 /* distance from leaf */
 	struct rcu_head		 rcu_head;
 };
@@ -123,7 +130,9 @@ void idr_init(struct idr *idp);
  * ida_bitmap->nr_busy so that the whole struct fits in 128 bytes.
  */
 #define IDA_CHUNK_SIZE		128	/* 128 bytes per chunk */
+/* 表示位图的long型数个数 */
 #define IDA_BITMAP_LONGS	(IDA_CHUNK_SIZE / sizeof(long) - 1)
+/* 位图中一共有多少个bit */
 #define IDA_BITMAP_BITS 	(IDA_BITMAP_LONGS * sizeof(long) * 8)
 
 struct ida_bitmap {

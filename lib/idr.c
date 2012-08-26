@@ -36,6 +36,7 @@
 #include <linux/idr.h>
 #include <linux/spinlock.h>
 
+/* struct idr_layer结构缓存 */
 static struct kmem_cache *idr_layer_cache;
 static DEFINE_SPINLOCK(simple_ida_lock);
 
@@ -783,12 +784,15 @@ int ida_get_new_above(struct ida *ida, int starting_id, int *p_id)
 	struct idr_layer *pa[MAX_LEVEL];
 	struct ida_bitmap *bitmap;
 	unsigned long flags;
+	/* 在第几个long型数中 */
 	int idr_id = starting_id / IDA_BITMAP_BITS;
+	/* 在该long型数中的偏移 */
 	int offset = starting_id % IDA_BITMAP_BITS;
 	int t, id;
 
  restart:
 	/* get vacant slot */
+	/* vacant:空闲的 */
 	t = idr_get_empty_slot(&ida->idr, idr_id, pa);
 	if (t < 0)
 		return _idr_rc_to_errno(t);
