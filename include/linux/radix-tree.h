@@ -41,6 +41,10 @@
  * when it is shrunk, before we rcu free the node. See shrink code for
  * details.
  */
+/*
+间接指针指向控制节点radix_tree_node
+而不是指向数据项
+*/
 #define RADIX_TREE_INDIRECT_PTR		1
 /*
  * A common use of the radix tree is to store pointers to struct pages;
@@ -60,9 +64,12 @@ static inline int radix_tree_is_indirect_ptr(void *ptr)
 
 #define RADIX_TREE_MAX_TAGS 3
 
+/* 基数树的根节点 */
 /* root tags are stored in gfp_mask, shifted by __GFP_BITS_SHIFT */
 struct radix_tree_root {
+	/* 树的高度，与第一个节点@rnode中记录的height大小一致 */
 	unsigned int		height;
+	/* 掩码与tag共用 */
 	gfp_t			gfp_mask;
 	struct radix_tree_node	__rcu *rnode;
 };
@@ -76,6 +83,7 @@ struct radix_tree_root {
 #define RADIX_TREE(name, mask) \
 	struct radix_tree_root name = RADIX_TREE_INIT(mask)
 
+/* 初始化一个根节点 */
 #define INIT_RADIX_TREE(root, mask)					\
 do {									\
 	(root)->height = 0;						\

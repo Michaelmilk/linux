@@ -633,6 +633,7 @@ asmlinkage void __init start_kernel(void)
 	perf_event_init();
 	/* 初始化RCU(Read-Copy Update)机制 */
 	rcu_init();
+	/* 基数树初始化 */
 	radix_tree_init();
 	/* init some links before init_ISA_irqs() */
 	early_irq_init();
