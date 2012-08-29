@@ -855,8 +855,10 @@ static inline int build_open_flags(int flags, umode_t mode, struct open_flags *o
 	int lookup_flags = 0;
 	int acc_mode;
 
+	/* 如果不是新创建文件，则忽略@mode，例如S_IRWXU */
 	if (!(flags & O_CREAT))
 		mode = 0;
+	/* 记录@mode */
 	op->mode = mode;
 
 	/* 去掉FMODE_NONOTIFY标志 */
@@ -869,6 +871,7 @@ static inline int build_open_flags(int flags, umode_t mode, struct open_flags *o
 	 * always set instead of having to deal with possibly weird behaviour
 	 * for malicious applications setting only __O_SYNC.
 	 */
+	/* __O_SYNC与O_DSYNC合并使用 */
 	if (flags & __O_SYNC)
 		flags |= O_DSYNC;
 
@@ -886,6 +889,7 @@ static inline int build_open_flags(int flags, umode_t mode, struct open_flags *o
 	op->open_flag = flags;
 
 	/* O_TRUNC implies we need access checks for write permissions */
+	/* 设置了截断标志，则需要检查是否有写权限 */
 	if (flags & O_TRUNC)
 		acc_mode |= MAY_WRITE;
 
@@ -953,22 +957,31 @@ long do_sys_open(int dfd, const char __user *filename, int flags, umode_t mode)
 	int fd = PTR_ERR(tmp);
 
 	if (!IS_ERR(tmp)) {
+		/* 取一个未使用的fd描述符 */
 		fd = get_unused_fd_flags(flags);
 		if (fd >= 0) {
+			/* 根据文件名创建file结构 */
 			struct file *f = do_filp_open(dfd, tmp, &op, lookup);
 			if (IS_ERR(f)) {
 				put_unused_fd(fd);
 				fd = PTR_ERR(f);
 			} else {
 				fsnotify_open(f);
+				/* 描述符与file建立对应关系 */
 				fd_install(fd, f);
 			}
 		}
+		/* 释放内核中分配的名称空间 */
 		putname(tmp);
 	}
+	/* 返回创建的文件描述符 */
 	return fd;
 }
 
+/*
+系统调用open
+sys_open
+*/
 SYSCALL_DEFINE3(open, const char __user *, filename, int, flags, umode_t, mode)
 {
 	long ret;

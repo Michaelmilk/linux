@@ -1184,6 +1184,10 @@ static void follow_mount(struct path *path)
 	}
 }
 
+/*
+回到上层目录
+上层目录的信息保存在@nd中
+*/
 static void follow_dotdot(struct nameidata *nd)
 {
 	set_root(nd);
@@ -1191,12 +1195,15 @@ static void follow_dotdot(struct nameidata *nd)
 	while(1) {
 		struct dentry *old = nd->path.dentry;
 
+		/* 已经回到根目录了，循环结束 */
 		if (nd->path.dentry == nd->root.dentry &&
 		    nd->path.mnt == nd->root.mnt) {
 			break;
 		}
+		/* 当前目录没有到挂载点的根 */
 		if (nd->path.dentry != nd->path.mnt->mnt_root) {
 			/* rare case of legitimate dget_parent()... */
+			/* 取父目录 */
 			nd->path.dentry = dget_parent(nd->path.dentry);
 			dput(old);
 			break;
@@ -1215,6 +1222,15 @@ static void follow_dotdot(struct nameidata *nd)
  *
  * dir->d_inode->i_mutex must be held
  */
+/*
+在目录项缓存中查找
+在@dir目录中查找@name
+
+找到则返回@name对应的dentry，标记need_lookup为false
+
+未找到则为@name创建一个目录项缓存dentry，标记need_lookup为true
+表示需要调用lookup函数
+*/
 static struct dentry *lookup_dcache(struct qstr *name, struct dentry *dir,
 				    unsigned int flags, bool *need_lookup)
 {
@@ -1288,6 +1304,7 @@ static struct dentry *__lookup_hash(struct qstr *name,
 	return lookup_real(base->d_inode, dentry, flags);
 }
 
+/* convoluted:复杂的 */
 /*
  *  It's more convoluted than I'd like it to be, but... it's still fairly
  *  small and for now I'd prefer to have fast path as straight as possible.
@@ -1488,6 +1505,9 @@ static inline int walk_component(struct nameidata *nd, struct path *path,
 	 */
 	if (unlikely(type != LAST_NORM))
 		return handle_dots(nd, type);
+	/* 普通路径名称，在当前@nd记录的目录中查找
+	   
+	*/
 	err = lookup_fast(nd, name, path, &inode);
 	if (unlikely(err)) {
 		if (err < 0)
@@ -1610,6 +1630,9 @@ static inline int can_lookup(struct inode *inode)
 
 #ifdef CONFIG_64BIT
 
+/* 将64位的@hash数折叠
+变为一个32位的数
+*/
 static inline unsigned int fold_hash(unsigned long hash)
 {
 	hash += hash >> (8*sizeof(int));
@@ -1714,44 +1737,67 @@ static inline unsigned long hash_name(const char *name, unsigned int *hashp)
  * Returns 0 and nd will have valid dentry and mnt on success.
  * Returns error and drops reference to input namei data on failure.
  */
+/*
+解析路径名称
+正确解析到路径最后一个部分对应的dentry和mnt信息，返回0
+失败的话返回错误码
+*/
 static int link_path_walk(const char *name, struct nameidata *nd)
 {
 	struct path next;
 	int err;
 	
+	/* 跳过起始的'/'符号
+	   可以有多个"/////"
+	*/
 	while (*name=='/')
 		name++;
+	/* 只有'/' */
 	if (!*name)
 		return 0;
 
 	/* At this point we know we have a real path component. */
+	/* 以'/'为分隔符，对路径中的各个部分进行解析 */
 	for(;;) {
+		/* 保存路径中当前解析部分的名称，长度 */
 		struct qstr this;
 		long len;
 		int type;
 
+		/* 检查当前@nd中节点的访问权限
+		   需要有可执行权限才能进入
+		   此时@nd中信息为@this的上层目录
+		*/
 		err = may_lookup(nd);
  		if (err)
 			break;
 
+		/* 当前解析的名称 */
 		len = hash_name(name, &this.hash);
 		this.name = name;
 		this.len = len;
 
+		/* 默认其是正常的普通文件 */
 		type = LAST_NORM;
+		/* 检查路径名称是否为'..' 或 '.' */
 		if (name[0] == '.') switch (len) {
+			/* 是2个'.'，尝试返回到上层目录 */
 			case 2:
 				if (name[1] == '.') {
 					type = LAST_DOTDOT;
 					nd->flags |= LOOKUP_JUMPED;
 				}
 				break;
+			/* 是1个'.'，表示当前目录，继续下个部分 */
 			case 1:
 				type = LAST_DOT;
 		}
+		/* 正常的路径名称 */
 		if (likely(type == LAST_NORM)) {
+			/* 当前路径名称所在的目录 */
 			struct dentry *parent = nd->path.dentry;
 			nd->flags &= ~LOOKUP_JUMPED;
+			/* 计算哈希值 */
 			if (unlikely(parent->d_flags & DCACHE_OP_HASH)) {
 				err = parent->d_op->d_hash(parent, nd->inode,
 							   &this);
@@ -1760,19 +1806,29 @@ static int link_path_walk(const char *name, struct nameidata *nd)
 			}
 		}
 
+		/* 路径解析结束 */
 		if (!name[len])
 			goto last_component;
 		/*
 		 * If it wasn't NUL, we know it was '/'. Skip that
 		 * slash, and continue until no more slashes.
 		 */
+		/* 进入下个部分的解析
+		   其应该是一个'/'
+		   也可以有多个'/'
+		*/
 		do {
 			len++;
 		} while (unlikely(name[len] == '/'));
+		/* 路径是以'/'符号结束的 */
 		if (!name[len])
 			goto last_component;
+		/* 路径下一部分 */
 		name += len;
 
+		/* 路径的下一层
+		   将当前目录的信息提取到@nd中
+		*/
 		err = walk_component(nd, &next, &this, type, LOOKUP_FOLLOW);
 		if (err < 0)
 			return err;
@@ -1782,6 +1838,10 @@ static int link_path_walk(const char *name, struct nameidata *nd)
 			if (err)
 				return err;
 		}
+		/* 可以进行查找
+		   说明当前解析的@this是一个目录
+		   则继续下一部分的解析
+		*/
 		if (can_lookup(nd->inode))
 			continue;
 		err = -ENOTDIR; 
@@ -1789,6 +1849,7 @@ static int link_path_walk(const char *name, struct nameidata *nd)
 		/* here ends the main loop */
 
 last_component:
+		/* 路径的最后一部分 */
 		nd->last = this;
 		nd->last_type = type;
 		return 0;
@@ -1797,6 +1858,11 @@ last_component:
 	return err;
 }
 
+/*
+初始化路径查找的信息@nd
+例如从根目录开始
+从进程运行时的当前路径开始
+*/
 static int path_init(int dfd, const char *name, unsigned int flags,
 		     struct nameidata *nd, struct file **fp)
 {
@@ -1829,7 +1895,9 @@ static int path_init(int dfd, const char *name, unsigned int flags,
 
 	nd->root.mnt = NULL;
 
+	/* 绝对路径，从根目录开始 */
 	if (*name=='/') {
+		/* 设置@nd的root */
 		if (flags & LOOKUP_RCU) {
 			lock_rcu_walk();
 			set_root_rcu(nd);
@@ -1837,8 +1905,13 @@ static int path_init(int dfd, const char *name, unsigned int flags,
 			set_root(nd);
 			path_get(&nd->root);
 		}
+		/* 从root开始 */
 		nd->path = nd->root;
 	} else if (dfd == AT_FDCWD) {
+	/* 从当前路径开始
+	   取进程的当前路径
+	   设置@nd->path为当前路径
+	*/
 		if (flags & LOOKUP_RCU) {
 			struct fs_struct *fs = current->fs;
 			unsigned seq;
@@ -2556,6 +2629,14 @@ looked_up:
  * FILE_CREATE will be set in @*opened if the dentry was created and will be
  * cleared otherwise prior to returning.
  */
+/*
+@nd	:
+@path	: 保存找到或创建的结果
+@file	:
+@op	:
+@got_write	:
+@opened	: 新创建的标记FILE_CREATED
+*/
 static int lookup_open(struct nameidata *nd, struct path *path,
 			struct file *file,
 			const struct open_flags *op,
@@ -2573,6 +2654,7 @@ static int lookup_open(struct nameidata *nd, struct path *path,
 		return PTR_ERR(dentry);
 
 	/* Cached positive dentry: will open in f_op->open */
+	/* 找到对应的目录项缓存 */
 	if (!need_lookup && dentry->d_inode)
 		goto out_no_open;
 
@@ -2605,6 +2687,7 @@ static int lookup_open(struct nameidata *nd, struct path *path,
 			error = -EROFS;
 			goto out_dput;
 		}
+		/* 标记是新创建的 */
 		*opened |= FILE_CREATED;
 		error = security_path_mknod(&nd->path, dentry, mode, 0);
 		if (error)
@@ -2631,8 +2714,10 @@ static int do_last(struct nameidata *nd, struct path *path,
 		   struct file *file, const struct open_flags *op,
 		   int *opened, const char *pathname)
 {
+	/* 路径名称最后一个部分所在的目录 */
 	struct dentry *dir = nd->path.dentry;
 	int open_flag = op->open_flag;
+	/* 是否截断 */
 	bool will_truncate = (open_flag & O_TRUNC) != 0;
 	bool got_write = false;
 	int acc_mode = op->acc_mode;
@@ -2670,6 +2755,9 @@ static int do_last(struct nameidata *nd, struct path *path,
 		goto finish_open;
 	}
 
+	/* 没有设置O_CREAT标志
+	   未找到的话，不创建
+	*/
 	if (!(open_flag & O_CREAT)) {
 		if (nd->last.name[nd->last.len])
 			nd->flags |= LOOKUP_FOLLOW | LOOKUP_DIRECTORY;
@@ -2703,6 +2791,7 @@ static int do_last(struct nameidata *nd, struct path *path,
 	}
 
 retry_lookup:
+	/* 这些标志位需要有写权限 */
 	if (op->open_flag & (O_CREAT | O_TRUNC | O_WRONLY | O_RDWR)) {
 		error = mnt_want_write(nd->path.mnt);
 		if (!error)
@@ -2729,6 +2818,7 @@ retry_lookup:
 		goto opened;
 	}
 
+	/* 在lookup_open()新创建的 */
 	if (*opened & FILE_CREATED) {
 		/* Don't check for write permission, don't truncate */
 		open_flag &= ~O_TRUNC;
@@ -2875,6 +2965,10 @@ stale_open:
 	goto retry_lookup;
 }
 
+/*
+返回找到
+或新创建的file
+*/
 static struct file *path_openat(int dfd, const char *pathname,
 		struct nameidata *nd, const struct open_flags *op, int flags)
 {
@@ -2899,6 +2993,7 @@ static struct file *path_openat(int dfd, const char *pathname,
 	if (unlikely(error))
 		goto out;
 
+	/* 路径的最后一部分 */
 	error = do_last(nd, &path, file, op, &opened, pathname);
 	while (unlikely(error > 0)) { /* trailing symlink */
 		struct path link = path;
@@ -2925,8 +3020,11 @@ out:
 		path_put(&nd->root);
 	if (base)
 		fput(base);
+	/* 没有打开文件 */
 	if (!(opened & FILE_OPENED)) {
+		/* 应该有错误码 */
 		BUG_ON(!error);
+		/* 释放file */
 		put_filp(file);
 	}
 	if (unlikely(error)) {
@@ -2950,6 +3048,9 @@ out:
 struct file *do_filp_open(int dfd, const char *pathname,
 		const struct open_flags *op, int flags)
 {
+	/* 局部变量结构
+	   用于辅助查找
+	*/
 	struct nameidata nd;
 	struct file *filp;
 

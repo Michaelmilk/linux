@@ -14,20 +14,35 @@ enum { MAX_NESTED_LINKS = 8 };
 这是一个临时结构，仅仅用在寻找目标节点的过程中。
 */
 struct nameidata {
+	/* 上层目录 */
 	struct path	path;
+	/* 路径的最后一个部分 */
 	struct qstr	last;
+	/* 已安装文件系统的根目录 */
 	struct path	root;
+	/* 第一个字段@path的path.dentry.d_inode */
 	struct inode	*inode; /* path.dentry.d_inode */
+	/* 查找标志 */
 	unsigned int	flags;
 	unsigned	seq;
+	/* 路径名称最后一部分的类型 */
 	int		last_type;
+	/* 符号链接的嵌套深度 */
 	unsigned	depth;
+	/* 与嵌套的符号链接关联的路径名数组 */
 	char *saved_names[MAX_NESTED_LINKS + 1];
 };
 
 /*
  * Type of the last component on LOOKUP_PARENT
  */
+/*
+@LAST_NORM	: 最后一个部分是普通文件名
+@LAST_ROOT	: '/'
+@LAST_DOT	: '.'
+@LAST_DOTDOT	: '..'
+@LAST_BIND	: 符号链接
+*/
 enum {LAST_NORM, LAST_ROOT, LAST_DOT, LAST_DOTDOT, LAST_BIND};
 
 /*
@@ -39,7 +54,9 @@ enum {LAST_NORM, LAST_ROOT, LAST_DOT, LAST_DOTDOT, LAST_BIND};
  *  - dentry cache is untrusted; force a real lookup
  *  - suppress terminal automount
  */
+/* 路径最后一个部分是链接，则继续跟踪该链接 */
 #define LOOKUP_FOLLOW		0x0001
+/* 路径最后一个部分必须是目录 */
 #define LOOKUP_DIRECTORY	0x0002
 #define LOOKUP_AUTOMOUNT	0x0004
 
@@ -50,7 +67,9 @@ enum {LAST_NORM, LAST_ROOT, LAST_DOT, LAST_DOTDOT, LAST_BIND};
 /*
  * Intent data
  */
+/* 试图打开一个文件 */
 #define LOOKUP_OPEN		0x0100
+/* 试图创建一个文件 */
 #define LOOKUP_CREATE		0x0200
 #define LOOKUP_EXCL		0x0400
 #define LOOKUP_RENAME_TARGET	0x0800

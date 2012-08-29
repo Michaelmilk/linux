@@ -121,6 +121,7 @@ struct file *get_empty_filp(void)
 			goto over;
 	}
 
+	/* 从缓存中分配一个file结构 */
 	f = kmem_cache_zalloc(filp_cachep, GFP_KERNEL);
 	if (f == NULL)
 		goto fail;
@@ -421,6 +422,9 @@ struct file *fget_light(unsigned int fd, int *fput_needed)
 	return file;
 }
 
+/*
+取描述符@fd对应的file结构
+*/
 struct file *fget_raw_light(unsigned int fd, int *fput_needed)
 {
 	struct file *file;

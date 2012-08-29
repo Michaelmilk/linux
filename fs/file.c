@@ -460,6 +460,7 @@ struct files_struct init_files = {
 */
 int alloc_fd(unsigned start, unsigned flags)
 {
+	/* 取当前进程的文件控制结构 */
 	struct files_struct *files = current->files;
 	unsigned int fd;
 	int error;
@@ -467,6 +468,7 @@ int alloc_fd(unsigned start, unsigned flags)
 
 	spin_lock(&files->file_lock);
 repeat:
+	/* 文件描述符表 */
 	fdt = files_fdtable(files);
 	fd = start;
 	if (fd < files->next_fd)
@@ -489,6 +491,7 @@ repeat:
 	if (start <= files->next_fd)
 		files->next_fd = fd + 1;
 
+	/* 在位图上标记 */
 	__set_open_fd(fd, fdt);
 	if (flags & O_CLOEXEC)
 		__set_close_on_exec(fd, fdt);

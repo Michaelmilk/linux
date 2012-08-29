@@ -70,6 +70,13 @@ static inline int atomic_inc_not_zero_hint(atomic_t *v, int hint)
 #endif
 
 #ifndef atomic_inc_unless_negative
+/*
+如果@p->counter不是负数，即大于等于0
+则原子增1，返回1
+
+如果是负数
+则不变，返回0
+*/
 static inline int atomic_inc_unless_negative(atomic_t *p)
 {
 	int v, v1;
@@ -83,6 +90,13 @@ static inline int atomic_inc_unless_negative(atomic_t *p)
 #endif
 
 #ifndef atomic_dec_unless_positive
+/*
+如果@p->counter不是正数，即小于等于0
+则原子减1，返回1
+
+如果是正数
+则不变，返回0
+*/
 static inline int atomic_dec_unless_positive(atomic_t *p)
 {
 	int v, v1;

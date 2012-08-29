@@ -15,26 +15,44 @@
  * When introducing new O_* bits, please check its uniqueness in fcntl_init().
  */
 
+/*
+octonary:八进制的
+
+下面这些标志是8进制的
+*/
+
+/* 读写文件操作时，用于取出flag的低2位 */
 #define O_ACCMODE	00000003
+/* 只读打开 */
 #define O_RDONLY	00000000
+/* 只写打开 */
 #define O_WRONLY	00000001
+/* 读写打开 */
 #define O_RDWR		00000002
 #ifndef O_CREAT
+/* 创建 */
 #define O_CREAT		00000100	/* not fcntl */
 #endif
 #ifndef O_EXCL
+/* 如果已经存在的话，则报错
+exclusive
+*/
 #define O_EXCL		00000200	/* not fcntl */
 #endif
 #ifndef O_NOCTTY
+/* 如果@pathname指的是终端设备，则不将此设备分配作为此进程的控制终端 */
 #define O_NOCTTY	00000400	/* not fcntl */
 #endif
 #ifndef O_TRUNC
+/* 截断为0 */
 #define O_TRUNC		00001000	/* not fcntl */
 #endif
 #ifndef O_APPEND
+/* 追加模式 */
 #define O_APPEND	00002000
 #endif
 #ifndef O_NONBLOCK
+/* 非阻塞 */
 #define O_NONBLOCK	00004000
 #endif
 #ifndef O_DSYNC
@@ -59,6 +77,7 @@
 #define O_NOATIME	01000000
 #endif
 #ifndef O_CLOEXEC
+/* 调用exec()函数成功后，文件描述符会自动关闭 */
 #define O_CLOEXEC	02000000	/* set close_on_exec */
 #endif
 
@@ -81,6 +100,15 @@
 #endif
 
 #ifndef O_PATH
+/*
+[PATCH -V26 12/16] vfs: Add O_PATH open flag
+
+This flag can be used to get a descriptor that is used only
+for fetching file attributes. We can get a O_PATH descriptor for even symlink.
+A attempt to do any file system operation like read/write/lseek/ioctl will all
+fail with EBADF
+
+*/
 #define O_PATH		010000000
 #endif
 

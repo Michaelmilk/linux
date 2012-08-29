@@ -58,14 +58,22 @@ struct inodes_stat_t {
 
 #define NR_FILE  8192	/* this can well be larger on a larger system */
 
+/* 0001b */
 #define MAY_EXEC		0x00000001
+/* 0010b */
 #define MAY_WRITE		0x00000002
+/* 0100b */
 #define MAY_READ		0x00000004
+/* 1000b */
 #define MAY_APPEND		0x00000008
+/* 00010000b */
 #define MAY_ACCESS		0x00000010
+/* 00100000b */
 #define MAY_OPEN		0x00000020
+/* 01000000b */
 #define MAY_CHDIR		0x00000040
 /* called from RCU mode, don't block */
+/* 10000000b */
 #define MAY_NOT_BLOCK		0x00000080
 
 /*
@@ -772,6 +780,9 @@ struct posix_acl;
 #define ACL_NOT_CACHED ((void *)(-1))
 
 #define IOP_FASTPERM	0x0001
+/* 在can_lookup()通过这个bit位加速对lookup函数的判断
+降低了cache miss带来的损失
+*/
 #define IOP_LOOKUP	0x0002
 #define IOP_NOFOLLOW	0x0004
 
@@ -3064,6 +3075,14 @@ int __init get_filesystem_list(char *buf);
 #define __FMODE_EXEC		((__force int) FMODE_EXEC)
 #define __FMODE_NONOTIFY	((__force int) FMODE_NONOTIFY)
 
+/*
+字符串常量作为数组使用
+对应返回8进制数
+004 =>	MAY_READ			O_RDONLY
+002 =>	MAY_WRITE			O_WRONLY
+006 =>	(MAY_READ | MAY_WRITE)		O_RDWR
+006 =>
+*/
 #define ACC_MODE(x) ("\004\002\006\006"[(x)&O_ACCMODE])
 #define OPEN_FMODE(flag) ((__force fmode_t)(((flag + 1) & O_ACCMODE) | \
 					    (flag & __FMODE_NONOTIFY)))
