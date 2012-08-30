@@ -398,14 +398,17 @@ EXPORT_SYMBOL(fget_raw);
 struct file *fget_light(unsigned int fd, int *fput_needed)
 {
 	struct file *file;
+	/* 当前进程的文件结构 */
 	struct files_struct *files = current->files;
 
 	*fput_needed = 0;
+	/* 引用计数1，没有共享，无须锁控制 */
 	if (atomic_read(&files->count) == 1) {
 		file = fcheck_files(files, fd);
 		if (file && (file->f_mode & FMODE_PATH))
 			file = NULL;
 	} else {
+	/* 使用rcu锁控制并发 */
 		rcu_read_lock();
 		file = fcheck_files(files, fd);
 		if (file) {

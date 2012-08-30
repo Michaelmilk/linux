@@ -293,12 +293,16 @@ bad:
  * them to something that fits in "int" so that others
  * won't have to do range checks all the time.
  */
+/*
+检查@ppos与@count的合法性
+*/
 int rw_verify_area(int read_write, struct file *file, loff_t *ppos, size_t count)
 {
 	struct inode *inode;
 	loff_t pos;
 	int retval = -EINVAL;
 
+	/* @file对应的inode节点 */
 	inode = file->f_path.dentry->d_inode;
 	if (unlikely((ssize_t) count < 0))
 		return retval;
@@ -363,20 +367,33 @@ ssize_t do_sync_read(struct file *filp, char __user *buf, size_t len, loff_t *pp
 
 EXPORT_SYMBOL(do_sync_read);
 
+/*
+@file	: 文件指针
+@buf	: 保存数据的buf
+@count	: 需要读取的字符数
+@pos	: 保存读取完成后的位置偏移
+*/
 ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 {
 	ssize_t ret;
 
+	/* 没有读权限 */
 	if (!(file->f_mode & FMODE_READ))
 		return -EBADF;
+	/* 没有文件操作函数
+	   或者没有读函数
+	*/
 	if (!file->f_op || (!file->f_op->read && !file->f_op->aio_read))
 		return -EINVAL;
+	/* 确认@buf在用户进程虚拟地址空间 */
 	if (unlikely(!access_ok(VERIFY_WRITE, buf, count)))
 		return -EFAULT;
 
 	ret = rw_verify_area(READ, file, pos, count);
+	/* 可以进行读操作 */
 	if (ret >= 0) {
 		count = ret;
+		/* 读数据 */
 		if (file->f_op->read)
 			ret = file->f_op->read(file, buf, count, pos);
 		else
@@ -385,6 +402,7 @@ ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 			fsnotify_access(file);
 			add_rchar(current, ret);
 		}
+		/* 增加系统调用读计数 */
 		inc_syscr(current);
 	}
 
@@ -459,16 +477,23 @@ static inline void file_pos_write(struct file *file, loff_t pos)
 	file->f_pos = pos;
 }
 
+/*
+系统调用read
+sys_read
+*/
 SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
 {
 	struct file *file;
+	/* 默认错误码 */
 	ssize_t ret = -EBADF;
 	int fput_needed;
 
+	/* 取@fd对应的file */
 	file = fget_light(fd, &fput_needed);
 	if (file) {
 		loff_t pos = file_pos_read(file);
 		ret = vfs_read(file, buf, count, &pos);
+		/* 更新文件的读写位置 */
 		file_pos_write(file, pos);
 		fput_light(file, fput_needed);
 	}

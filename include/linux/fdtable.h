@@ -114,6 +114,9 @@ static inline void free_fdtable(struct fdtable *fdt)
 	call_rcu(&fdt->rcu, free_fdtable_rcu);
 }
 
+/*
+取@fd对应的file结构
+*/
 static inline struct file * fcheck_files(struct files_struct *files, unsigned int fd)
 {
 	struct file * file = NULL;
