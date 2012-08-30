@@ -807,6 +807,7 @@ static void __put_unused_fd(struct files_struct *files, unsigned int fd)
 {
 	struct fdtable *fdt = files_fdtable(files);
 	__clear_open_fd(fd, fdt);
+	/* 记为下一个可用的fd */
 	if (fd < files->next_fd)
 		files->next_fd = fd;
 }
@@ -1036,6 +1037,7 @@ int filp_close(struct file *filp, fl_owner_t id)
 		return 0;
 	}
 
+	/* 先调用flush将数据写磁盘 */
 	if (filp->f_op && filp->f_op->flush)
 		retval = filp->f_op->flush(filp, id);
 
@@ -1054,6 +1056,10 @@ EXPORT_SYMBOL(filp_close);
  * releasing the fd. This ensures that one clone task can't release
  * an fd while another clone is opening it.
  */
+/*
+系统调用close
+sys_close
+*/
 SYSCALL_DEFINE1(close, unsigned int, fd)
 {
 	struct file * filp;
@@ -1065,6 +1071,7 @@ SYSCALL_DEFINE1(close, unsigned int, fd)
 	fdt = files_fdtable(files);
 	if (fd >= fdt->max_fds)
 		goto out_unlock;
+	/* @fd对应的file */
 	filp = fdt->fd[fd];
 	if (!filp)
 		goto out_unlock;

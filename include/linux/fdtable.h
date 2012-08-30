@@ -55,6 +55,9 @@ static inline void __set_open_fd(int fd, struct fdtable *fdt)
 	__set_bit(fd, fdt->open_fds);
 }
 
+/*
+清除@fd对应的bit位
+*/
 static inline void __clear_open_fd(int fd, struct fdtable *fdt)
 {
 	__clear_bit(fd, fdt->open_fds);
