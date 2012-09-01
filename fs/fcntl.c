@@ -129,18 +129,28 @@ SYSCALL_DEFINE2(dup2, unsigned int, oldfd, unsigned int, newfd)
 	return sys_dup3(oldfd, newfd, 0);
 }
 
+/*
+系统调用dup
+sys_dup
+复制一个文件描述符
+分配一个新的fd
+与原@fildes对应的file结构
+建立映射
+*/
 SYSCALL_DEFINE1(dup, unsigned int, fildes)
 {
 	int ret = -EBADF;
 	struct file *file = fget_raw(fildes);
 
 	if (file) {
+		/* 取一个未使用的fd */
 		ret = get_unused_fd();
 		if (ret >= 0)
 			fd_install(ret, file);
 		else
 			fput(file);
 	}
+	/* 返回复制的新描述符 */
 	return ret;
 }
 

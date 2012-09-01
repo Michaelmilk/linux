@@ -372,6 +372,9 @@ struct file *fget(unsigned int fd)
 
 EXPORT_SYMBOL(fget);
 
+/*
+取@fd对应的file结构
+*/
 struct file *fget_raw(unsigned int fd)
 {
 	struct file *file;
@@ -381,6 +384,9 @@ struct file *fget_raw(unsigned int fd)
 	file = fcheck_files(files, fd);
 	if (file) {
 		/* File object ref couldn't be taken */
+		/* 增加引用计数
+		   如果已经为0了的话，则不增，其可能已经等待被释放了
+		*/
 		if (!atomic_long_inc_not_zero(&file->f_count))
 			file = NULL;
 	}
