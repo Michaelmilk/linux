@@ -66,6 +66,9 @@ SYSCALL_DEFINE3(dup3, unsigned int, oldfd, unsigned int, newfd, int, flags)
 
 	spin_lock(&files->file_lock);
 	err = expand_files(files, newfd);
+	/* 取@oldfd对应的file结构
+	   检查@oldfd是否有效
+	*/
 	file = fcheck(oldfd);
 	if (unlikely(!file))
 		goto Ebadf;
@@ -93,7 +96,9 @@ SYSCALL_DEFINE3(dup3, unsigned int, oldfd, unsigned int, newfd, int, flags)
 	tofree = fdt->fd[newfd];
 	if (!tofree && fd_is_open(newfd, fdt))
 		goto out_unlock;
+	/* 增加@oldfd对应file的引用计数 */
 	get_file(file);
+	/* @newfd对应file */
 	rcu_assign_pointer(fdt->fd[newfd], file);
 	__set_open_fd(newfd, fdt);
 	if (flags & O_CLOEXEC)
@@ -102,9 +107,11 @@ SYSCALL_DEFINE3(dup3, unsigned int, oldfd, unsigned int, newfd, int, flags)
 		__clear_close_on_exec(newfd, fdt);
 	spin_unlock(&files->file_lock);
 
+	/* 关闭@oldfd对应的file结构 */
 	if (tofree)
 		filp_close(tofree, files);
 
+	/* 返回新的文件描述符 */
 	return newfd;
 
 Ebadf:
@@ -114,8 +121,16 @@ out_unlock:
 	return err;
 }
 
+/*
+系统调用dup2
+sys_dup2
+返回@newfd，如果其原来已经打开，则会关闭它
+*/
 SYSCALL_DEFINE2(dup2, unsigned int, oldfd, unsigned int, newfd)
 {
+	/* 新旧描述符一样
+	   检查旧描述符，可用的话返回描述符
+	*/
 	if (unlikely(newfd == oldfd)) { /* corner case */
 		struct files_struct *files = current->files;
 		int retval = oldfd;
