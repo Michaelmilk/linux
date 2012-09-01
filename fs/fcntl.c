@@ -51,6 +51,13 @@ static bool get_close_on_exec(unsigned int fd)
 	return res;
 }
 
+/*
+系统调用dup3
+sys_dup3
+比dup2多一个@flags参数
+该函数不允许@oldfd与@newfd相等
+返回@newfd
+*/
 SYSCALL_DEFINE3(dup3, unsigned int, oldfd, unsigned int, newfd, int, flags)
 {
 	int err = -EBADF;
