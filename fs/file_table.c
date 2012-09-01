@@ -413,6 +413,10 @@ EXPORT_SYMBOL(fget_raw);
  * The fput_needed flag returned by fget_light should be passed to the
  * corresponding fput_light.
  */
+/*
+@fd		:
+@fput_needed	: 标记是否需要调用fput_light() => fput()
+*/
 struct file *fget_light(unsigned int fd, int *fput_needed)
 {
 	struct file *file;

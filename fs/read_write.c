@@ -295,6 +295,8 @@ bad:
  */
 /*
 检查@ppos与@count的合法性
+
+返回@count
 */
 int rw_verify_area(int read_write, struct file *file, loff_t *ppos, size_t count)
 {
@@ -441,16 +443,20 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 {
 	ssize_t ret;
 
+	/* 没有写权限 */
 	if (!(file->f_mode & FMODE_WRITE))
 		return -EBADF;
+	/* 没有写函数 */
 	if (!file->f_op || (!file->f_op->write && !file->f_op->aio_write))
 		return -EINVAL;
+	/* 检查用户传递的@buf地址空间是否有效 */
 	if (unlikely(!access_ok(VERIFY_READ, buf, count)))
 		return -EFAULT;
 
 	ret = rw_verify_area(WRITE, file, pos, count);
 	if (ret >= 0) {
 		count = ret;
+		/* 写数据 */
 		if (file->f_op->write)
 			ret = file->f_op->write(file, buf, count, pos);
 		else
@@ -467,11 +473,17 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 
 EXPORT_SYMBOL(vfs_write);
 
+/*
+读取文件当前的读写位置
+*/
 static inline loff_t file_pos_read(struct file *file)
 {
 	return file->f_pos;
 }
 
+/*
+设置文件的读写位置
+*/
 static inline void file_pos_write(struct file *file, loff_t pos)
 {
 	file->f_pos = pos;
@@ -501,6 +513,11 @@ SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
 	return ret;
 }
 
+/*
+系统调用write
+sys_write
+
+*/
 SYSCALL_DEFINE3(write, unsigned int, fd, const char __user *, buf,
 		size_t, count)
 {
