@@ -36,9 +36,13 @@
  * Of course, your mileage may vary.
  */
 #define MAX_RCU_LVLS 4
+/* 16 */
 #define RCU_FANOUT_1	      (CONFIG_RCU_FANOUT_LEAF)
+/* (16 * 64) */
 #define RCU_FANOUT_2	      (RCU_FANOUT_1 * CONFIG_RCU_FANOUT)
+/* (16 * 64 * 64) */
 #define RCU_FANOUT_3	      (RCU_FANOUT_2 * CONFIG_RCU_FANOUT)
+/* (16 * 64 * 64 * 64) */
 #define RCU_FANOUT_4	      (RCU_FANOUT_3 * CONFIG_RCU_FANOUT)
 
 #if NR_CPUS <= RCU_FANOUT_1
@@ -51,7 +55,9 @@
 #elif NR_CPUS <= RCU_FANOUT_2
 #  define RCU_NUM_LVLS	      2
 #  define NUM_RCU_LVL_0	      1
+/* (64 / 16) = 4 */
 #  define NUM_RCU_LVL_1	      DIV_ROUND_UP(NR_CPUS, RCU_FANOUT_1)
+/* 64 */
 #  define NUM_RCU_LVL_2	      (NR_CPUS)
 #  define NUM_RCU_LVL_3	      0
 #  define NUM_RCU_LVL_4	      0
@@ -73,10 +79,14 @@
 # error "CONFIG_RCU_FANOUT insufficient for NR_CPUS"
 #endif /* #if (NR_CPUS) <= RCU_FANOUT_1 */
 
+/* 1 + 4 + 64 + 0 + 0 = 69 */
 #define RCU_SUM (NUM_RCU_LVL_0 + NUM_RCU_LVL_1 + NUM_RCU_LVL_2 + NUM_RCU_LVL_3 + NUM_RCU_LVL_4)
+/* 69 - 64 = 5 */
 #define NUM_RCU_NODES (RCU_SUM - NR_CPUS)
 
+/* RCU_NUM_LVLS = 2 */
 extern int rcu_num_lvls;
+/* NUM_RCU_NODES = 5 */
 extern int rcu_num_nodes;
 
 /*
@@ -144,7 +154,11 @@ struct rcu_node {
 	int	grplo;		/* lowest-numbered CPU or group here. */
 	int	grphi;		/* highest-numbered CPU or group here. */
 	u8	grpnum;		/* CPU/group number for next level up. */
+	/* 该节点所在的层级
+	   根从0级开始
+	*/
 	u8	level;		/* root is at level 0. */
+	/* 上层节点 */
 	struct rcu_node *parent;
 	struct list_head blkd_tasks;
 				/* Tasks blocked in RCU read-side critical */
@@ -238,6 +252,9 @@ struct rcu_node {
 #define RCU_NEXT_TAIL		3
 #define RCU_NEXT_SIZE		4
 
+/*
+每cpu变量rcu_sched_data结构
+*/
 /* Per-CPU data for read-copy update. */
 struct rcu_data {
 	/* 1) quiescent-state and grace-period handling : */
@@ -363,10 +380,26 @@ do {									\
  * consisting of a single rcu_node.
  */
 struct rcu_state {
+	/* 使用的rcu_node节点 */
 	struct rcu_node node[NUM_RCU_NODES];	/* Hierarchy. */
+	/* 实例由RCU_STATE_INITIALIZER初始化时
+	   level[0]指向node[0]
+	*/
 	struct rcu_node *level[RCU_NUM_LVLS];	/* Hierarchy levels. */
+	/* 每一级中rcu_node节点的个数
+	   level 0 => 1
+	   level 1 => 4
+	*/
 	u32 levelcnt[MAX_RCU_LVLS + 1];		/* # nodes in each level. */
+	/* 每一级rcu_node节点的子节点个数
+	   0 => 4
+	   1 => 16
+	*/
 	u8 levelspread[RCU_NUM_LVLS];		/* kids/node in each level. */
+	/* 调用rcu_init_one()初始化时
+	   rcu_sched_state.rda => rcu_sched_data
+	   rcu_bh_state.rda => rcu_bh_data
+	*/
 	struct rcu_data __percpu *rda;		/* pointer of percu rcu_data. */
 	void (*call)(struct rcu_head *head,	/* call_rcu() flavor. */
 		     void (*func)(struct rcu_head *head));

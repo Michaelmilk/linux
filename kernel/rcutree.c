@@ -62,6 +62,9 @@
 
 static struct lock_class_key rcu_node_class[RCU_NUM_LVLS];
 
+/*
+初始化一个rcu_state结构实例
+*/
 #define RCU_STATE_INITIALIZER(sname, cr) { \
 	.level = { &sname##_state.node[0] }, \
 	.call = cr, \
@@ -76,20 +79,31 @@ static struct lock_class_key rcu_node_class[RCU_NUM_LVLS];
 	.name = #sname, \
 }
 
+/*
+全局变量
+*/
 struct rcu_state rcu_sched_state =
 	RCU_STATE_INITIALIZER(rcu_sched, call_rcu_sched);
+/* 每cpu的rcu_data */
 DEFINE_PER_CPU(struct rcu_data, rcu_sched_data);
 
 struct rcu_state rcu_bh_state = RCU_STATE_INITIALIZER(rcu_bh, call_rcu_bh);
 DEFINE_PER_CPU(struct rcu_data, rcu_bh_data);
 
 static struct rcu_state *rcu_state;
+/*
+rcu_sched_state和rcu_bh_state
+在rcu_init_one()中通过字段flavors链入这个链表
+*/
 LIST_HEAD(rcu_struct_flavors);
 
 /* Increase (but not decrease) the CONFIG_RCU_FANOUT_LEAF at boot time. */
 static int rcu_fanout_leaf = CONFIG_RCU_FANOUT_LEAF;
 module_param(rcu_fanout_leaf, int, 0);
 int rcu_num_lvls __read_mostly = RCU_NUM_LVLS;
+/*
+1 4 64 0 0
+*/
 static int num_rcu_lvl[] = {  /* Number of rcu_nodes at specified level. */
 	NUM_RCU_LVL_0,
 	NUM_RCU_LVL_1,
@@ -1633,6 +1647,12 @@ static void rcu_do_batch(struct rcu_state *rsp, struct rcu_data *rdp)
  * invoked from the scheduling-clock interrupt.  If rcu_pending returns
  * false, there is no point in invoking rcu_check_callbacks().
  */
+/*
+每个时钟中断到来时调用
+
+检查cpu是否处于一个非上下文切换的静止态
+
+*/
 void rcu_check_callbacks(int cpu, int user)
 {
 	trace_rcu_utilization("Start scheduler-tick");
@@ -2680,6 +2700,7 @@ static void __init rcu_init_one(struct rcu_state *rsp,
 			       "rcu_node_level_1",
 			       "rcu_node_level_2",
 			       "rcu_node_level_3" };  /* Match MAX_RCU_LVLS */
+	/* stride:步幅 */
 	int cpustride = 1;
 	int i;
 	int j;
@@ -2689,8 +2710,12 @@ static void __init rcu_init_one(struct rcu_state *rsp,
 
 	/* Initialize the level-tracking arrays. */
 
+	/* 设置每一级中rcu_node节点个数 */
 	for (i = 0; i < rcu_num_lvls; i++)
 		rsp->levelcnt[i] = num_rcu_lvl[i];
+	/* 设置level指针
+	   构成堆
+	*/
 	for (i = 1; i < rcu_num_lvls; i++)
 		rsp->level[i] = rsp->level[i - 1] + rsp->levelcnt[i - 1];
 	rcu_init_levelspread(rsp);
@@ -2707,7 +2732,9 @@ static void __init rcu_init_one(struct rcu_state *rsp,
 			rnp->gpnum = 0;
 			rnp->qsmask = 0;
 			rnp->qsmaskinit = 0;
+			/* 该节点下表示的cpu起始值 */
 			rnp->grplo = j * cpustride;
+			/* 该节点下表示的cpu结束值 */
 			rnp->grphi = (j + 1) * cpustride - 1;
 			if (rnp->grphi >= NR_CPUS)
 				rnp->grphi = NR_CPUS - 1;
@@ -2750,6 +2777,10 @@ static void __init rcu_init_geometry(void)
 	int rcu_capacity[MAX_RCU_LVLS + 1];
 
 	/* If the compile-time values are accurate, just leave. */
+	/* 与编译时定义的宏一致
+	   无须再进行计算
+	   各个值已经由宏展开
+	*/
 	if (rcu_fanout_leaf == CONFIG_RCU_FANOUT_LEAF)
 		return;
 
@@ -2801,6 +2832,7 @@ void __init rcu_init(void)
 {
 	int cpu;
 
+	/* 打印所使用的rcu机制信息 */
 	rcu_bootup_announce();
 	rcu_init_geometry();
 	rcu_init_one(&rcu_sched_state, &rcu_sched_data);
@@ -2813,6 +2845,7 @@ void __init rcu_init(void)
 	 * this is called early in boot, before either interrupts
 	 * or the scheduler are operational.
 	 */
+	/* 注册cpu通知链 */
 	cpu_notifier(rcu_cpu_notify, 0);
 	for_each_online_cpu(cpu)
 		rcu_cpu_notify(NULL, CPU_UP_PREPARE, (void *)(long)cpu);

@@ -170,6 +170,9 @@ static inline void __rcu_read_unlock(void)
 	preempt_enable();
 }
 
+/*
+等待之前的读者全部退出
+*/
 static inline void synchronize_rcu(void)
 {
 	synchronize_sched();
@@ -507,6 +510,11 @@ static inline void rcu_preempt_sleep_check(void)
 		smp_read_barrier_depends(); \
 		(_________p1); \
 	})
+/*
+指针的赋值是原子操作
+为了保持cache一致性
+加上写内存屏障
+*/
 #define __rcu_assign_pointer(p, v, space) \
 	do { \
 		smp_wmb(); \
@@ -656,6 +664,9 @@ static inline void rcu_preempt_sleep_check(void)
  *
  * This is a simple wrapper around rcu_dereference_check().
  */
+/*
+获取一个受rcu保护的指针
+*/
 #define rcu_dereference(p) rcu_dereference_check(p, 0)
 
 /**
@@ -716,6 +727,13 @@ static inline void rcu_preempt_sleep_check(void)
  * block, but only when acquiring spinlocks that are subject to priority
  * inheritance.
  */
+/*
+标记rcu读者临界区的开始
+
+禁止抢占
+不允许发生上下文切换
+
+*/
 static inline void rcu_read_lock(void)
 {
 	__rcu_read_lock();
@@ -862,6 +880,9 @@ static inline notrace void rcu_read_unlock_sched_notrace(void)
  * impossible-to-diagnose memory corruption.  So please be careful.
  * See the RCU_INIT_POINTER() comment header for details.
  */
+/*
+为受rcu保护的指针@p分配一个新值@v
+*/
 #define rcu_assign_pointer(p, v) \
 	__rcu_assign_pointer((p), (v), __rcu)
 

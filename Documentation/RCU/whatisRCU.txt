@@ -34,21 +34,21 @@ some point.  People who prefer to start with an API that they can then
 experiment with should focus on Section 2.  People who prefer to start
 with example uses should focus on Sections 3 and 4.  People who need to
 understand the RCU implementation should focus on Section 5, then dive
-into the kernel source code.  People who reason best by analogy should
+into the kernel source code.  People who reason best by analogy(类比) should
 focus on Section 6.  Section 7 serves as an index to the docbook API
 documentation, and Section 8 is the traditional answer key.
 
 So, start with the section that makes the most sense to you and your
 preferred method of learning.  If you need to know everything about
 everything, feel free to read the whole thing -- but if you are really
-that type of person, you have perused the source code and will therefore
+that type of person, you have perused(精读) the source code and will therefore
 never need this document anyway.  ;-)
 
 
 1.  RCU OVERVIEW
 
 The basic idea behind RCU is to split updates into "removal" and
-"reclamation" phases.  The removal phase removes references to data items
+"reclamation"(回收) phases.  The removal phase removes references to data items
 within a data structure (possibly by replacing them with references to
 new versions of these data items), and can run concurrently with readers.
 The reason that it is safe to run the removal phase concurrently with
@@ -61,13 +61,13 @@ concurrently referencing those data items, the reclamation phase must
 not start until readers no longer hold references to those data items.
 
 Splitting the update into removal and reclamation phases permits the
-updater to perform the removal phase immediately, and to defer the
+updater to perform the removal phase immediately, and to defer(推迟) the
 reclamation phase until all readers active during the removal phase have
 completed, either by blocking until they finish or by registering a
 callback that is invoked after they finish.  Only readers that are active
 during the removal phase need be considered, because any reader starting
 after the removal phase will be unable to gain a reference to the removed
-data items, and therefore cannot be disrupted by the reclamation phase.
+data items, and therefore cannot be disrupted(破坏) by the reclamation phase.
 
 So the typical RCU update sequence goes something like the following:
 
@@ -93,7 +93,7 @@ typically take advantage of the fact that writes to single aligned
 pointers are atomic on modern CPUs, allowing atomic insertion, removal,
 and replacement of data items in a linked structure without disrupting
 readers.  Concurrent RCU readers can then continue accessing the old
-versions, and can dispense with the atomic operations, memory barriers,
+versions, and can dispense(免除) with the atomic operations, memory barriers,
 and communications cache misses that are so expensive on present-day
 SMP computer systems, even in absence of lock contention.
 
@@ -172,7 +172,7 @@ synchronize_rcu()
 	 5.                     exits synchronize_rcu()
 	 6.                                              rcu_read_unlock()
 
-	To reiterate, synchronize_rcu() waits only for ongoing RCU
+	To reiterate(重申), synchronize_rcu() waits only for ongoing RCU
 	read-side critical sections to complete, not necessarily for
 	any that begin after synchronize_rcu() is invoked.
 
@@ -200,7 +200,7 @@ synchronize_rcu()
 	of the synchronize_rcu() API generally results in simpler code.
 	In addition, the synchronize_rcu() API has the nice property
 	of automatically limiting update rate should grace periods
-	be delayed.  This property results in system resilience in face
+	be delayed.  This property results in system resilience(弹性) in face
 	of denial-of-service attacks.  Code using call_rcu() should limit
 	update rate in order to gain this same sort of resilience.  See
 	checklist.txt for some approaches to limiting the update rate.
@@ -259,7 +259,7 @@ rcu_dereference()
 	ugly and incur unnecessary overhead on Alpha CPUs.
 
 	Note that the value returned by rcu_dereference() is valid
-	only within the enclosing RCU read-side critical section.
+	only within the enclosing(围住) RCU read-side critical section.
 	For example, the following is -not- legal:
 
 		rcu_read_lock();
@@ -876,7 +876,7 @@ d.	Do you need to treat NMI handlers, hardirq handlers,
 	If so, you need RCU-sched.
 
 e.	Do you need RCU grace periods to complete even in the face
-	of softirq monopolization of one or more of the CPUs?  For
+	of softirq monopolization(独占) of one or more of the CPUs?  For
 	example, is your code subject to network-based denial-of-service
 	attacks?  If so, you need RCU-bh.
 
