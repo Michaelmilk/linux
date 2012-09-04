@@ -22,8 +22,13 @@
  * and macros DECLARE_COMPLETION(), DECLARE_COMPLETION_ONSTACK(), and
  * INIT_COMPLETION().
  */
+/*
+完成量结构
+*/
 struct completion {
+	/* 用于同步的原子量 */
 	unsigned int done;
+	/* 等待队列 */
 	wait_queue_head_t wait;
 };
 
@@ -41,6 +46,9 @@ struct completion {
  * for static declarations. You should use the _ONSTACK variant for automatic
  * variables.
  */
+/*
+定义并初始化一个完成量@work
+*/
 #define DECLARE_COMPLETION(work) \
 	struct completion work = COMPLETION_INITIALIZER(work)
 
@@ -70,6 +78,9 @@ struct completion {
  * This inline function will initialize a dynamically created completion
  * structure.
  */
+/*
+初始化一个动态申请的完成量@x
+*/
 static inline void init_completion(struct completion *x)
 {
 	x->done = 0;

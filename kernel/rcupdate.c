@@ -195,6 +195,9 @@ static void wakeme_after_rcu(struct rcu_head  *head)
 	complete(&rcu->completion);
 }
 
+/*
+@crf	: call_rcu_sched() call_rcu_bh()
+*/
 void wait_rcu_gp(call_rcu_func_t crf)
 {
 	struct rcu_synchronize rcu;

@@ -3612,9 +3612,13 @@ static void __wake_up_common(wait_queue_head_t *q, unsigned int mode,
 {
 	wait_queue_t *curr, *next;
 
+	/* 遍历等待队列 */
 	list_for_each_entry_safe(curr, next, &q->task_list, task_list) {
 		unsigned flags = curr->flags;
 
+		/* 调用唤醒回调函数
+		   比如default_wake_function()
+		*/
 		if (curr->func(curr, mode, wake_flags, key) &&
 				(flags & WQ_FLAG_EXCLUSIVE) && !--nr_exclusive)
 			break;
@@ -3713,13 +3717,20 @@ EXPORT_SYMBOL_GPL(__wake_up_sync);	/* For internal use only */
  * It may be assumed that this function implies a write memory barrier before
  * changing the task state if and only if any tasks are woken up.
  */
+/*
+唤醒完成量@x等待队列中的进程
+*/
 void complete(struct completion *x)
 {
 	unsigned long flags;
 
+	/* 加锁 */
 	spin_lock_irqsave(&x->wait.lock, flags);
+	/* 加1，表示完成量已经完成 */
 	x->done++;
+	/* 唤醒等待队列中的进程 */
 	__wake_up_common(&x->wait, TASK_NORMAL, 1, 0, NULL);
+	/* 解锁 */
 	spin_unlock_irqrestore(&x->wait.lock, flags);
 }
 EXPORT_SYMBOL(complete);
@@ -3747,25 +3758,41 @@ EXPORT_SYMBOL(complete_all);
 static inline long __sched
 do_wait_for_common(struct completion *x, long timeout, int state)
 {
+	/* done为0 */
 	if (!x->done) {
+		/* 初始化当前进程的等待队列节点 */
 		DECLARE_WAITQUEUE(wait, current);
 
+		/* 加入完成量的等待队列 */
 		__add_wait_queue_tail_exclusive(&x->wait, &wait);
 		do {
 			if (signal_pending_state(state, current)) {
 				timeout = -ERESTARTSYS;
 				break;
 			}
+			/* 设置当前进程的状态 */
 			__set_current_state(state);
+			/* 解锁 */
 			spin_unlock_irq(&x->wait.lock);
+			/* 进程调度 */
 			timeout = schedule_timeout(timeout);
+			/* 加锁 */
 			spin_lock_irq(&x->wait.lock);
+		/* 当done被++后，表明完成量已经完成
+		   循环终止
+		*/
 		} while (!x->done && timeout);
+		/* 当前进程移出完成量等待队列 */
 		__remove_wait_queue(&x->wait, &wait);
+		/* 若done仍为0，则返回剩余的超时时间 */
 		if (!x->done)
 			return timeout;
 	}
+	/* done减1，此时在wait.lock的原子锁中 */
 	x->done--;
+	/* 未到设置的超时时间，则返回剩余的时间
+	   或者返回1
+	*/
 	return timeout ?: 1;
 }
 
@@ -3790,6 +3817,11 @@ wait_for_common(struct completion *x, long timeout, int state)
  * See also similar routines (i.e. wait_for_completion_timeout()) with timeout
  * and interrupt capability. Also see complete().
  */
+/*
+等待一个任务的完成
+没有超时时间
+不可中断
+*/
 void __sched wait_for_completion(struct completion *x)
 {
 	wait_for_common(x, MAX_SCHEDULE_TIMEOUT, TASK_UNINTERRUPTIBLE);
