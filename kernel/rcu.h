@@ -48,10 +48,15 @@
  * initial exit from idle.
  */
 #define DYNTICK_TASK_NEST_WIDTH 7
+/* 0x0100000000000000 */
 #define DYNTICK_TASK_NEST_VALUE ((LLONG_MAX >> DYNTICK_TASK_NEST_WIDTH) + 1)
+/* 0x7f00000000000000 */
 #define DYNTICK_TASK_NEST_MASK  (LLONG_MAX - DYNTICK_TASK_NEST_VALUE + 1)
+/* 0x0040000000000000 */
 #define DYNTICK_TASK_FLAG	   ((DYNTICK_TASK_NEST_VALUE / 8) * 2)
+/* 0x0060000000000000 */
 #define DYNTICK_TASK_MASK	   ((DYNTICK_TASK_NEST_VALUE / 8) * 3)
+/* 0x0140000000000000 */
 #define DYNTICK_TASK_EXIT_IDLE	   (DYNTICK_TASK_NEST_VALUE + \
 				    DYNTICK_TASK_FLAG)
 
@@ -94,6 +99,10 @@ static inline void debug_rcu_head_unqueue(struct rcu_head *head)
 
 extern void kfree(const void *);
 
+/*
+rcu的回收处理
+调用链表中的回调函数
+*/
 static inline bool __rcu_reclaim(char *rn, struct rcu_head *head)
 {
 	unsigned long offset = (unsigned long)head->func;

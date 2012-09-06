@@ -268,6 +268,7 @@ struct rcu_data {
 	bool		qs_pending;	/* Core waits for quiesc state. */
 	bool		beenonline;	/* CPU online at least once. */
 	bool		preemptible;	/* Preemptible RCU? */
+	/* 指向rcu_state中该cpu所属的节点 */
 	struct rcu_node *mynode;	/* This CPU's leaf of hierarchy */
 	unsigned long grpmask;		/* Mask to apply to leaf qsmask. */
 #ifdef CONFIG_RCU_CPU_STALL_INFO
@@ -322,6 +323,7 @@ struct rcu_data {
 	unsigned long offline_fqs;	/* Kicked due to being offline. */
 
 	/* 5) __rcu_pending() statistics. */
+	/* __rcu_pending()函数在该cpu上调用的次数 */
 	unsigned long n_rcu_pending;	/* rcu_pending() calls since boot. */
 	unsigned long n_rp_qs_pending;
 	unsigned long n_rp_report_qs;
@@ -456,10 +458,12 @@ struct rcu_state {
 	unsigned long gp_max;			/* Maximum GP duration in */
 						/*  jiffies. */
 	char *name;				/* Name of structure. */
+	/* 加入rcu_struct_flavors链表 */
 	struct list_head flavors;		/* List of RCU flavors. */
 };
 
 extern struct list_head rcu_struct_flavors;
+/* 遍历rcu_state的链表 */
 #define for_each_rcu_flavor(rsp) \
 	list_for_each_entry((rsp), &rcu_struct_flavors, flavors)
 

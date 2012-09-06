@@ -193,6 +193,7 @@ void rcu_sched_qs(int cpu)
 	barrier();
 	if (rdp->passed_quiesce == 0)
 		trace_rcu_grace_period("rcu_sched", rdp->gpnum, "cpuqs");
+	/* 标记该@cpu经历了一次quiescent state */
 	rdp->passed_quiesce = 1;
 }
 
@@ -212,6 +213,11 @@ void rcu_bh_qs(int cpu)
  * and requires special handling for preemptible RCU.
  * The caller must have disabled preemption.
  */
+/*
+记录一次上下文切换
+
+调用者必须关闭抢占
+*/
 void rcu_note_context_switch(int cpu)
 {
 	trace_rcu_utilization("Start context switch");
@@ -830,6 +836,9 @@ static void print_cpu_stall(struct rcu_state *rsp)
 	set_need_resched();  /* kick ourselves to get things going. */
 }
 
+/*
+检查cpu是否停转
+*/
 static void check_cpu_stall(struct rcu_state *rsp, struct rcu_data *rdp)
 {
 	unsigned long j;
@@ -1574,8 +1583,11 @@ static void rcu_do_batch(struct rcu_state *rsp, struct rcu_data *rdp)
 	WARN_ON_ONCE(cpu_is_offline(smp_processor_id()));
 	bl = rdp->blimit;
 	trace_rcu_batch_start(rsp->name, rdp->qlen_lazy, rdp->qlen, bl);
+	/* 记录nxtlist下的链表 */
 	list = rdp->nxtlist;
+	/* nxtlist指向RCU_DONE_TAIL链表 */
 	rdp->nxtlist = *rdp->nxttail[RCU_DONE_TAIL];
+	/* RCU_DONE_TAIL链表置空 */
 	*rdp->nxttail[RCU_DONE_TAIL] = NULL;
 	tail = rdp->nxttail[RCU_DONE_TAIL];
 	for (i = RCU_NEXT_SIZE - 1; i >= 0; i--)
@@ -1585,8 +1597,11 @@ static void rcu_do_batch(struct rcu_state *rsp, struct rcu_data *rdp)
 
 	/* Invoke callbacks. */
 	count = count_lazy = 0;
+	/* 遍历先前的nxtlist链表 */
 	while (list) {
+		/* 下一节点 */
 		next = list->next;
+		/* 预取 */
 		prefetch(next);
 		debug_rcu_head_unqueue(list);
 		if (__rcu_reclaim(rsp->name, list))
@@ -1605,7 +1620,9 @@ static void rcu_do_batch(struct rcu_state *rsp, struct rcu_data *rdp)
 			    rcu_is_callbacks_kthread());
 
 	/* Update count, and requeue any remaining callbacks. */
+	/* 上面遍历list时没有结束 */
 	if (list != NULL) {
+		/* 重新加入RCU_DONE_TAIL链表 */
 		*tail = rdp->nxtlist;
 		rdp->nxtlist = list;
 		for (i = 0; i < RCU_NEXT_SIZE; i++)
@@ -1649,7 +1666,7 @@ static void rcu_do_batch(struct rcu_state *rsp, struct rcu_data *rdp)
  */
 /*
 每个时钟中断到来时调用
-
+在update_process_times()中调用
 检查cpu是否处于一个非上下文切换的静止态
 
 */
@@ -1657,6 +1674,9 @@ void rcu_check_callbacks(int cpu, int user)
 {
 	trace_rcu_utilization("Start scheduler-tick");
 	increment_cpu_stall_ticks();
+	/* 时钟中断到来时处于用户态
+	   或cpu处于空闲进程
+	*/
 	if (user || rcu_is_cpu_rrupt_from_idle()) {
 
 		/*
@@ -1675,6 +1695,7 @@ void rcu_check_callbacks(int cpu, int user)
 		rcu_bh_qs(cpu);
 
 	} else if (!in_softirq()) {
+	/* 不在中断中 */
 
 		/*
 		 * Get here if this CPU did not take its interrupt from
@@ -1820,6 +1841,7 @@ static void
 __rcu_process_callbacks(struct rcu_state *rsp)
 {
 	unsigned long flags;
+	/* 取当前cpu的rcu_data */
 	struct rcu_data *rdp = __this_cpu_ptr(rsp->rda);
 
 	WARN_ON_ONCE(rdp->beenonline == 0);
@@ -1854,6 +1876,9 @@ __rcu_process_callbacks(struct rcu_state *rsp)
 /*
  * Do RCU core processing for the current CPU.
  */
+/*
+软中断RCU_SOFTIRQ的回调函数
+*/
 static void rcu_process_callbacks(struct softirq_action *unused)
 {
 	struct rcu_state *rsp;
@@ -1958,6 +1983,7 @@ __call_rcu(struct rcu_head *head, void (*func)(struct rcu_head *rcu),
 	 * a quiescent state betweentimes.
 	 */
 	local_irq_save(flags);
+	/* 取本地cpu的rcu_data */
 	rdp = this_cpu_ptr(rsp->rda);
 
 	/* Add the callback to our list. */
@@ -1967,7 +1993,13 @@ __call_rcu(struct rcu_head *head, void (*func)(struct rcu_head *rcu),
 	else
 		rcu_idle_count_callbacks_posted();
 	smp_mb();  /* Count before adding callback for rcu_barrier(). */
+	/* @head节点加入nxttail链表尾
+	   通过修改前一节点的next指针完成
+	*/
 	*rdp->nxttail[RCU_NEXT_TAIL] = head;
+	/* 2级指针指向next指针域
+	   以便在尾部增加新节点
+	*/
 	rdp->nxttail[RCU_NEXT_TAIL] = &head->next;
 
 	if (__is_kfree_rcu_offset((unsigned long)func))
@@ -2276,6 +2308,7 @@ static int rcu_pending(int cpu)
 {
 	struct rcu_state *rsp;
 
+	/* 遍历rcu_state的链表 */
 	for_each_rcu_flavor(rsp)
 		if (__rcu_pending(rsp, per_cpu_ptr(rsp->rda, cpu)))
 			return 1;
@@ -2501,23 +2534,34 @@ EXPORT_SYMBOL_GPL(rcu_barrier_sched);
 /*
  * Do boot-time initialization of a CPU's per-CPU RCU data.
  */
+/*
+初始化每个cpu的rcu_data
+*/
 static void __init
 rcu_boot_init_percpu_data(int cpu, struct rcu_state *rsp)
 {
 	unsigned long flags;
+	/* 取@cpu对应的每cpu变量rcu_data */
 	struct rcu_data *rdp = per_cpu_ptr(rsp->rda, cpu);
+	/* 取rcu_state中层级结构的根节点(第一个节点) */
 	struct rcu_node *rnp = rcu_get_root(rsp);
 
 	/* Set up local state, ensuring consistent view of global state. */
+	/* 加锁
+	   控制对整个层级的并发
+	*/
 	raw_spin_lock_irqsave(&rnp->lock, flags);
 	rdp->grpmask = 1UL << (cpu - rdp->mynode->grplo);
 	init_callback_list(rdp);
 	rdp->qlen_lazy = 0;
+	/* 链表长度置0 */
 	ACCESS_ONCE(rdp->qlen) = 0;
 	rdp->dynticks = &per_cpu(rcu_dynticks, cpu);
 	WARN_ON_ONCE(rdp->dynticks->dynticks_nesting != DYNTICK_TASK_EXIT_IDLE);
 	WARN_ON_ONCE(atomic_read(&rdp->dynticks->dynticks) != 1);
+	/* 所属的cpu */
 	rdp->cpu = cpu;
+	/* 所属的rcu_state */
 	rdp->rsp = rsp;
 	raw_spin_unlock_irqrestore(&rnp->lock, flags);
 }
@@ -2755,9 +2799,14 @@ static void __init rcu_init_one(struct rcu_state *rsp,
 
 	rsp->rda = rda;
 	rnp = rsp->level[rcu_num_lvls - 1];
+	/* 遍历cpu号 */
 	for_each_possible_cpu(i) {
+		/* 根据rcu_node下cpu组的最大组号
+		   取cpu i所在的rcu_node
+		*/
 		while (i > rnp->grphi)
 			rnp++;
+		/* 记录所属的rcu_node节点 */
 		per_cpu_ptr(rsp->rda, i)->mynode = rnp;
 		rcu_boot_init_percpu_data(i, rsp);
 	}

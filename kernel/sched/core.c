@@ -3384,6 +3384,9 @@ need_resched:
 	preempt_disable();
 	cpu = smp_processor_id();
 	rq = cpu_rq(cpu);
+	/* 告诉rcu发生了一次进程切换
+	   以示当前cpu下所有的rcu读者都已经退出
+	*/
 	rcu_note_context_switch(cpu);
 	prev = rq->curr;
 

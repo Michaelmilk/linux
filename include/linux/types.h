@@ -300,6 +300,9 @@ struct callback_head {
 	struct callback_head *next;
 	void (*func)(struct callback_head *head);
 };
+/*
+通常内嵌在要被释放的结构体中
+*/
 #define rcu_head callback_head
 
 #endif	/* __KERNEL__ */
