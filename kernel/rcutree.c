@@ -157,6 +157,7 @@ static void rcu_node_kthread_setaffinity(struct rcu_node *rnp, int outgoingcpu);
 static void invoke_rcu_core(void);
 static void invoke_rcu_callbacks(struct rcu_state *rsp, struct rcu_data *rdp);
 
+/* correlate:关联 */
 /*
  * Track the rcutorture test sequence number and the update version
  * number within a given test.  The rcutorture_testseq is incremented
@@ -961,6 +962,9 @@ check_for_new_grace_period(struct rcu_state *rsp, struct rcu_data *rdp)
 /*
  * Initialize the specified rcu_data structure's callback list to empty.
  */
+/*
+初始化每个cpu的rcu_data的回调函数链表
+*/
 static void init_callback_list(struct rcu_data *rdp)
 {
 	int i;
@@ -983,6 +987,7 @@ __rcu_process_gp_end(struct rcu_state *rsp, struct rcu_node *rnp, struct rcu_dat
 	if (rdp->completed != rnp->completed) {
 
 		/* Advance callbacks.  No harm if list empty. */
+		/* 向前推进各个callbacks链表 */
 		rdp->nxttail[RCU_DONE_TAIL] = rdp->nxttail[RCU_WAIT_TAIL];
 		rdp->nxttail[RCU_WAIT_TAIL] = rdp->nxttail[RCU_NEXT_READY_TAIL];
 		rdp->nxttail[RCU_NEXT_READY_TAIL] = rdp->nxttail[RCU_NEXT_TAIL];
@@ -1907,6 +1912,10 @@ static void invoke_rcu_callbacks(struct rcu_state *rsp, struct rcu_data *rdp)
 	invoke_rcu_callbacks_kthread();
 }
 
+/*
+触发RCU_SOFTIRQ软中断
+会调用注册的rcu_process_callbacks()
+*/
 static void invoke_rcu_core(void)
 {
 	raise_softirq(RCU_SOFTIRQ);
@@ -2016,6 +2025,10 @@ __call_rcu(struct rcu_head *head, void (*func)(struct rcu_head *rcu),
 /*
  * Queue an RCU-sched callback for invocation after a grace period.
  */
+/*
+由写执行单元调用
+将函数func挂接到rcu的回调函数链表上，然后立即返回
+*/
 void call_rcu_sched(struct rcu_head *head, void (*func)(struct rcu_head *rcu))
 {
 	__call_rcu(head, func, &rcu_sched_state, 0);
@@ -2025,6 +2038,10 @@ EXPORT_SYMBOL_GPL(call_rcu_sched);
 /*
  * Queue an RCU callback for invocation after a quicker grace period.
  */
+/*
+与call_rcu()类似
+不过call_rcu_bh()将软中断的完成当做经历一个quiesecent state
+*/
 void call_rcu_bh(struct rcu_head *head, void (*func)(struct rcu_head *rcu))
 {
 	__call_rcu(head, func, &rcu_bh_state, 0);
@@ -2577,7 +2594,9 @@ rcu_init_percpu_data(int cpu, struct rcu_state *rsp, int preemptible)
 {
 	unsigned long flags;
 	unsigned long mask;
+	/* 取@cpu的rcu_data */
 	struct rcu_data *rdp = per_cpu_ptr(rsp->rda, cpu);
+	/* 根节点 */
 	struct rcu_node *rnp = rcu_get_root(rsp);
 
 	/* Set up local state, ensuring consistent view of global state. */
@@ -2602,13 +2621,16 @@ rcu_init_percpu_data(int cpu, struct rcu_state *rsp, int preemptible)
 	raw_spin_lock(&rsp->onofflock);		/* irqs already disabled. */
 
 	/* Add CPU to rcu_node bitmasks. */
+	/* @cpu所属的rcu_node */
 	rnp = rdp->mynode;
 	mask = rdp->grpmask;
 	do {
 		/* Exclude any attempts to start a new GP on small systems. */
 		raw_spin_lock(&rnp->lock);	/* irqs already disabled. */
+		/* 依据循环，掩码传递到根节点 */
 		rnp->qsmaskinit |= mask;
 		mask = rnp->grpmask;
+		/* 只根据该@cpu所属的rcu_node更新相关数据 */
 		if (rnp == rdp->mynode) {
 			/*
 			 * If there is a grace period in progress, we will
@@ -2624,6 +2646,7 @@ rcu_init_percpu_data(int cpu, struct rcu_state *rsp, int preemptible)
 		}
 		raw_spin_unlock(&rnp->lock); /* irqs already disabled. */
 		rnp = rnp->parent;
+	/* 遍历到根节点 */
 	} while (rnp != NULL && !(rnp->qsmaskinit & mask));
 
 	raw_spin_unlock_irqrestore(&rsp->onofflock, flags);
@@ -2766,10 +2789,15 @@ static void __init rcu_init_one(struct rcu_state *rsp,
 
 	/* Initialize the elements themselves, starting from the leaves. */
 
+	/* 遍历各个层级，从叶子开始 */
 	for (i = rcu_num_lvls - 1; i >= 0; i--) {
+		/* 该层各个节点子节点的个数 */
 		cpustride *= rsp->levelspread[i];
+		/* 取该层使用的第一个node[]节点 */
 		rnp = rsp->level[i];
+		/* 遍历该层使用的几个node[]节点 */
 		for (j = 0; j < rsp->levelcnt[i]; j++, rnp++) {
+			/* 初始化自旋锁 */
 			raw_spin_lock_init(&rnp->lock);
 			lockdep_set_class_and_name(&rnp->lock,
 						   &rcu_node_class[i], buf[i]);
@@ -2780,8 +2808,10 @@ static void __init rcu_init_one(struct rcu_state *rsp,
 			rnp->grplo = j * cpustride;
 			/* 该节点下表示的cpu结束值 */
 			rnp->grphi = (j + 1) * cpustride - 1;
+			/* 不能超过可能的最大cpu数 */
 			if (rnp->grphi >= NR_CPUS)
 				rnp->grphi = NR_CPUS - 1;
+			/* 根节点 */
 			if (i == 0) {
 				rnp->grpnum = 0;
 				rnp->grpmask = 0;
@@ -2792,6 +2822,7 @@ static void __init rcu_init_one(struct rcu_state *rsp,
 				rnp->parent = rsp->level[i - 1] +
 					      j / rsp->levelspread[i - 1];
 			}
+			/* 记录该节点所属的层级 */
 			rnp->level = i;
 			INIT_LIST_HEAD(&rnp->blkd_tasks);
 		}

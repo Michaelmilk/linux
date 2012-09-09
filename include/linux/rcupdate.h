@@ -69,8 +69,14 @@ extern void do_trace_rcu_torture_read(char *rcutorturename,
 #endif
 #endif
 
+/* 无符号型数的大小比较
+两数相差不能达到最大值的一半
+@a<@b的时候，变为负数，因为是无符号数，回绕变成一个较大的数，以此判断
+*/
+/* 用于unsigned int型的数比较大小 */
 #define UINT_CMP_GE(a, b)	(UINT_MAX / 2 >= (a) - (b))
 #define UINT_CMP_LT(a, b)	(UINT_MAX / 2 < (a) - (b))
+/* 用于unsigned long型的数比较大小 */
 #define ULONG_CMP_GE(a, b)	(ULONG_MAX / 2 >= (a) - (b))
 #define ULONG_CMP_LT(a, b)	(ULONG_MAX / 2 < (a) - (b))
 
@@ -97,6 +103,10 @@ extern void call_rcu(struct rcu_head *head,
 #else /* #ifdef CONFIG_PREEMPT_RCU */
 
 /* In classic RCU, call_rcu() is just call_rcu_sched(). */
+/*
+由写执行单元调用
+将函数func挂接到rcu的回调函数上，然后立即返回
+*/
 #define	call_rcu	call_rcu_sched
 
 #endif /* #else #ifdef CONFIG_PREEMPT_RCU */

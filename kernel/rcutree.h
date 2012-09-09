@@ -151,7 +151,9 @@ struct rcu_node {
 				/* Per-GP initial value for qsmask & expmask. */
 	unsigned long grpmask;	/* Mask to apply to parent qsmask. */
 				/*  Only one bit will be set in this mask. */
+	/* 该节点表示的一组cpu中最小的号 */
 	int	grplo;		/* lowest-numbered CPU or group here. */
+	/* 该节点表示的一组cpu中最大的号 */
 	int	grphi;		/* highest-numbered CPU or group here. */
 	u8	grpnum;		/* CPU/group number for next level up. */
 	/* 该节点所在的层级
@@ -270,6 +272,7 @@ struct rcu_data {
 	bool		preemptible;	/* Preemptible RCU? */
 	/* 指向rcu_state中该cpu所属的节点 */
 	struct rcu_node *mynode;	/* This CPU's leaf of hierarchy */
+	/* 该rcu_data在一组cpu中的bit位 */
 	unsigned long grpmask;		/* Mask to apply to leaf qsmask. */
 #ifdef CONFIG_RCU_CPU_STALL_INFO
 	unsigned long	ticks_this_gp;	/* The number of scheduling-clock */
