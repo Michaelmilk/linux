@@ -43,6 +43,9 @@ enum {
 
 struct module;
 
+/*
+加解密算法操作函数表
+*/
 struct lib80211_crypto_ops {
 	const char *name;
 	struct list_head list;
@@ -93,9 +96,11 @@ struct lib80211_crypto_ops {
 };
 
 struct lib80211_crypt_data {
+	/* 链入lib80211_crypt_info结构的crypt_deinit_list链表 */
 	struct list_head list;	/* delayed deletion list */
 	struct lib80211_crypto_ops *ops;
 	void *priv;
+	/* 引用计数 */
 	atomic_t refcnt;
 };
 
@@ -108,7 +113,9 @@ struct lib80211_crypt_info {
 	struct lib80211_crypt_data *crypt[NUM_WEP_KEYS];
 	int tx_keyidx;		/* default TX key index (crypt[tx_keyidx]) */
 	struct list_head crypt_deinit_list;
+	/* 定时器，延迟处理crypt_deinit_list链表中的元素 */
 	struct timer_list crypt_deinit_timer;
+	/* 置1后进入静默期，crypt_deinit_list链表不会再加入新元素 */
 	int crypt_quiesced;
 };
 
