@@ -358,6 +358,7 @@ int __inode_permission(struct inode *inode, int mask)
 /**
  * sb_permission - Check superblock-level permissions
  * @sb: Superblock of inode to check permission on
+ * @inode: Inode to check permission on
  * @mask: Right to check for (%MAY_READ, %MAY_WRITE, %MAY_EXEC)
  *
  * Separate out file-system wide checks from inode-specific permission checks.
@@ -662,6 +663,7 @@ int sysctl_protected_hardlinks __read_mostly = 1;
 /**
  * may_follow_link - Check symlink following for unsafe situations
  * @link: The path of the symlink
+ * @nd: nameidata pathwalk data
  *
  * In the case of the sysctl_protected_symlinks sysctl being enabled,
  * CAP_DAC_OVERRIDE needs to be specifically ignored if the symlink is
@@ -2493,7 +2495,7 @@ static int atomic_open(struct nameidata *nd, struct dentry *dentry,
 		goto out;
 	}
 
-	mode = op->mode & S_IALLUGO;
+	mode = op->mode;
 	if ((open_flag & O_CREAT) && !IS_POSIXACL(dir))
 		mode &= ~current_umask();
 
@@ -2531,7 +2533,7 @@ static int atomic_open(struct nameidata *nd, struct dentry *dentry,
 	}
 
 	if (open_flag & O_CREAT) {
-		error = may_o_create(&nd->path, dentry, op->mode);
+		error = may_o_create(&nd->path, dentry, mode);
 		if (error) {
 			create_error = error;
 			if (open_flag & O_EXCL)
@@ -2567,6 +2569,10 @@ static int atomic_open(struct nameidata *nd, struct dentry *dentry,
 		if (file->f_path.dentry) {
 			dput(dentry);
 			dentry = file->f_path.dentry;
+		}
+		if (create_error && dentry->d_inode == NULL) {
+			error = create_error;
+			goto out;
 		}
 		goto looked_up;
 	}

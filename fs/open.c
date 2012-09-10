@@ -856,11 +856,11 @@ static inline int build_open_flags(int flags, umode_t mode, struct open_flags *o
 	int lookup_flags = 0;
 	int acc_mode;
 
+	if (flags & O_CREAT)
+		op->mode = (mode & S_IALLUGO) | S_IFREG;
+	else
 	/* 如果不是新创建文件，则忽略@mode，例如S_IRWXU */
-	if (!(flags & O_CREAT))
-		mode = 0;
-	/* 记录@mode */
-	op->mode = mode;
+		op->mode = 0;
 
 	/* 去掉FMODE_NONOTIFY标志 */
 	/* Must never be set by userspace */
