@@ -290,12 +290,16 @@ int netlink_sendskb(struct sock *sk, struct sk_buff *skb);
  *	use enormous buffer sizes on recvmsg() calls just to avoid
  *	MSG_TRUNC when PAGE_SIZE is very large.
  */
+/* 控制在一页内
+数据区大小
+*/
 #if PAGE_SIZE < 8192UL
 #define NLMSG_GOODSIZE	SKB_WITH_OVERHEAD(PAGE_SIZE)
 #else
 #define NLMSG_GOODSIZE	SKB_WITH_OVERHEAD(8192UL)
 #endif
 
+/* 除去nlmsghdr消息头的数据大小 */
 #define NLMSG_DEFAULT_SIZE (NLMSG_GOODSIZE - NLMSG_HDRLEN)
 
 

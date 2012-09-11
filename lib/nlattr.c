@@ -325,6 +325,7 @@ struct nlattr *__nla_reserve(struct sk_buff *skb, int attrtype, int attrlen)
 {
 	struct nlattr *nla;
 
+	/* 填充一个nlattr属性 */
 	nla = (struct nlattr *) skb_put(skb, nla_total_size(attrlen));
 	nla->nla_type = attrtype;
 	nla->nla_len = nla_attr_size(attrlen);
@@ -412,6 +413,7 @@ void __nla_put(struct sk_buff *skb, int attrtype, int attrlen,
 	struct nlattr *nla;
 
 	nla = __nla_reserve(skb, attrtype, attrlen);
+	/* 将属性的值拷贝进skb数据区 */
 	memcpy(nla_data(nla), data, attrlen);
 }
 EXPORT_SYMBOL(__nla_put);
@@ -444,6 +446,11 @@ EXPORT_SYMBOL(__nla_put_nohdr);
  * Returns -EMSGSIZE if the tailroom of the skb is insufficient to store
  * the attribute header and payload.
  */
+/*
+向skb中填充一个属性
+
+@skb->tail指针后移
+*/
 int nla_put(struct sk_buff *skb, int attrtype, int attrlen, const void *data)
 {
 	if (unlikely(skb_tailroom(skb) < nla_total_size(attrlen)))

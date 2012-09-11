@@ -267,6 +267,7 @@ static inline int nlmsg_msg_size(int payload)
  * nlmsg_total_size - length of netlink message including padding
  * @payload: length of message payload
  */
+/* 加上nlmsghdr并对齐后的大小 */
 static inline int nlmsg_total_size(int payload)
 {
 	return NLMSG_ALIGN(nlmsg_msg_size(payload));
@@ -285,6 +286,7 @@ static inline int nlmsg_padlen(int payload)
  * nlmsg_data - head of message payload
  * @nlh: netlink message header
  */
+/* 返回nlmsghdr消息头后的位置指针 */
 static inline void *nlmsg_data(const struct nlmsghdr *nlh)
 {
 	return (unsigned char *) nlh + NLMSG_HDRLEN;
@@ -442,6 +444,7 @@ static inline int nlmsg_report(const struct nlmsghdr *nlh)
 static inline struct nlmsghdr *nlmsg_put(struct sk_buff *skb, u32 pid, u32 seq,
 					 int type, int payload, int flags)
 {
+	/* 检查tailroom是否够用 */
 	if (unlikely(skb_tailroom(skb) < nlmsg_total_size(payload)))
 		return NULL;
 
@@ -494,8 +497,10 @@ static inline struct sk_buff *nlmsg_new(size_t payload, gfp_t flags)
  */
 static inline int nlmsg_end(struct sk_buff *skb, struct nlmsghdr *nlh)
 {
+	/* 更新@nlh头中nlmsg_len消息数据总长度字段 */
 	nlh->nlmsg_len = skb_tail_pointer(skb) - (unsigned char *)nlh;
 
+	/* 返回@skb的数据长度 */
 	return skb->len;
 }
 

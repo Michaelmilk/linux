@@ -25,6 +25,9 @@ struct genlmsghdr {
 /*
  * List of reserved static generic netlink identifiers:
  */
+/* 使用此标记时
+在genl_register_family()中将为genl_family生成一个唯一的id
+*/
 #define GENL_ID_GENERATE	0
 #define GENL_ID_CTRL		NLMSG_MIN_TYPE
 

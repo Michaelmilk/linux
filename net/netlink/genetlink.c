@@ -41,9 +41,11 @@ int lockdep_genl_is_held(void)
 EXPORT_SYMBOL(lockdep_genl_is_held);
 #endif
 
+/* 哈希表大小 */
 #define GENL_FAM_TAB_SIZE	16
 #define GENL_FAM_TAB_MASK	(GENL_FAM_TAB_SIZE - 1)
 
+/* genl_family的哈希表 */
 static struct list_head family_ht[GENL_FAM_TAB_SIZE];
 /*
  * Bitmap of multicast groups that are currently in use.
@@ -58,16 +60,19 @@ static unsigned long mc_groups_longs = 1;
 
 static int genl_ctrl_event(int event, void *data);
 
+/* 根据@id计算哈希值 */
 static inline unsigned int genl_family_hash(unsigned int id)
 {
 	return id & GENL_FAM_TAB_MASK;
 }
 
+/* 根据@id取哈希表的链表头节点 */
 static inline struct list_head *genl_family_chain(unsigned int id)
 {
 	return &family_ht[genl_family_hash(id)];
 }
 
+/* 根据@id在family_ht[]哈希表中查找genl_family */
 static struct genl_family *genl_family_find_byid(unsigned int id)
 {
 	struct genl_family *f;
@@ -79,6 +84,7 @@ static struct genl_family *genl_family_find_byid(unsigned int id)
 	return NULL;
 }
 
+/* 根据@name在family_ht[]哈希表中查找genl_family */
 static struct genl_family *genl_family_find_byname(char *name)
 {
 	struct genl_family *f;
@@ -92,6 +98,7 @@ static struct genl_family *genl_family_find_byname(char *name)
 	return NULL;
 }
 
+/* 根据@cmd从@family的ops_list链表中查找genl_ops */
 static struct genl_ops *genl_get_cmd(u8 cmd, struct genl_family *family)
 {
 	struct genl_ops *ops;
@@ -106,6 +113,7 @@ static struct genl_ops *genl_get_cmd(u8 cmd, struct genl_family *family)
 /* Of course we are going to have problems once we hit
  * 2^16 alive types, but that can only happen by year 2K
 */
+/* 返回一个没有使用的id */
 static u16 genl_generate_id(void)
 {
 	static u16 id_gen_idx = GENL_MIN_ID;
@@ -283,18 +291,23 @@ static void genl_unregister_mc_groups(struct genl_family *family)
  *
  * Returns 0 on success or a negative error code.
  */
+
+/* 将@ops注册到@family的ops_list链表 */
 int genl_register_ops(struct genl_family *family, struct genl_ops *ops)
 {
 	int err = -EINVAL;
 
+	/* dumpit或doit至少有一个要有效 */
 	if (ops->dumpit == NULL && ops->doit == NULL)
 		goto errout;
 
+	/* cmd重复了 */
 	if (genl_get_cmd(ops->cmd, family)) {
 		err = -EEXIST;
 		goto errout;
 	}
 
+	/* 使用bit位标记@ops具有的操作能力 */
 	if (ops->dumpit)
 		ops->flags |= GENL_CMD_CAP_DUMP;
 	if (ops->doit)
@@ -303,6 +316,7 @@ int genl_register_ops(struct genl_family *family, struct genl_ops *ops)
 		ops->flags |= GENL_CMD_CAP_HASPOL;
 
 	genl_lock();
+	/* @ops通过ops_list字段链入@family */
 	list_add_tail(&ops->ops_list, &family->ops_list);
 	genl_unlock();
 
@@ -329,6 +343,8 @@ EXPORT_SYMBOL(genl_register_ops);
  *
  * Returns 0 on success or a negative error code.
  */
+
+/* 将@ops从@family的ops_list链表移除 */
 int genl_unregister_ops(struct genl_family *family, struct genl_ops *ops)
 {
 	struct genl_ops *rc;
@@ -363,22 +379,26 @@ int genl_register_family(struct genl_family *family)
 {
 	int err = -EINVAL;
 
+	/* 判断id的有效性 */
 	if (family->id && family->id < GENL_MIN_ID)
 		goto errout;
 
 	if (family->id > GENL_MAX_ID)
 		goto errout;
 
+	/* 初始化@family的ops_list链表节点和mcast_groups链表节点 */
 	INIT_LIST_HEAD(&family->ops_list);
 	INIT_LIST_HEAD(&family->mcast_groups);
 
 	genl_lock();
 
+	/* 名称重复了 */
 	if (genl_family_find_byname(family->name)) {
 		err = -EEXIST;
 		goto errout_locked;
 	}
 
+	/* 生成唯一的id */
 	if (family->id == GENL_ID_GENERATE) {
 		u16 newid = genl_generate_id();
 
@@ -389,11 +409,13 @@ int genl_register_family(struct genl_family *family)
 
 		family->id = newid;
 	} else if (genl_family_find_byid(family->id)) {
+	/* id重复了 */
 		err = -EEXIST;
 		goto errout_locked;
 	}
 
 	if (family->maxattr) {
+		/* 分配指针数组的空间，+1作为NULL结束 */
 		family->attrbuf = kmalloc((family->maxattr+1) *
 					sizeof(struct nlattr *), GFP_KERNEL);
 		if (family->attrbuf == NULL) {
@@ -403,6 +425,7 @@ int genl_register_family(struct genl_family *family)
 	} else
 		family->attrbuf = NULL;
 
+	/* 依据id链入family_ht[]哈希表 */
 	list_add_tail(&family->family_list, genl_family_chain(family->id));
 	genl_unlock();
 
@@ -509,6 +532,12 @@ EXPORT_SYMBOL(genl_unregister_family);
  *
  * Returns pointer to user specific header
  */
+/*
+          |  nlmsghdr  |  genlmsghdr  |  family->hdrsize  |
+          ^                           ^                   ^
+      skb->data                    @return             skb->tail
+
+*/
 void *genlmsg_put(struct sk_buff *skb, u32 pid, u32 seq,
 				struct genl_family *family, int flags, u8 cmd)
 {
@@ -626,6 +655,9 @@ static struct genl_family genl_ctrl = {
 	.netnsok = true,
 };
 
+/*
+向skb中填充信息
+*/
 static int ctrl_fill_info(struct genl_family *family, u32 pid, u32 seq,
 			  u32 flags, struct sk_buff *skb, u8 cmd)
 {
@@ -642,11 +674,15 @@ static int ctrl_fill_info(struct genl_family *family, u32 pid, u32 seq,
 	    nla_put_u32(skb, CTRL_ATTR_MAXATTR, family->maxattr))
 		goto nla_put_failure;
 
+	/*    |    nlattr    |  nlattr  |     data    |  nlattr  |  data       | ...
+              |CTRL_ATTR_OPS |   idx    | cmd | flags |   idx    | cmd | flags | ...
+	*/
 	if (!list_empty(&family->ops_list)) {
 		struct nlattr *nla_ops;
 		struct genl_ops *ops;
 		int idx = 1;
 
+		/* 放置属性CTRL_ATTR_OPS */
 		nla_ops = nla_nest_start(skb, CTRL_ATTR_OPS);
 		if (nla_ops == NULL)
 			goto nla_put_failure;
@@ -654,17 +690,21 @@ static int ctrl_fill_info(struct genl_family *family, u32 pid, u32 seq,
 		list_for_each_entry(ops, &family->ops_list, ops_list) {
 			struct nlattr *nest;
 
+			/* 用编号做属性type */
 			nest = nla_nest_start(skb, idx++);
 			if (nest == NULL)
 				goto nla_put_failure;
 
+			/* 放置数据 */
 			if (nla_put_u32(skb, CTRL_ATTR_OP_ID, ops->cmd) ||
 			    nla_put_u32(skb, CTRL_ATTR_OP_FLAGS, ops->flags))
 				goto nla_put_failure;
 
+			/* 更新nest的属性长度字段 */
 			nla_nest_end(skb, nest);
 		}
 
+		/* 更新nla_ops的属性长度字段 */
 		nla_nest_end(skb, nla_ops);
 	}
 
@@ -778,6 +818,7 @@ static struct sk_buff *ctrl_build_family_msg(struct genl_family *family,
 	struct sk_buff *skb;
 	int err;
 
+	/* 分配一个skb */
 	skb = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
 	if (skb == NULL)
 		return ERR_PTR(-ENOBUFS);

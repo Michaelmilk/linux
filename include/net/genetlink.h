@@ -58,6 +58,7 @@ struct genl_family {
 					     struct genl_info *info);
 	struct nlattr **	attrbuf;	/* private */
 	struct list_head	ops_list;	/* private */
+	/* 依据@id链入family_ht[]哈希表 */
 	struct list_head	family_list;	/* private */
 	struct list_head	mcast_groups;	/* private */
 };
@@ -117,6 +118,7 @@ struct genl_ops {
 	int		       (*dumpit)(struct sk_buff *skb,
 					 struct netlink_callback *cb);
 	int		       (*done)(struct netlink_callback *cb);
+	/* 链入genl_family的ops_list链表 */
 	struct list_head	ops_list;
 };
 
@@ -192,6 +194,11 @@ static inline void *genlmsg_put_reply(struct sk_buff *skb,
  * @skb: socket buffer the message is stored in
  * @hdr: user specific header
  */
+/*
+更新@nlh头中nlmsg_len消息数据总长度字段
+
+返回@skb的数据长度
+*/
 static inline int genlmsg_end(struct sk_buff *skb, void *hdr)
 {
 	return nlmsg_end(skb, hdr - GENL_HDRLEN - NLMSG_HDRLEN);

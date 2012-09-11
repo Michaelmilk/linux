@@ -1935,6 +1935,9 @@ void netlink_set_nonroot(int protocol, unsigned int flags)
 }
 EXPORT_SYMBOL(netlink_set_nonroot);
 
+/*
+将nlmsghdr消息头信息封装进skb
+*/
 struct nlmsghdr *
 __nlmsg_put(struct sk_buff *skb, u32 pid, u32 seq, int type, int len, int flags)
 {
