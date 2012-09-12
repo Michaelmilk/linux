@@ -249,6 +249,10 @@ extern void netlink_table_grab(void);
 extern void netlink_table_ungrab(void);
 
 /* optional Netlink kernel configuration parameters */
+/*
+内核中使用netlink的相关配置
+封装了input函数等
+*/
 struct netlink_kernel_cfg {
 	unsigned int	groups;
 	void		(*input)(struct sk_buff *skb);

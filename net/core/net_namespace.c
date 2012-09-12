@@ -556,6 +556,10 @@ static void unregister_pernet_operations(struct pernet_operations *ops)
  *	are called in the reverse of the order with which they were
  *	registered.
  */
+/*
+注册网络命名空间子系统
+在每一个网络命名空间下使用@ops函数进行一些初始化操作
+*/
 int register_pernet_subsys(struct pernet_operations *ops)
 {
 	int error;

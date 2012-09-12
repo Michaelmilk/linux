@@ -161,6 +161,7 @@ int genl_register_mc_group(struct genl_family *family,
 					 mc_groups_longs * BITS_PER_LONG);
 
 
+	/* bit位用完了，扩充位图空间 */
 	if (id >= mc_groups_longs * BITS_PER_LONG) {
 		size_t nlen = (mc_groups_longs + 1) * sizeof(unsigned long);
 
@@ -184,6 +185,7 @@ int genl_register_mc_group(struct genl_family *family,
 		mc_groups_longs++;
 	}
 
+	/* 命名空间可用 */
 	if (family->netnsok) {
 		struct net *net;
 
@@ -213,9 +215,13 @@ int genl_register_mc_group(struct genl_family *family,
 			goto out;
 	}
 
+	/* 记录分配的组id */
 	grp->id = id;
+	/* 标记bit位 */
 	set_bit(id, mc_groups);
+	/* 加入mcast_groups链表 */
 	list_add_tail(&grp->list, &family->mcast_groups);
+	/* 反向指针记录所属的genl_family */
 	grp->family = family;
 
 	genl_ctrl_event(CTRL_CMD_NEWMCAST_GRP, grp);
@@ -375,6 +381,9 @@ EXPORT_SYMBOL(genl_unregister_ops);
  *
  * Return 0 on success or a negative error code.
  */
+/*
+将@family注册进family_ht[]哈希表
+*/
 int genl_register_family(struct genl_family *family)
 {
 	int err = -EINVAL;
@@ -465,6 +474,14 @@ EXPORT_SYMBOL(genl_register_family);
  *
  * Return 0 on success or a negative error code.
  */
+/*
+将@family注册进family_ht[]哈希表
+将@ops注册进@family的ops_list链表
+
+相当于先后调用
+genl_register_family()
+genl_register_ops()
+*/
 int genl_register_family_with_ops(struct genl_family *family,
 	struct genl_ops *ops, size_t n_ops)
 {
@@ -931,6 +948,8 @@ static int genl_ctrl_event(int event, void *data)
 	if (IS_ERR(msg))
 		return PTR_ERR(msg);
 
+	/* 向GENL_ID_CTRL组发送消息 */
+
 	if (!family->netnsok) {
 		genlmsg_multicast_netns(&init_net, msg, 0,
 					GENL_ID_CTRL, GFP_KERNEL);
@@ -962,6 +981,7 @@ static int __net_init genl_pernet_init(struct net *net)
 	};
 
 	/* we'll bump the group number right afterwards */
+	/* 每命名空间下建立netlink套接字 */
 	net->genl_sock = netlink_kernel_create(net, NETLINK_GENERIC,
 					       THIS_MODULE, &cfg);
 
@@ -989,9 +1009,11 @@ static int __init genl_init(void)
 {
 	int i, err;
 
+	/* 初始化哈希表头节点 */
 	for (i = 0; i < GENL_FAM_TAB_SIZE; i++)
 		INIT_LIST_HEAD(&family_ht[i]);
 
+	/* 注册genl_ctrl */
 	err = genl_register_family_with_ops(&genl_ctrl, &genl_ctrl_ops, 1);
 	if (err < 0)
 		goto problem;
