@@ -1345,6 +1345,7 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 	   PF_INET    => inet_create()
 	   PF_INET6   => inet6_create()
 	   PF_NETLINK => netlink_create()
+	   PF_PACKET  => packet_create()
 	*/
 	err = pf->create(net, sock, protocol, kern);
 	if (err < 0)
