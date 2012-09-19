@@ -1346,6 +1346,9 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 	   PF_INET6   => inet6_create()
 	   PF_NETLINK => netlink_create()
 	   PF_PACKET  => packet_create()
+	   PF_UNIX    => unix_create()
+
+	   根据具体协议分配所占用的sock结构空间
 	*/
 	err = pf->create(net, sock, protocol, kern);
 	if (err < 0)
@@ -1427,6 +1430,9 @@ SYSCALL_DEFINE3(socket, int, family, int, type, int, protocol)
 	if (SOCK_NONBLOCK != O_NONBLOCK && (flags & SOCK_NONBLOCK))
 		flags = (flags & ~SOCK_NONBLOCK) | O_NONBLOCK;
 
+	/* 创建socket
+	   由@sock返回
+	*/
 	retval = sock_create(family, type, protocol, &sock);
 	if (retval < 0)
 		goto out;
@@ -1538,6 +1544,7 @@ SYSCALL_DEFINE3(bind, int, fd, struct sockaddr __user *, umyaddr, int, addrlen)
 	/* 根据文件描述符查找对应的socket结构 */
 	sock = sockfd_lookup_light(fd, &err, &fput_needed);
 	if (sock) {
+		/* 将用户空间地址复制到内核空间 */
 		err = move_addr_to_kernel(umyaddr, addrlen, &address);
 		if (err >= 0) {
 			err = security_socket_bind(sock,

@@ -959,6 +959,9 @@ struct proto {
 
 	/* slab缓存，在函数proto_register()中建立 */
 	struct kmem_cache	*slab;
+	/* 在sk_prot_alloc()中分配sock结构空间的时候，对象的大小
+	   比如tcp_sock结构的大小
+	*/
 	unsigned int		obj_size;
 	int			slab_flags;
 

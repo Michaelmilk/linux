@@ -1163,6 +1163,10 @@ void sk_prot_clear_portaddr_nulls(struct sock *sk, int size)
 }
 EXPORT_SYMBOL(sk_prot_clear_portaddr_nulls);
 
+/*
+根据具体协议的@prot->obj_size大小分配内嵌有sock结构的空间
+比如tcp_sock udp_sock unix_sock
+*/
 static struct sock *sk_prot_alloc(struct proto *prot, gfp_t priority,
 		int family)
 {
@@ -1258,6 +1262,10 @@ EXPORT_SYMBOL_GPL(sock_update_netprioidx);
  *	@priority: for allocation (%GFP_KERNEL, %GFP_ATOMIC, etc)
  *	@prot: struct proto associated with this new sock instance
  */
+/*
+根据具体协议的@prot->obj_size大小分配内嵌有sock结构的空间
+并初始化相应字段
+*/
 struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 		      struct proto *prot)
 {
@@ -1265,6 +1273,7 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 
 	sk = sk_prot_alloc(prot, priority | __GFP_ZERO, family);
 	if (sk) {
+		/* 记录协议族 */
 		sk->sk_family = family;
 		/*
 		 * See comment in struct sock definition to understand
@@ -2139,6 +2148,10 @@ void sk_stop_timer(struct sock *sk, struct timer_list* timer)
 }
 EXPORT_SYMBOL(sk_stop_timer);
 
+/*
+@sock与@sk建立对应关系
+初始化@sk的一些字段
+*/
 void sock_init_data(struct socket *sock, struct sock *sk)
 {
 	skb_queue_head_init(&sk->sk_receive_queue);
@@ -2156,6 +2169,7 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 	sk->sk_rcvbuf		=	sysctl_rmem_default;
 	sk->sk_sndbuf		=	sysctl_wmem_default;
 	sk->sk_state		=	TCP_CLOSE;
+	/* 在@sk中记录@sock */
 	sk_set_socket(sk, sock);
 
 	sock_set_flag(sk, SOCK_ZAPPED);
@@ -2163,6 +2177,7 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 	if (sock) {
 		sk->sk_type	=	sock->type;
 		sk->sk_wq	=	sock->wq;
+		/* 在@sock中记录@sk */
 		sock->sk	=	sk;
 	} else
 		sk->sk_wq	=	NULL;
