@@ -21,9 +21,15 @@ extern spinlock_t unix_table_lock;
 extern struct hlist_head unix_socket_table[2 * UNIX_HASH_SIZE];
 
 struct unix_address {
+	/* 引用计数 */
 	atomic_t	refcnt;
+	/* @name的长度 */
 	int		len;
+	/* 哈希值 */
 	unsigned int	hash;
+	/* 0长度数组，动态分配空间
+	   保存地址信息
+	*/
 	struct sockaddr_un name[0];
 };
 

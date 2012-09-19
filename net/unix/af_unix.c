@@ -212,10 +212,13 @@ static inline void unix_release_addr(struct unix_address *addr)
 
 static int unix_mkname(struct sockaddr_un *sunaddr, int len, unsigned int *hashp)
 {
+	/* 检查长度合法性 */
 	if (len <= sizeof(short) || len > sizeof(*sunaddr))
 		return -EINVAL;
+	/* 检查协议族 */
 	if (!sunaddr || sunaddr->sun_family != AF_UNIX)
 		return -EINVAL;
+	/* 有路径信息 */
 	if (sunaddr->sun_path[0]) {
 		/*
 		 * This may look like an off by one error but it is a bit more
@@ -224,6 +227,7 @@ static int unix_mkname(struct sockaddr_un *sunaddr, int len, unsigned int *hashp
 		 * we are guaranteed that it is a valid memory location in our
 		 * kernel address buffer.
 		 */
+		/* 设置路径字符串结束符 */
 		((char *)sunaddr)[len] = 0;
 		len = strlen(sunaddr->sun_path)+1+sizeof(short);
 		return len;
@@ -626,6 +630,10 @@ static struct proto unix_proto = {
  */
 static struct lock_class_key af_unix_sk_receive_queue_lock_key;
 
+/*
+创建sock结构并初始化
+记录在@sock的sk字段
+*/
 static struct sock *unix_create1(struct net *net, struct socket *sock)
 {
 	struct sock *sk = NULL;
@@ -635,6 +643,7 @@ static struct sock *unix_create1(struct net *net, struct socket *sock)
 	if (atomic_long_read(&unix_nr_socks) > 2 * get_max_files())
 		goto out;
 
+	/* 分配sock结构空间 */
 	sk = sk_alloc(net, PF_UNIX, GFP_KERNEL, &unix_proto);
 	if (!sk)
 		goto out;
@@ -674,6 +683,7 @@ static int unix_create(struct net *net, struct socket *sock, int protocol,
 
 	sock->state = SS_UNCONNECTED;
 
+	/* 根据类型设置操作函数 */
 	switch (sock->type) {
 	case SOCK_STREAM:
 		sock->ops = &unix_stream_ops;
@@ -709,11 +719,16 @@ static int unix_release(struct socket *sock)
 	return unix_release_sock(sk, 0);
 }
 
+/*
+动态分配一个路径信息
+由静态增加的数字转换
+*/
 static int unix_autobind(struct socket *sock)
 {
 	struct sock *sk = sock->sk;
 	struct net *net = sock_net(sk);
 	struct unix_sock *u = unix_sk(sk);
+	/* 静态变量 */
 	static u32 ordernum = 1;
 	struct unix_address *addr;
 	int err;
@@ -722,14 +737,17 @@ static int unix_autobind(struct socket *sock)
 	mutex_lock(&u->readlock);
 
 	err = 0;
+	/* 已经有地址了 */
 	if (u->addr)
 		goto out;
 
 	err = -ENOMEM;
+	/* 分配结构空间 */
 	addr = kzalloc(sizeof(*addr) + sizeof(short) + 16, GFP_KERNEL);
 	if (!addr)
 		goto out;
 
+	/* 记录协议族 */
 	addr->name->sun_family = AF_UNIX;
 	atomic_set(&addr->refcnt, 1);
 
@@ -738,6 +756,7 @@ retry:
 	addr->hash = unix_hash_fold(csum_partial(addr->name, addr->len, 0));
 
 	spin_lock(&unix_table_lock);
+	/* 5位以内的数字 */
 	ordernum = (ordernum+1)&0xFFFFF;
 
 	if (__unix_find_socket_byname(net, addr->name, addr->len, sock->type,
@@ -759,7 +778,9 @@ retry:
 	addr->hash ^= sk->sk_type;
 
 	__unix_remove_socket(sk);
+	/* 记录地址信息 */
 	u->addr = addr;
+	/* 加入哈希链表 */
 	__unix_insert_socket(&unix_socket_table[addr->hash], sk);
 	spin_unlock(&unix_table_lock);
 	err = 0;
@@ -854,10 +875,15 @@ static int unix_mknod(const char *sun_path, umode_t mode, struct path *res)
 
 static int unix_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 {
+	/* 取sock结构 */
 	struct sock *sk = sock->sk;
+	/* 取命名空间 */
 	struct net *net = sock_net(sk);
+	/* 转换为unix_sock */
 	struct unix_sock *u = unix_sk(sk);
+	/* 转换为unix的sock地址 */
 	struct sockaddr_un *sunaddr = (struct sockaddr_un *)uaddr;
+	/* 路径 */
 	char *sun_path = sunaddr->sun_path;
 	int err;
 	unsigned int hash;
@@ -865,9 +891,11 @@ static int unix_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	struct hlist_head *list;
 
 	err = -EINVAL;
+	/* 检查协议族 */
 	if (sunaddr->sun_family != AF_UNIX)
 		goto out;
 
+	/* 没有设置路径 */
 	if (addr_len == sizeof(short)) {
 		err = unix_autobind(sock);
 		goto out;
