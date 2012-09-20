@@ -1801,6 +1801,7 @@ static int unix_dgram_recvmsg(struct kiocb *iocb, struct socket *sock,
 	struct scm_cookie tmp_scm;
 	struct sock *sk = sock->sk;
 	struct unix_sock *u = unix_sk(sk);
+	/* 是否阻塞 */
 	int noblock = flags & MSG_DONTWAIT;
 	struct sk_buff *skb;
 	int err;
@@ -1820,6 +1821,7 @@ static int unix_dgram_recvmsg(struct kiocb *iocb, struct socket *sock,
 
 	skip = sk_peek_offset(sk, flags);
 
+	/* 取skb */
 	skb = __skb_recv_datagram(sk, flags, &peeked, &skip, &err);
 	if (!skb) {
 		unix_state_lock(sk);
@@ -1837,8 +1839,10 @@ static int unix_dgram_recvmsg(struct kiocb *iocb, struct socket *sock,
 	if (msg->msg_name)
 		unix_copy_addr(msg, skb->sk);
 
+	/* 实际数据大小 */
 	if (size > skb->len - skip)
 		size = skb->len - skip;
+	/* 缓冲区大小不够，标记MSG_TRUNC */
 	else if (size < skb->len - skip)
 		msg->msg_flags |= MSG_TRUNC;
 

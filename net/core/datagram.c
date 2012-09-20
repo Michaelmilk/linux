@@ -112,6 +112,7 @@ static int wait_for_packet(struct sock *sk, int *err, long *timeo_p)
 		goto interrupted;
 
 	error = 0;
+	/* 等待超时 */
 	*timeo_p = schedule_timeout(*timeo_p);
 out:
 	finish_wait(sk_sleep(sk), &wait);
@@ -158,6 +159,9 @@ out_noerr:
  *	quite explicitly by POSIX 1003.1g, don't change them without having
  *	the standard around please.
  */
+/*
+从@sk的接收队列中取出一个skb
+*/
 struct sk_buff *__skb_recv_datagram(struct sock *sk, unsigned int flags,
 				    int *peeked, int *off, int *err)
 {
@@ -171,6 +175,7 @@ struct sk_buff *__skb_recv_datagram(struct sock *sk, unsigned int flags,
 	if (error)
 		goto no_packet;
 
+	/* 取超时时间 */
 	timeo = sock_rcvtimeo(sk, flags & MSG_DONTWAIT);
 
 	do {
@@ -181,28 +186,37 @@ struct sk_buff *__skb_recv_datagram(struct sock *sk, unsigned int flags,
 		 * However, this function was correct in any case. 8)
 		 */
 		unsigned long cpu_flags;
+		/* 接收的skb队列 */
 		struct sk_buff_head *queue = &sk->sk_receive_queue;
 
 		spin_lock_irqsave(&queue->lock, cpu_flags);
+		/* 遍历接收队列 */
 		skb_queue_walk(queue, skb) {
+			/* 记录这个skb是否在别处被查看过 */
 			*peeked = skb->peeked;
 			if (flags & MSG_PEEK) {
+				/* 跳过@off偏移 */
 				if (*off >= skb->len) {
 					*off -= skb->len;
 					continue;
 				}
+				/* 标记该skb是被peek的 */
 				skb->peeked = 1;
+				/* 增加skb的引用计数 */
 				atomic_inc(&skb->users);
 			} else
+				/* 从队列中移出 */
 				__skb_unlink(skb, queue);
 
 			spin_unlock_irqrestore(&queue->lock, cpu_flags);
+			/* 返回取出的skb */
 			return skb;
 		}
 		spin_unlock_irqrestore(&queue->lock, cpu_flags);
 
 		/* User doesn't want to wait */
 		error = -EAGAIN;
+		/* 非阻塞，返回 */
 		if (!timeo)
 			goto no_packet;
 

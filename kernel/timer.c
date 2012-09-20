@@ -1594,6 +1594,7 @@ signed long __sched schedule_timeout(signed long timeout)
 	timeout = expire - jiffies;
 
  out:
+	/* 返回非负值 */
 	return timeout < 0 ? 0 : timeout;
 }
 EXPORT_SYMBOL(schedule_timeout);

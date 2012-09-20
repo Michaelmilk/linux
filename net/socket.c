@@ -773,7 +773,19 @@ static inline int __sock_recvmsg_nosec(struct kiocb *iocb, struct socket *sock,
 	si->size = size;
 	si->flags = flags;
 
-	/* 调用sock_common_recvmsg */
+	/* 调用sock_common_recvmsg
+	   inet_stream_ops.recvmsg   => inet_recvmsg()
+	   inet_dgram_ops.recvmsg    => inet_recvmsg()
+	   inet_sockraw_ops.recvmsg  => inet_recvmsg()
+	   inet6_stream_ops.recvmsg  => inet_recvmsg()
+	   inet6_dgram_ops.recvmsg   => inet_recvmsg()
+	   netlink_ops.recvmsg       => netlink_recvmsg()
+	   packet_ops_spkt.recvmsg   => packet_recvmsg()
+	   packet_ops.recvmsg        => packet_recvmsg()
+	   unix_stream_ops.recvmsg   => unix_stream_recvmsg()
+	   unix_dgram_ops.recvmsg    => unix_dgram_recvmsg()
+	   inet6_sockraw_ops.recvmsg => sock_common_recvmsg()
+	*/
 	return sock->ops->recvmsg(iocb, sock, msg, size, flags);
 }
 
@@ -1862,16 +1874,22 @@ SYSCALL_DEFINE6(recvfrom, int, fd, void __user *, ubuf, size_t, size,
 
 	if (size > INT_MAX)
 		size = INT_MAX;
+	/* 根据描述符@fd查找对应的socket */
 	sock = sockfd_lookup_light(fd, &err, &fput_needed);
 	if (!sock)
 		goto out;
 
 	msg.msg_control = NULL;
 	msg.msg_controllen = 0;
+	/* 1个iovec */
 	msg.msg_iovlen = 1;
+	/* 指向局部变量iov */
 	msg.msg_iov = &iov;
+	/* 记录用户空间ubuf长度 */
 	iov.iov_len = size;
+	/* 记录用户空间ubuf地址 */
 	iov.iov_base = ubuf;
+	/* 指向局部变量，用来保存地址信息 */
 	msg.msg_name = (struct sockaddr *)&address;
 	msg.msg_namelen = sizeof(address);
 	if (sock->file->f_flags & O_NONBLOCK)

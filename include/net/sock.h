@@ -2112,6 +2112,9 @@ static inline gfp_t gfp_any(void)
 
 static inline long sock_rcvtimeo(const struct sock *sk, bool noblock)
 {
+	/* 非阻塞，返回0
+	   阻塞，返回超时时间
+	*/
 	return noblock ? 0 : sk->sk_rcvtimeo;
 }
 

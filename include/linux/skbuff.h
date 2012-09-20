@@ -1340,6 +1340,7 @@ static inline void __skb_queue_tail(struct sk_buff_head *list,
  * the list known..
  */
 extern void	   skb_unlink(struct sk_buff *skb, struct sk_buff_head *list);
+/* 将@skb从@list中移出 */
 static inline void __skb_unlink(struct sk_buff *skb, struct sk_buff_head *list)
 {
 	struct sk_buff *next, *prev;
