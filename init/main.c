@@ -69,6 +69,7 @@
 #include <linux/slab.h>
 #include <linux/perf_event.h>
 #include <linux/file.h>
+#include <linux/ptrace.h>
 
 #include <asm/io.h>
 #include <asm/bugs.h>
@@ -86,7 +87,6 @@ extern void init_IRQ(void);
 extern void fork_init(unsigned long);
 extern void mca_init(void);
 extern void sbus_init(void);
-extern void prio_tree_init(void);
 extern void radix_tree_init(void);
 #ifndef CONFIG_DEBUG_RODATA
 static inline void mark_rodata_ro(void) { }
@@ -635,7 +635,6 @@ asmlinkage void __init start_kernel(void)
 	early_irq_init();
 	/* init_IRQ()函数则完成其余中断向量(外部中断)的初始化 */
 	init_IRQ();
-	prio_tree_init();
 	/* 初始化定时器相关的数据结构 */
 	init_timers();
 	/* 对高精度时钟进行初始化 */
@@ -734,6 +733,11 @@ asmlinkage void __init start_kernel(void)
 	acpi_early_init(); /* before LAPIC and SMP init */
 	/* SFI: Simple Firmware Interface */
 	sfi_init_late();
+
+	if (efi_enabled) {
+		efi_late_init();
+		efi_free_boot_services();
+	}
 
 	ftrace_init();
 
@@ -898,17 +902,17 @@ run_init_process()在调用相应程序运行的时候，用的是kernel_execve()
 也就是说调用进程@init_filename后会替换run_init_process()运行的当前进程。
 只要调用成功，就不会返回到调用它的函数。
 */
-static void run_init_process(const char *init_filename)
+static int run_init_process(const char *init_filename)
 {
 	argv_init[0] = init_filename;
-	kernel_execve(init_filename, argv_init, envp_init);
+	return kernel_execve(init_filename, argv_init, envp_init);
 }
 
-/* This is a non __init function. Force it to be noinline otherwise gcc
- * makes it inline to init() and it becomes part of init.text section
- */
-static noinline int init_post(void)
+static void __init kernel_init_freeable(void);
+
+static int __ref kernel_init(void *unused)
 {
+	kernel_init_freeable();
 	/* need to finish all async __init code before freeing the memory */
 	async_synchronize_full();
 	/* 调用free_initmem()舍弃内存的__init_begin至__init_end
@@ -925,7 +929,8 @@ static noinline int init_post(void)
 
 	/* 执行在启动阶段用rdinit=x指定的内核命令 */
 	if (ramdisk_execute_command) {
-		run_init_process(ramdisk_execute_command);
+		if (!run_init_process(ramdisk_execute_command))
+			return 0;
 		printk(KERN_WARNING "Failed to execute %s\n",
 				ramdisk_execute_command);
 	}
@@ -941,7 +946,8 @@ static noinline int init_post(void)
 	   则使用run_init_process函数建立一个进程来运行由execute_command指定的命令
 	   在内核启动的时候可以通过传递init=/bin/bash来绕过口令登录界面 */
 	if (execute_command) {
-		run_init_process(execute_command);
+		if (!run_init_process(execute_command))
+			return 0;
 		printk(KERN_WARNING "Failed to execute %s.  Attempting "
 					"defaults...\n", execute_command);
 	}
@@ -949,10 +955,11 @@ static noinline int init_post(void)
 	   到这里内核启动就完成了
 	   /etc/inittab文件是init进程的配置文件
 	   系统可以配置inittab文件来启动需要的进程 */
-	run_init_process("/sbin/init");
-	run_init_process("/etc/init");
-	run_init_process("/bin/init");
-	run_init_process("/bin/sh");
+	if (!run_init_process("/sbin/init") ||
+	    !run_init_process("/etc/init") ||
+	    !run_init_process("/bin/init") ||
+	    !run_init_process("/bin/sh"))
+		return 0;
 
 	/* run_init_process()在调用相应程序运行的时候，用的是kernel_execve。
 	   也就是说调用进程会替换当前进程。
@@ -965,7 +972,7 @@ static noinline int init_post(void)
 /*
 继续初始化内核，并建立init进程
 */
-static int __init kernel_init(void * unused)
+static void __init kernel_init_freeable(void)
 {
 	/*
 	 * Wait until kthreadd is all set-up.
@@ -1032,8 +1039,4 @@ static int __init kernel_init(void * unused)
 	 * we're essentially up and running. Get rid of the
 	 * initmem segments and start the user-mode stuff..
 	 */
-
-	/* 启动用户空间的init进程 */
-	init_post();
-	return 0;
 }

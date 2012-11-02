@@ -57,6 +57,7 @@
 #include <asm/switch_to.h>
 
 asmlinkage void ret_from_fork(void) __asm__("ret_from_fork");
+asmlinkage void ret_from_kernel_thread(void) __asm__("ret_from_kernel_thread");
 
 /*
  * Return saved PC of a blocked thread.
@@ -132,35 +133,44 @@ void release_thread(struct task_struct *dead_task)
 }
 
 int copy_thread(unsigned long clone_flags, unsigned long sp,
-	unsigned long unused,
+	unsigned long arg,
 	struct task_struct *p, struct pt_regs *regs)
 {
-	struct pt_regs *childregs;
+	/* 取pt_regs指针 */
+	struct pt_regs *childregs = task_pt_regs(p);
 	struct task_struct *tsk;
 	int err;
 
-	/* 取pt_regs指针 */
-	childregs = task_pt_regs(p);
 	/* 为pt_regs指针指向的地方赋值 */
+	p->thread.sp = (unsigned long) childregs;
+	p->thread.sp0 = (unsigned long) (childregs+1);
+
+	if (unlikely(!regs)) {
+		/* kernel thread */
+		memset(childregs, 0, sizeof(struct pt_regs));
+		p->thread.ip = (unsigned long) ret_from_kernel_thread;
+		task_user_gs(p) = __KERNEL_STACK_CANARY;
+		childregs->ds = __USER_DS;
+		childregs->es = __USER_DS;
+		childregs->fs = __KERNEL_PERCPU;
+		childregs->bx = sp;	/* function */
+		childregs->bp = arg;
+		childregs->orig_ax = -1;
+		childregs->cs = __KERNEL_CS | get_kernel_rpl();
+		childregs->flags = X86_EFLAGS_IF | X86_EFLAGS_BIT1;
+		p->fpu_counter = 0;
+		p->thread.io_bitmap_ptr = NULL;
+		memset(p->thread.ptrace_bps, 0, sizeof(p->thread.ptrace_bps));
+		return 0;
+	}
 	*childregs = *regs;
 	/* 将ax设0，作为系统调用结束时的返回值 */
 	childregs->ax = 0;
 	/* 指出进程在用户态的堆栈地址，该值在fork()中为传递进去的regs.sp */
 	childregs->sp = sp;
 
-	/* P指向的task_struct结构中有一个thread指针，指向一个thread_struct结构，
-	   里面记录着进程切换时的堆栈指针，在子进程中也需要进行调整
-	   指向子进程的pt_regs结构起始地址
-	*/
-	p->thread.sp = (unsigned long) childregs;
-	/* 指向子进程的系统空间栈顶，当进程被调度运行时，
-	   内核会将这个值写入sp0字段，标志该进程在ring0运行时的堆栈地址。
-	*/
-	p->thread.sp0 = (unsigned long) (childregs+1);
-
 	/* 指向当进程下一次被切换运行时的入口处ret_from_fork */
 	p->thread.ip = (unsigned long) ret_from_fork;
-
 	/* 把当前gs段寄存器内的值保存在p->thread.gs内 */
 	task_user_gs(p) = get_user_gs(regs);
 
@@ -208,10 +218,12 @@ start_thread(struct pt_regs *regs, unsigned long new_ip, unsigned long new_sp)
 	regs->cs		= __USER_CS;
 	regs->ip		= new_ip;
 	regs->sp		= new_sp;
+	regs->flags		= X86_EFLAGS_IF;
 	/*
-	 * Free the old FP and other extended state
+	 * force it to the iret return path by making it look as if there was
+	 * some work pending.
 	 */
-	free_thread_xstate(current);
+	set_thread_flag(TIF_NOTIFY_RESUME);
 }
 EXPORT_SYMBOL_GPL(start_thread);
 

@@ -66,15 +66,13 @@ int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
 {
 	int ret;
 
-	unlazy_fpu(src);
-
 	*dst = *src;
 	if (fpu_allocated(&src->thread.fpu)) {
 		memset(&dst->thread.fpu, 0, sizeof(dst->thread.fpu));
 		ret = fpu_alloc(&dst->thread.fpu);
 		if (ret)
 			return ret;
-		fpu_copy(&dst->thread.fpu, &src->thread.fpu);
+		fpu_copy(dst, src);
 	}
 	return 0;
 }
@@ -95,16 +93,6 @@ void arch_task_cache_init(void)
         	kmem_cache_create("task_xstate", xstate_size,
 				  __alignof__(union thread_xstate),
 				  SLAB_PANIC | SLAB_NOTRACK, NULL);
-}
-
-static inline void drop_fpu(struct task_struct *tsk)
-{
-	/*
-	 * Forget coprocessor state..
-	 */
-	tsk->fpu_counter = 0;
-	clear_fpu(tsk);
-	clear_used_math();
 }
 
 /*
@@ -163,7 +151,13 @@ void flush_thread(void)
 
 	flush_ptrace_hw_breakpoint(tsk);
 	memset(tsk->thread.tls_array, 0, sizeof(tsk->thread.tls_array));
-	drop_fpu(tsk);
+	drop_init_fpu(tsk);
+	/*
+	 * Free the FPU state for non xsave platforms. They get reallocated
+	 * lazily at the first use.
+	 */
+	if (!use_eager_fpu())
+		free_thread_xstate(tsk);
 }
 
 static void hard_disable_TSC(void)
@@ -299,90 +293,6 @@ sys_clone(unsigned long clone_flags, unsigned long newsp,
 	if (!newsp)
 		newsp = regs->sp;
 	return do_fork(clone_flags, newsp, regs, 0, parent_tid, child_tid);
-}
-
-/*
- * This gets run with %si containing the
- * function to call, and %di containing
- * the "args".
- */
-/*
-该函数入口点在arch/x86/kernel/entry_32.S内
-
-调用%si寄存器指向的函数
-%di指向函数的参数
-*/
-extern void kernel_thread_helper(void);
-
-/*
- * Create a kernel thread
- */
-/*
-kernel_thread()才是真正创建内核线程的所在
-因为到了这里线程有了寄存器的上下文环境值
-*/
-int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
-{
-	/* 构造寄存器值的集合
-	   传递给函数do_fork()，作为新进程的上下文环境 */
-	struct pt_regs regs;
-
-	memset(&regs, 0, sizeof(regs));
-
-	/* 记录新进程待执行的函数及其参数 */
-	regs.si = (unsigned long) fn;
-	regs.di = (unsigned long) arg;
-
-#ifdef CONFIG_X86_32
-	regs.ds = __USER_DS;
-	regs.es = __USER_DS;
-	regs.fs = __KERNEL_PERCPU;
-	regs.gs = __KERNEL_STACK_CANARY;
-#else
-	regs.ss = __KERNEL_DS;
-#endif
-
-	regs.orig_ax = -1;
-	/* 下一条待执行指令指针 */
-	regs.ip = (unsigned long) kernel_thread_helper;
-	/* 代码段选择子
-	   请求特权级 */
-	regs.cs = __KERNEL_CS | get_kernel_rpl();
-	regs.flags = X86_EFLAGS_IF | X86_EFLAGS_BIT1;
-
-	/* Ok, create the new process.. */
-	/* 创建新的内核线程 */
-	return do_fork(flags | CLONE_VM | CLONE_UNTRACED, 0, &regs, 0, NULL, NULL);
-}
-EXPORT_SYMBOL(kernel_thread);
-
-/*
- * sys_execve() executes a new program.
- */
-long sys_execve(const char __user *name,
-		const char __user *const __user *argv,
-		const char __user *const __user *envp, struct pt_regs *regs)
-{
-	long error;
-	char *filename;
-
-	/* 在内核空间申请一块区域保存用户态的字符串名称 */
-	filename = getname(name);
-	error = PTR_ERR(filename);
-	if (IS_ERR(filename))
-		return error;
-	error = do_execve(filename, argv, envp, regs);
-
-#ifdef CONFIG_X86_32
-	if (error == 0) {
-		/* Make sure we don't return using sysenter.. */
-                set_thread_flag(TIF_IRET);
-        }
-#endif
-
-	/* 释放空间，放回缓存 */
-	putname(filename);
-	return error;
 }
 
 /*

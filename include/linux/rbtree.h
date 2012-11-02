@@ -23,72 +23,7 @@
   I know it's not the cleaner way,  but in C (not in C++) to get
   performances and genericity...
 
-  Some example of insert and search follows here. The search is a plain
-  normal search over an ordered tree. The insert instead must be implemented
-  in two steps: First, the code must insert the element in order as a red leaf
-  in the tree, and then the support library function rb_insert_color() must
-  be called. Such function will do the not trivial work to rebalance the
-  rbtree, if necessary.
-
------------------------------------------------------------------------
-static inline struct page * rb_search_page_cache(struct inode * inode,
-						 unsigned long offset)
-{
-	struct rb_node * n = inode->i_rb_page_cache.rb_node;
-	struct page * page;
-
-	while (n)
-	{
-		page = rb_entry(n, struct page, rb_page_cache);
-
-		if (offset < page->offset)
-			n = n->rb_left;
-		else if (offset > page->offset)
-			n = n->rb_right;
-		else
-			return page;
-	}
-	return NULL;
-}
-
-static inline struct page * __rb_insert_page_cache(struct inode * inode,
-						   unsigned long offset,
-						   struct rb_node * node)
-{
-	struct rb_node ** p = &inode->i_rb_page_cache.rb_node;
-	struct rb_node * parent = NULL;
-	struct page * page;
-
-	while (*p)
-	{
-		parent = *p;
-		page = rb_entry(parent, struct page, rb_page_cache);
-
-		if (offset < page->offset)
-			p = &(*p)->rb_left;
-		else if (offset > page->offset)
-			p = &(*p)->rb_right;
-		else
-			return page;
-	}
-
-	rb_link_node(node, parent, p);
-
-	return NULL;
-}
-
-static inline struct page * rb_insert_page_cache(struct inode * inode,
-						 unsigned long offset,
-						 struct rb_node * node)
-{
-	struct page * ret;
-	if ((ret = __rb_insert_page_cache(inode, offset, node)))
-		goto out;
-	rb_insert_color(node, &inode->i_rb_page_cache);
- out:
-	return ret;
-}
------------------------------------------------------------------------
+  See Documentation/rbtree.txt for documentation and samples.
 */
 
 #ifndef	_LINUX_RBTREE_H
@@ -105,14 +40,11 @@ static inline struct page * rb_insert_page_cache(struct inode * inode,
 5.从任一节点到其每个叶子的所有路径都包含相同数目的黑色节点
 */
 
-struct rb_node
-{
+struct rb_node {
 	/* 1.保存指向其父节点的指针
 	   2.保存当前节点的颜色
 	   因为struct rb_node结构是4字节对齐的，低2bit始终为0，故可用来保存颜色 */
-	unsigned long  rb_parent_color;
-#define	RB_RED		0
-#define	RB_BLACK	1
+	unsigned long  __rb_parent_color;
 	struct rb_node *rb_right;
 	struct rb_node *rb_left;
 } __attribute__((aligned(sizeof(long))));
@@ -120,8 +52,7 @@ struct rb_node
 /* allegedly: 据传说 */
 
 /* 根节点必须是黑色 */
-struct rb_root
-{
+struct rb_root {
 	struct rb_node *rb_node;
 };
 
@@ -130,36 +61,7 @@ struct rb_root
 取节点@r的父节点的指针
 因结构struct rb_node是4字节对齐的，掩去低2bit的颜色信息
 */
-#define rb_parent(r)   ((struct rb_node *)((r)->rb_parent_color & ~3))
-/*
-最低的1个bit保存节点@r的颜色信息
-*/
-#define rb_color(r)   ((r)->rb_parent_color & 1)
-/* 最低1bit没有置位表示为红色 */
-#define rb_is_red(r)   (!rb_color(r))
-/* 置位了表示为黑色 */
-#define rb_is_black(r) rb_color(r)
-/* 将最低的1个bit置位为0，即红色 */
-#define rb_set_red(r)  do { (r)->rb_parent_color &= ~1; } while (0)
-/* 将最低的1个bit置位为1，即黑色 */
-#define rb_set_black(r)  do { (r)->rb_parent_color |= 1; } while (0)
-
-/*
-设置节点@rb的父节点指针为@p
-@p的指针值保存在rb_parent_color字段内
-*/
-static inline void rb_set_parent(struct rb_node *rb, struct rb_node *p)
-{
-	rb->rb_parent_color = (rb->rb_parent_color & 3) | (unsigned long)p;
-}
-/*
-设置节点@rb的颜色
-@color保存在字段rb_parent_color的最低1个bit
-*/
-static inline void rb_set_color(struct rb_node *rb, int color)
-{
-	rb->rb_parent_color = (rb->rb_parent_color & ~1) | color;
-}
+#define rb_parent(r)   ((struct rb_node *)((r)->__rb_parent_color & ~3))
 
 #define RB_ROOT	(struct rb_root) { NULL, }
 /*
@@ -172,37 +74,20 @@ static inline void rb_set_color(struct rb_node *rb, int color)
 #define	rb_entry(ptr, type, member) container_of(ptr, type, member)
 
 /* 判断根节点@root是否为空 */
-#define RB_EMPTY_ROOT(root)	((root)->rb_node == NULL)
-/* 判断节点@node的父节点是否指向自身 */
-#define RB_EMPTY_NODE(node)	(rb_parent(node) == node)
-/* 设置节点@node的父节点为自身 */
-#define RB_CLEAR_NODE(node)	(rb_set_parent(node, node))
+#define RB_EMPTY_ROOT(root)  ((root)->rb_node == NULL)
 
-/*
-初始化节点@rb
-*/
-static inline void rb_init_node(struct rb_node *rb)
-{
-	/* 初始颜色为红色 */
-	rb->rb_parent_color = 0;
-	/* 右子节点为空 */
-	rb->rb_right = NULL;
-	/* 左子节点为空 */
-	rb->rb_left = NULL;
-	/* 父节点指向自身 */
-	RB_CLEAR_NODE(rb);
-}
+/* 'empty' nodes are nodes that are known not to be inserted in an rbree */
+/* 判断节点@node的父节点是否指向自身 */
+#define RB_EMPTY_NODE(node)  \
+	((node)->__rb_parent_color == (unsigned long)(node))
+/* 设置节点@node的父节点为自身 */
+#define RB_CLEAR_NODE(node)  \
+	((node)->__rb_parent_color = (unsigned long)(node))
+
 
 extern void rb_insert_color(struct rb_node *, struct rb_root *);
 extern void rb_erase(struct rb_node *, struct rb_root *);
 
-typedef void (*rb_augment_f)(struct rb_node *node, void *data);
-
-extern void rb_augment_insert(struct rb_node *node,
-			      rb_augment_f func, void *data);
-extern struct rb_node *rb_augment_erase_begin(struct rb_node *node);
-extern void rb_augment_erase_end(struct rb_node *node,
-				 rb_augment_f func, void *data);
 
 /* Find logical next and previous nodes in a tree */
 extern struct rb_node *rb_next(const struct rb_node *);
@@ -225,7 +110,7 @@ static inline void rb_link_node(struct rb_node * node, struct rb_node * parent,
 				struct rb_node ** rb_link)
 {
 	/* 设置@node的父节点 */
-	node->rb_parent_color = (unsigned long )parent;
+	node->__rb_parent_color = (unsigned long)parent;
 	/* @node的子节点为空 */
 	node->rb_left = node->rb_right = NULL;
 

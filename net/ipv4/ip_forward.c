@@ -94,7 +94,7 @@ int ip_forward(struct sk_buff *skb)
 	/* 取路由表，在ip_rcv_finish()中会先处理路由的选择 */
 	rt = skb_rtable(skb);
 
-	if (opt->is_strictroute && opt->nexthop != rt->rt_gateway)
+	if (opt->is_strictroute && rt->rt_uses_gateway)
 		goto sr_failed;
 
 	/* 检查MTU */

@@ -23,6 +23,7 @@
 #include <linux/rcupdate.h>
 #include <linux/ftrace.h>
 #include <linux/smp.h>
+#include <linux/smpboot.h>
 #include <linux/tick.h>
 
 #define CREATE_TRACE_POINTS
@@ -229,7 +230,7 @@ asmlinkage void __do_softirq(void)
 
 	/* 得到当前所有pending的软中断 */
 	pending = local_softirq_pending();
-	account_system_vtime(current);
+	vtime_account(current);
 
 	/* 执行到这里要屏蔽其他软中断，这里也就证明了每个CPU上同时运行的软中断只能有一个 */
 	__local_bh_disable((unsigned long)__builtin_return_address(0),
@@ -342,7 +343,7 @@ restart:
 
 	lockdep_softirq_exit();
 
-	account_system_vtime(current);
+	vtime_account(current);
 	/* 到最后才开软中断执行环境，允许软中断执行。
 	   注意:这里使用的不是local_bh_enable()，不会再次触发do_softirq()的调用。
 	*/
@@ -427,7 +428,7 @@ static inline void invoke_softirq(void)
  */
 void irq_exit(void)
 {
-	account_system_vtime(current);
+	vtime_account(current);
 	trace_hardirq_exit();
 	/* 恢复preempt_count的值 */
 	sub_preempt_count(IRQ_EXIT_OFFSET);
@@ -835,118 +836,22 @@ void __init softirq_init(void)
 	open_softirq(HI_SOFTIRQ, tasklet_hi_action);
 }
 
-/*
-每cpu的软中断守护进程
-
-@__bind_cpu	: cpu号
-*/
-static int run_ksoftirqd(void * __bind_cpu)
+static int ksoftirqd_should_run(unsigned int cpu)
 {
-	/* 设置当前进程状态为可中断的状态，这种睡眠状态可响应信号处理等。 */
-	set_current_state(TASK_INTERRUPTIBLE);
+	return local_softirq_pending();
+}
 
-	/* 下面是一个大循环，循环判断当前进程是否会停止，
-	   不会则继续判断当前是否有pending的软中断需要处理。
-	*/
-	while (!kthread_should_stop()) {
-		/* 如果可以进行处理，那么在此处理期间内禁止当前进程被抢占。 */
-		preempt_disable();
-		/* 首先判断系统当前没有需要处理的pending状态的软中断 */
-		if (!local_softirq_pending()) {
-			/* 没有的话则主动放弃CPU前先要允许抢占，
-			   因为一直是在不允许抢占状态下执行的代码。 */
-
-			/* 显式调用此函数主动放弃CPU将当前进程放入睡眠队列，
-			   并切换新的进程执行(调度器相关不记录在此) */
-
-			/* 注意:如果当前显式调用schedule()函数主动切换的进程再次被调度执行的话，
-			   那么将从调用这个函数的下一条语句开始执行。
-			   也就是说，在这里当前进程再次被执行的话，
-			   将会执行下面的preempt_disable()函数。
-
-			   当进程再度被调度时，在以下处理期间内禁止当前进程被抢占。
-			*/
-
-			schedule_preempt_disabled();
-		}
-
-		/* 设置当前进程为运行状态。
-		   注意:已经设置了当前进程不可抢占在进入循环后，
-		   以上两个分支不论走哪个都会执行到这里。
-		   一是进入循环时就有pending的软中断需要执行时。
-		   二是进入循环时没有pending的软中断，当前进程再次被调度获得CPU时继续执行时。
-		*/
-		__set_current_state(TASK_RUNNING);
-
-		/* 循环判断是否有pending的软中断，
-		   如果有则调用do_softirq()来做具体处理。
-		   注意:这里又是一个do_softirq()的入口点，
-		   那么在__do_softirq()当中循环处理10次软中断的回调函数后，
-		   如果还有pending的话，会又调用到这里。
-		   那么在这里则又会有可能去调用__do_softirq()来处理软中断回调函数。
-		   在前面介绍__do_softirq()时已经提到过，
-		   处理10次还处理不完的话说明系统正处于繁忙状态。
-		   根据以上分析，我们可以试想如果在系统非常繁忙时，
-		   这个进程将会与do_softirq()相互交替执行，
-		   这时此进程占用CPU应该会很高，虽然下面的cond_resched()函数做了一些处理，
-		   它在处理完一轮软中断后当前处理进程可能会因被调度而减少CPU负荷，
-		   但是在非常繁忙时这个进程仍然有可能大量占用CPU。
-		*/
-		while (local_softirq_pending()) {
-			/* Preempt disable stops cpu going offline.
-			   If already offline, we'll be on wrong CPU:
-			   don't process */
-			/* 如果当前被关联的CPU无法继续处理则跳转到wait_to_die标记出，
-			   等待结束并退出。
-			*/
-			if (cpu_is_offline((long)__bind_cpu))
-				goto wait_to_die;
-			local_irq_disable();
-			/* 执行__do_softirq()来处理具体的软中断回调函数 */
-			if (local_softirq_pending())
-				__do_softirq();
-			local_irq_enable();
-
-			/* 允许当前进程被抢占 */
-
-			/* 这个函数有可能间接的调用schedule()来切换当前进程，
-			   而且上面已经允许当前进程可被抢占。
-			   也就是说在处理完一轮软中断回调函数时，
-			   有可能会切换到其他进程。
-			   这样做的目的一是为了在某些负载超标的情况下
-			   不至于让这个进程长时间大量的占用 CPU，
-			   二是让在有很多软中断需要处理时不至于让其他进程得不到响应。
-			*/
-
-			sched_preempt_enable_no_resched();
-			cond_resched();
-			/* 禁止当前进程被抢占 */
-			preempt_disable();
-			rcu_note_context_switch((long)__bind_cpu);
-		/* 处理完所有软中断了吗?没有的话继续循环以上步骤 */
-		}
-		/* 待一切都处理完成后，允许当前进程被抢占，
-		   并设置当前进程状态为可中断状态，继续循环以上所有过程。
-		*/
-		preempt_enable();
-		set_current_state(TASK_INTERRUPTIBLE);
+static void run_ksoftirqd(unsigned int cpu)
+{
+	local_irq_disable();
+	if (local_softirq_pending()) {
+		__do_softirq();
+		rcu_note_context_switch(cpu);
+		local_irq_enable();
+		cond_resched();
+		return;
 	}
-	/* 如果将会停止则设置当前进程为运行状态后直接返回。
-	   调度器会根据优先级来使当前进程运行。
-	*/
-	__set_current_state(TASK_RUNNING);
-	return 0;
-
-wait_to_die:
-	preempt_enable();
-	/* Wait for kthread_stop */
-	set_current_state(TASK_INTERRUPTIBLE);
-	while (!kthread_should_stop()) {
-		schedule();
-		set_current_state(TASK_INTERRUPTIBLE);
-	}
-	__set_current_state(TASK_RUNNING);
-	return 0;
+	local_irq_enable();
 }
 
 #ifdef CONFIG_HOTPLUG_CPU
@@ -1012,50 +917,14 @@ static int __cpuinit cpu_callback(struct notifier_block *nfb,
 				  unsigned long action,
 				  void *hcpu)
 {
-	int hotcpu = (unsigned long)hcpu;
-	struct task_struct *p;
-
 	switch (action) {
-	case CPU_UP_PREPARE:
-	case CPU_UP_PREPARE_FROZEN:
-		p = kthread_create_on_node(run_ksoftirqd,
-					   hcpu,
-					   cpu_to_node(hotcpu),
-					   "ksoftirqd/%d", hotcpu);
-		if (IS_ERR(p)) {
-			printk("ksoftirqd for %i failed\n", hotcpu);
-			return notifier_from_errno(PTR_ERR(p));
-		}
-		kthread_bind(p, hotcpu);
-  		per_cpu(ksoftirqd, hotcpu) = p;
- 		break;
-	case CPU_ONLINE:
-	case CPU_ONLINE_FROZEN:
-		wake_up_process(per_cpu(ksoftirqd, hotcpu));
-		break;
 #ifdef CONFIG_HOTPLUG_CPU
-	case CPU_UP_CANCELED:
-	case CPU_UP_CANCELED_FROZEN:
-		if (!per_cpu(ksoftirqd, hotcpu))
-			break;
-		/* Unbind so it can run.  Fall thru. */
-		kthread_bind(per_cpu(ksoftirqd, hotcpu),
-			     cpumask_any(cpu_online_mask));
 	case CPU_DEAD:
-	case CPU_DEAD_FROZEN: {
-		static const struct sched_param param = {
-			.sched_priority = MAX_RT_PRIO-1
-		};
-
-		p = per_cpu(ksoftirqd, hotcpu);
-		per_cpu(ksoftirqd, hotcpu) = NULL;
-		sched_setscheduler_nocheck(p, SCHED_FIFO, &param);
-		kthread_stop(p);
-		takeover_tasklets(hotcpu);
+	case CPU_DEAD_FROZEN:
+		takeover_tasklets((unsigned long)hcpu);
 		break;
-	}
 #endif /* CONFIG_HOTPLUG_CPU */
- 	}
+	}
 	return NOTIFY_OK;
 }
 
@@ -1063,14 +932,19 @@ static struct notifier_block __cpuinitdata cpu_nfb = {
 	.notifier_call = cpu_callback
 };
 
+static struct smp_hotplug_thread softirq_threads = {
+	.store			= &ksoftirqd,
+	.thread_should_run	= ksoftirqd_should_run,
+	.thread_fn		= run_ksoftirqd,
+	.thread_comm		= "ksoftirqd/%u",
+};
+
 static __init int spawn_ksoftirqd(void)
 {
-	void *cpu = (void *)(long)smp_processor_id();
-	int err = cpu_callback(&cpu_nfb, CPU_UP_PREPARE, cpu);
-
-	BUG_ON(err != NOTIFY_OK);
-	cpu_callback(&cpu_nfb, CPU_ONLINE, cpu);
 	register_cpu_notifier(&cpu_nfb);
+
+	BUG_ON(smpboot_register_percpu_thread(&softirq_threads));
+
 	return 0;
 }
 early_initcall(spawn_ksoftirqd);

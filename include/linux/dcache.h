@@ -254,6 +254,8 @@ struct dentry_operations中含有对应函数的标志位
 #define DCACHE_MANAGED_DENTRY \
 	(DCACHE_MOUNTED|DCACHE_NEED_AUTOMOUNT|DCACHE_MANAGE_TRANSIT)
 
+#define DCACHE_DENTRY_KILLED	0x100000
+
 extern seqlock_t rename_lock;
 
 static inline int dname_external(struct dentry *dentry)

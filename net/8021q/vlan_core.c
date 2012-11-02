@@ -9,7 +9,7 @@
 由vlan接口接收此skb
 参数为2级指针，因为共享性检查中和插入vlanid时可能会分配新的skb
 */
-bool vlan_do_receive(struct sk_buff **skbp, bool last_handler)
+bool vlan_do_receive(struct sk_buff **skbp)
 {
 	struct sk_buff *skb = *skbp;
 	u16 vlan_id = skb->vlan_tci & VLAN_VID_MASK;
@@ -18,16 +18,10 @@ bool vlan_do_receive(struct sk_buff **skbp, bool last_handler)
 
 	/* 查找虚拟vlan接口 */
 	vlan_dev = vlan_find_dev(skb->dev, vlan_id);
-	if (!vlan_dev) {
-		/* Only the last call to vlan_do_receive() should change
-		 * pkt_type to PACKET_OTHERHOST
-		 */
-		if (vlan_id && last_handler)
-			skb->pkt_type = PACKET_OTHERHOST;
+	if (!vlan_dev)
 		/* 没有对应vlan_id的虚拟接口，而该帧又是vlan帧
 		   则标记为PACKET_OTHERHOST，返回false，表示本机vlan未做处理 */
 		return false;
-	}
 
 	/* 检查skb的共享性
 	   参考__netif_receive_skb()中调用vlan_do_receive()前的deliver_skb()*/
@@ -124,7 +118,6 @@ static struct sk_buff *vlan_reorder_header(struct sk_buff *skb)
 		return NULL;
 	memmove(skb->data - ETH_HLEN, skb->data - VLAN_ETH_HLEN, 2 * ETH_ALEN);
 	skb->mac_header += VLAN_HLEN;
-	skb_reset_mac_len(skb);
 	return skb;
 }
 
@@ -163,6 +156,8 @@ struct sk_buff *vlan_untag(struct sk_buff *skb)
 
 	skb_reset_network_header(skb);
 	skb_reset_transport_header(skb);
+	skb_reset_mac_len(skb);
+
 	return skb;
 
 err_free:
@@ -392,3 +387,16 @@ void vlan_vids_del_by_dev(struct net_device *dev,
 		vlan_vid_del(dev, vid_info->vid);
 }
 EXPORT_SYMBOL(vlan_vids_del_by_dev);
+
+bool vlan_uses_dev(const struct net_device *dev)
+{
+	struct vlan_info *vlan_info;
+
+	ASSERT_RTNL();
+
+	vlan_info = rtnl_dereference(dev->vlan_info);
+	if (!vlan_info)
+		return false;
+	return vlan_info->grp.nr_vlan_devs ? true : false;
+}
+EXPORT_SYMBOL(vlan_uses_dev);

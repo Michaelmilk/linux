@@ -68,9 +68,6 @@ hardware supports the LegacyRepl acement Interrupt Route option
 #define HPET_ID_VENDOR		0xffff0000
 #define	HPET_ID_NUMBER_SHIFT	8
 #define HPET_ID_VENDOR_SHIFT	16
-
-#define HPET_ID_VENDOR_8086	0x8086
-
 /* ENABLE_CNF
 bit 0
 0 ¨C Halt main count and disable all timer interrupts

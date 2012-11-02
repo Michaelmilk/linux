@@ -431,7 +431,7 @@ struct dentry *proc_lookup_de(struct proc_dir_entry *de, struct inode *dir,
 		if (!memcmp(dentry->d_name.name, de->name, de->namelen)) {
 			pde_get(de);
 			spin_unlock(&proc_subdir_lock);
-			error = -EINVAL;
+			error = -ENOMEM;
 			inode = proc_get_inode(dir->i_sb, de);
 			goto out_unlock;
 		}
@@ -626,7 +626,8 @@ static struct proc_dir_entry *__proc_create(struct proc_dir_entry **parent,
 	unsigned int len;
 
 	/* make sure name is valid */
-	if (!name || !strlen(name)) goto out;
+	if (!name || !strlen(name))
+		goto out;
 
 	if (xlate_proc_name(name, parent, &fn) != 0)
 		goto out;
@@ -641,11 +642,11 @@ static struct proc_dir_entry *__proc_create(struct proc_dir_entry **parent,
 
 	/* 结构struct proc_dir_entry最后一个字段name[]为0长度数组占位符
 	   这里分配空间的时候额外加上文件名称的长度，1为字符串结束符'\0' */
-	ent = kmalloc(sizeof(struct proc_dir_entry) + len + 1, GFP_KERNEL);
-	if (!ent) goto out;
 
-	/* 结构清0 */
-	memset(ent, 0, sizeof(struct proc_dir_entry));
+	ent = kzalloc(sizeof(struct proc_dir_entry) + len + 1, GFP_KERNEL);
+	if (!ent)
+		goto out;
+
 	/* 复制文件名称 */
 	memcpy(ent->name, fn, len + 1);
 	/* 记录文件名称长度 */
@@ -654,11 +655,9 @@ static struct proc_dir_entry *__proc_create(struct proc_dir_entry **parent,
 	ent->nlink = nlink;
 	/* 引用计数置为1 */
 	atomic_set(&ent->count, 1);
-	ent->pde_users = 0;
 	spin_lock_init(&ent->pde_unload_lock);
-	ent->pde_unload_completion = NULL;
 	INIT_LIST_HEAD(&ent->pde_openers);
- out:
+out:
 	return ent;
 }
 
