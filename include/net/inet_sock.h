@@ -144,12 +144,11 @@ struct inet_sock {
 	/* Socket demultiplex comparisons on incoming packets. */
 #define inet_daddr		sk.__sk_common.skc_daddr
 #define inet_rcv_saddr		sk.__sk_common.skc_rcv_saddr
+#define inet_addrpair		sk.__sk_common.skc_addrpair
+#define inet_dport		sk.__sk_common.skc_dport
+#define inet_num		sk.__sk_common.skc_num
+#define inet_portpair		sk.__sk_common.skc_portpair
 
-	__be16			inet_dport;
-	/* L4协议号，例如IPPROTO_TCP
-	   另参考inet_bind()函数
-	*/
-	__u16			inet_num;
 	__be32			inet_saddr;
 	__s16			uc_ttl;
 	__u16			cmsg_flags;
@@ -158,6 +157,7 @@ struct inet_sock {
 	__u16			inet_id;
 
 	struct ip_options_rcu __rcu	*inet_opt;
+	int			rx_dst_ifindex;
 	__u8			tos;
 	__u8			min_ttl;
 	__u8			mc_ttl;
@@ -174,7 +174,6 @@ struct inet_sock {
 	int			uc_index;
 	int			mc_index;
 	__be32			mc_addr;
-	int			rx_dst_ifindex;
 	struct ip_mc_socklist __rcu	*mc_list;
 	struct inet_cork_full	cork;
 };

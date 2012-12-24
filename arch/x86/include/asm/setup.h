@@ -1,7 +1,8 @@
 #ifndef _ASM_X86_SETUP_H
 #define _ASM_X86_SETUP_H
 
-#ifdef __KERNEL__
+#include <uapi/asm/setup.h>
+
 
 /*
 内核可以接受的参数个数没有限制，
@@ -137,6 +138,4 @@ void __init x86_64_start_reservations(char *real_mode_data);
 	.size .brk.name,.-1b;				\
 	.popsection
 #endif /* __ASSEMBLY__ */
-#endif  /*  __KERNEL__  */
-
 #endif /* _ASM_X86_SETUP_H */

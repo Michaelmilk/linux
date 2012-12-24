@@ -1,7 +1,7 @@
 VERSION = 3
-PATCHLEVEL = 7
+PATCHLEVEL = 8
 SUBLEVEL = 0
-EXTRAVERSION = -rc8
+EXTRAVERSION = -rc1
 NAME = Terrified Chipmunk
 
 	# 内核版本信息
@@ -231,7 +231,7 @@ PHONY += $(MAKECMDGOALS) sub-make
 	# 注意：此变量仅用在特殊的场合（比如判断），在Makeifle中不要对它进行重新定义！
 
 $(filter-out _all sub-make $(CURDIR)/Makefile, $(MAKECMDGOALS)) _all: sub-make
-	$(Q)@:
+	@:
 
 	# 反过滤函数——filter-out，语法是：$(filter-out <pattern...>;,<text>;)
 	# 函数filter-out的功能是：去掉$(MAKECMDGOALS）中符合规则_all的所有字符串后，剩下的作为返回值。
@@ -1324,6 +1324,12 @@ _modinst_post: _modinst_
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.fwinst obj=firmware __fw_modinst
 	$(call cmd,depmod)
 
+ifeq ($(CONFIG_MODULE_SIG), y)
+PHONY += modules_sign
+modules_sign:
+	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modsign
+endif
+
 else # CONFIG_MODULES
 
 # Modules not configured
@@ -1369,11 +1375,14 @@ clean: rm-dirs  := $(CLEAN_DIRS)
 clean: rm-files := $(CLEAN_FILES)
 clean-dirs      := $(addprefix _clean_, . $(vmlinux-alldirs) Documentation samples)
 
-PHONY += $(clean-dirs) clean archclean
+PHONY += $(clean-dirs) clean archclean vmlinuxclean
 $(clean-dirs):
 	$(Q)$(MAKE) $(clean)=$(patsubst _clean_%,%,$@)
 
-clean: archclean
+vmlinuxclean:
+	$(Q)$(CONFIG_SHELL) $(srctree)/scripts/link-vmlinux.sh clean
+
+clean: archclean vmlinuxclean
 
 # mrproper - Delete all generated files, including .config
 #
@@ -1600,7 +1609,6 @@ scripts: ;
 endif # KBUILD_EXTMOD
 
 clean: $(clean-dirs)
-	$(Q)$(CONFIG_SHELL) $(srctree)/scripts/link-vmlinux.sh clean
 	$(call cmd,rmdirs)
 	$(call cmd,rmfiles)
 	@find $(if $(KBUILD_EXTMOD), $(KBUILD_EXTMOD), .) $(RCS_FIND_IGNORE) \

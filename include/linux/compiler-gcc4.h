@@ -39,7 +39,10 @@ __cold__属性告诉编译器该函数不太可能会被执行
 
 #define __linktime_error(message) __attribute__((__error__(message)))
 
+#define __UNIQUE_ID(prefix) __PASTE(__PASTE(__UNIQUE_ID_, prefix), __COUNTER__)
+
 /* gcc4.5往后的版本 */
+
 #if __GNUC_MINOR__ >= 5
 /*
  * Mark a position in code as unreachable.  This can be used to
@@ -72,4 +75,14 @@ __cold__属性告诉编译器该函数不太可能会被执行
 #if __GNUC_MINOR__ >= 3 && !defined(__CHECKER__)
 #define __compiletime_warning(message) __attribute__((warning(message)))
 #define __compiletime_error(message) __attribute__((error(message)))
+#endif
+
+#ifdef CONFIG_ARCH_USE_BUILTIN_BSWAP
+#if __GNUC_MINOR__ >= 4
+#define __HAVE_BUILTIN_BSWAP32__
+#define __HAVE_BUILTIN_BSWAP64__
+#endif
+#if __GNUC_MINOR__ >= 8 || (defined(__powerpc__) && __GNUC_MINOR__ >= 6)
+#define __HAVE_BUILTIN_BSWAP16__
+#endif
 #endif

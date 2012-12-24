@@ -142,10 +142,7 @@ struct page {
 		};
 
 		struct list_head list;	/* slobs list of pages */
-		struct {		/* slab fields */
-			struct kmem_cache *slab_cache;
-			struct slab *slab_page;
-		};
+		struct slab *slab_page; /* slab fields */
 	};
 
 	/* Remainder is not double word aligned */
@@ -160,7 +157,7 @@ struct page {
 #if USE_SPLIT_PTLOCKS
 		spinlock_t ptl;
 #endif
-		struct kmem_cache *slab;	/* SLUB: Pointer to slab */
+		struct kmem_cache *slab_cache;	/* SL[AU]B: Pointer to slab */
 		struct page *first_page;	/* Compound tail pages */
 	};
 
@@ -189,6 +186,10 @@ struct page {
 	 * is a pointer to such a status block. NULL if not tracked.
 	 */
 	void *shadow;
+#endif
+
+#ifdef CONFIG_NUMA_BALANCING
+	int _last_nid;
 #endif
 }
 /*
@@ -242,8 +243,8 @@ struct vm_region {
 虚拟内存空间描述符
 */
 struct vm_area_struct {
-	struct mm_struct * vm_mm;	/* The address space we belong to. */
-	/* 记录该结构描述的虚拟地址空间起始地址 */
+	/* The first cache line has the info for VMA tree walking. */
+
 	unsigned long vm_start;		/* Our start address within vm_mm. */
 	unsigned long vm_end;		/* The first byte after our end address
 					   within vm_mm. */
@@ -252,13 +253,24 @@ struct vm_area_struct {
 	/* 组成链表，描述每个task_struct的虚拟空间，按地址排序 */
 	struct vm_area_struct *vm_next, *vm_prev;
 
+	struct rb_node vm_rb;
+
+	/*
+	 * Largest free memory gap in bytes to the left of this VMA.
+	 * Either between this VMA and vma->vm_prev, or between one of the
+	 * VMAs below us in the VMA rbtree and its ->vm_prev. This helps
+	 * get_unmapped_area find a free area of the right size.
+	 */
+	unsigned long rb_subtree_gap;
+
+	/* Second cache line starts here. */
+
+	struct mm_struct *vm_mm;	/* The address space we belong to. */
 	pgprot_t vm_page_prot;		/* Access permissions of this VMA. */
 	/* 描述该区域的一段标志，驱动程序最感兴趣的是VM-IO和VM-RESERVED。
        前者将VMA设置为一个内存映射的I／O区域。
        后者告诉内存管理系统不要将VMA交换出去，大多数设备映射都设置该标志 */
 	unsigned long vm_flags;		/* Flags, see mm.h. */
-
-	struct rb_node vm_rb;
 
 	/*
 	 * For areas with an address space and backing store,
@@ -356,6 +368,7 @@ struct mm_struct {
 	unsigned long task_size;		/* size of task vm space */
 	unsigned long cached_hole_size; 	/* if non-zero, the largest hole below free_area_cache */
 	unsigned long free_area_cache;		/* first hole of size cached_hole_size or larger */
+	unsigned long highest_vm_end;		/* highest vma end address */
 	/* 指向页全局目录 */
 	pgd_t * pgd;
 	atomic_t mm_users;			/* How many users with user space? */
@@ -433,8 +446,35 @@ struct mm_struct {
 #ifdef CONFIG_CPUMASK_OFFSTACK
 	struct cpumask cpumask_allocation;
 #endif
+#ifdef CONFIG_NUMA_BALANCING
+	/*
+	 * numa_next_scan is the next time when the PTEs will me marked
+	 * pte_numa to gather statistics and migrate pages to new nodes
+	 * if necessary
+	 */
+	unsigned long numa_next_scan;
+
+	/* numa_next_reset is when the PTE scanner period will be reset */
+	unsigned long numa_next_reset;
+
+	/* Restart point for scanning and setting pte_numa */
+	unsigned long numa_scan_offset;
+
+	/* numa_scan_seq prevents two threads setting pte_numa */
+	int numa_scan_seq;
+
+	/*
+	 * The first node a task was scheduled on. If a task runs on
+	 * a different node than Make PTE Scan Go Now.
+	 */
+	int first_nid;
+#endif
 	struct uprobes_state uprobes_state;
 };
+
+/* first nid will either be a valid NID or one of these values */
+#define NUMA_PTE_SCAN_INIT	-1
+#define NUMA_PTE_SCAN_ACTIVE	-2
 
 static inline void mm_init_cpumask(struct mm_struct *mm)
 {

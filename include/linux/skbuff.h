@@ -271,11 +271,13 @@ enum {
 /*
  * The callback notifies userspace to release buffers when skb DMA is done in
  * lower device, the skb last reference should be 0 when calling this.
+ * The zerocopy_success argument is true if zero copy transmit occurred,
+ * false on data copy or out of memory error caused by data copy attempt.
  * The ctx field is used to track device context.
  * The desc field is used to track userspace buffer index.
  */
 struct ubuf_info {
-	void (*callback)(struct ubuf_info *);
+	void (*callback)(struct ubuf_info *, bool zerocopy_success);
 	void *ctx;
 	unsigned long desc;
 };
@@ -429,6 +431,8 @@ typedef unsigned char *sk_buff_data_t;
  *	@mark: Generic packet mark
  *	@dropcount: total number of sk_receive_queue overflows
  *	@vlan_tci: vlan tag control information
+ *	@inner_transport_header: Inner transport layer header (encapsulation)
+ *	@inner_network_header: Network layer header (encapsulation)
  *	@transport_header: Transport layer header
  *	@network_header: Network layer header
  *	@mac_header: Link layer header
@@ -578,7 +582,13 @@ struct sk_buff {
 	__u8			wifi_acked:1;
 	__u8			no_fcs:1;
 	__u8			head_frag:1;
-	/* 8/10 bit hole (depending on ndisc_nodetype presence) */
+	/* Encapsulation protocol and NIC drivers should use
+	 * this flag to indicate to each other if the skb contains
+	 * encapsulated packet or not and maybe use the inner packet
+	 * headers if needed
+	 */
+	__u8			encapsulation:1;
+	/* 7/9 bit hole (depending on ndisc_nodetype presence) */
 	kmemcheck_bitfield_end(flags2);
 
 #ifdef CONFIG_NET_DMA
@@ -593,6 +603,8 @@ struct sk_buff {
 		__u32		avail_size;
 	};
 
+	sk_buff_data_t		inner_transport_header;
+	sk_buff_data_t		inner_network_header;
 	/* L4传输层头部指针，ip_local_deliver_finish() 里初始化 */
 	sk_buff_data_t		transport_header;
 	/* L3网络层头部指针，netif_receive_skb() 里初始化 */
@@ -698,6 +710,7 @@ static inline struct rtable *skb_rtable(const struct sk_buff *skb)
 }
 
 extern void kfree_skb(struct sk_buff *skb);
+extern void skb_tx_error(struct sk_buff *skb);
 extern void consume_skb(struct sk_buff *skb);
 extern void	       __kfree_skb(struct sk_buff *skb);
 extern struct kmem_cache *skbuff_head_cache;
@@ -788,7 +801,7 @@ extern unsigned int   skb_find_text(struct sk_buff *skb, unsigned int from,
 extern void __skb_get_rxhash(struct sk_buff *skb);
 static inline __u32 skb_get_rxhash(struct sk_buff *skb)
 {
-	if (!skb->rxhash)
+	if (!skb->l4_rxhash)
 		__skb_get_rxhash(skb);
 
 	return skb->rxhash;
@@ -1661,6 +1674,12 @@ static inline void skb_reserve(struct sk_buff *skb, int len)
 	skb->tail += len;
 }
 
+static inline void skb_reset_inner_headers(struct sk_buff *skb)
+{
+	skb->inner_network_header = skb->network_header;
+	skb->inner_transport_header = skb->transport_header;
+}
+
 static inline void skb_reset_mac_len(struct sk_buff *skb)
 {
 	skb->mac_len = skb->network_header - skb->mac_header;
@@ -1668,6 +1687,41 @@ static inline void skb_reset_mac_len(struct sk_buff *skb)
 
 /* 使用相对head指针的偏移方式 */
 #ifdef NET_SKBUFF_DATA_USES_OFFSET
+static inline unsigned char *skb_inner_transport_header(const struct sk_buff
+							*skb)
+{
+	return skb->head + skb->inner_transport_header;
+}
+
+static inline void skb_reset_inner_transport_header(struct sk_buff *skb)
+{
+	skb->inner_transport_header = skb->data - skb->head;
+}
+
+static inline void skb_set_inner_transport_header(struct sk_buff *skb,
+						   const int offset)
+{
+	skb_reset_inner_transport_header(skb);
+	skb->inner_transport_header += offset;
+}
+
+static inline unsigned char *skb_inner_network_header(const struct sk_buff *skb)
+{
+	return skb->head + skb->inner_network_header;
+}
+
+static inline void skb_reset_inner_network_header(struct sk_buff *skb)
+{
+	skb->inner_network_header = skb->data - skb->head;
+}
+
+static inline void skb_set_inner_network_header(struct sk_buff *skb,
+						const int offset)
+{
+	skb_reset_inner_network_header(skb);
+	skb->inner_network_header += offset;
+}
+
 static inline unsigned char *skb_transport_header(const struct sk_buff *skb)
 {
 	return skb->head + skb->transport_header;
@@ -1723,7 +1777,38 @@ static inline void skb_set_mac_header(struct sk_buff *skb, const int offset)
 }
 
 #else /* NET_SKBUFF_DATA_USES_OFFSET */
-/* 未定义NET_SKBUFF_DATA_USES_OFFSET，其他字段保存的为指针 */
+static inline unsigned char *skb_inner_transport_header(const struct sk_buff
+							*skb)
+{
+	return skb->inner_transport_header;
+}
+
+static inline void skb_reset_inner_transport_header(struct sk_buff *skb)
+{
+	skb->inner_transport_header = skb->data;
+}
+
+static inline void skb_set_inner_transport_header(struct sk_buff *skb,
+						   const int offset)
+{
+	skb->inner_transport_header = skb->data + offset;
+}
+
+static inline unsigned char *skb_inner_network_header(const struct sk_buff *skb)
+{
+	return skb->inner_network_header;
+}
+
+static inline void skb_reset_inner_network_header(struct sk_buff *skb)
+{
+	skb->inner_network_header = skb->data;
+}
+
+static inline void skb_set_inner_network_header(struct sk_buff *skb,
+						const int offset)
+{
+	skb->inner_network_header = skb->data + offset;
+}
 
 static inline unsigned char *skb_transport_header(const struct sk_buff *skb)
 {
@@ -1802,9 +1887,19 @@ static inline u32 skb_network_header_len(const struct sk_buff *skb)
 	return skb->transport_header - skb->network_header;
 }
 
+static inline u32 skb_inner_network_header_len(const struct sk_buff *skb)
+{
+	return skb->inner_transport_header - skb->inner_network_header;
+}
+
 static inline int skb_network_offset(const struct sk_buff *skb)
 {
 	return skb_network_header(skb) - skb->data;
+}
+
+static inline int skb_inner_network_offset(const struct sk_buff *skb)
+{
+	return skb_inner_network_header(skb) - skb->data;
 }
 
 static inline int pskb_network_may_pull(struct sk_buff *skb, unsigned int len)

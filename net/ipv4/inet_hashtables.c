@@ -242,15 +242,18 @@ struct sock *__inet_lookup_established(struct net *net,
 begin:
 	/* 遍历该桶下的链表 */
 	sk_nulls_for_each_rcu(sk, node, &head->chain) {
-		if (INET_MATCH(sk, net, hash, acookie,
-					saddr, daddr, ports, dif)) {
+		if (sk->sk_hash != hash)
+			continue;
+		if (likely(INET_MATCH(sk, net, acookie,
+				      saddr, daddr, ports, dif))) {
 			/* 如果sk_refcnt是0，则跳转到begintw
 			   不是0的话，则增加了引用计数
 			*/
+
 			if (unlikely(!atomic_inc_not_zero(&sk->sk_refcnt)))
 				goto begintw;
-			if (unlikely(!INET_MATCH(sk, net, hash, acookie,
-				saddr, daddr, ports, dif))) {
+			if (unlikely(!INET_MATCH(sk, net, acookie,
+						 saddr, daddr, ports, dif))) {
 				sock_put(sk);
 				goto begin;
 			}
@@ -269,14 +272,18 @@ begintw:
 	/* Must check for a TIME_WAIT'er before going to listener hash. */
 	/* 遍历TIME_WAIT链表 */
 	sk_nulls_for_each_rcu(sk, node, &head->twchain) {
-		if (INET_TW_MATCH(sk, net, hash, acookie,
-					saddr, daddr, ports, dif)) {
+		if (sk->sk_hash != hash)
+			continue;
+		if (likely(INET_TW_MATCH(sk, net, acookie,
+					 saddr, daddr, ports,
+					 dif))) {
 			if (unlikely(!atomic_inc_not_zero(&sk->sk_refcnt))) {
 				sk = NULL;
 				goto out;
 			}
-			if (unlikely(!INET_TW_MATCH(sk, net, hash, acookie,
-				 saddr, daddr, ports, dif))) {
+			if (unlikely(!INET_TW_MATCH(sk, net, acookie,
+						    saddr, daddr, ports,
+						    dif))) {
 				sock_put(sk);
 				goto begintw;
 			}
@@ -323,10 +330,12 @@ static int __inet_check_established(struct inet_timewait_death_row *death_row,
 
 	/* Check TIME-WAIT sockets first. */
 	sk_nulls_for_each(sk2, node, &head->twchain) {
-		tw = inet_twsk(sk2);
+		if (sk2->sk_hash != hash)
+			continue;
 
-		if (INET_TW_MATCH(sk2, net, hash, acookie,
-					saddr, daddr, ports, dif)) {
+		if (likely(INET_TW_MATCH(sk2, net, acookie,
+					 saddr, daddr, ports, dif))) {
+			tw = inet_twsk(sk2);
 			if (twsk_unique(sk, sk2, twp))
 				goto unique;
 			else
@@ -337,8 +346,10 @@ static int __inet_check_established(struct inet_timewait_death_row *death_row,
 
 	/* And established part... */
 	sk_nulls_for_each(sk2, node, &head->chain) {
-		if (INET_MATCH(sk2, net, hash, acookie,
-					saddr, daddr, ports, dif))
+		if (sk2->sk_hash != hash)
+			continue;
+		if (likely(INET_MATCH(sk2, net, acookie,
+				      saddr, daddr, ports, dif)))
 			goto not_unique;
 	}
 

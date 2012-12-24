@@ -20,6 +20,7 @@
 # define __nocast	__attribute__((nocast))
 /* io地址空间指针属性，不可直接反引用 */
 # define __iomem	__attribute__((noderef, address_space(2)))
+# define __must_hold(x)	__attribute__((context(x,1,1)))
 /* @x在执行之前，必须为0，执行后为1 */
 # define __acquires(x)	__attribute__((context(x,0,1)))
 /* @x在执行之前，必须为1，执行后为0 */
@@ -50,6 +51,7 @@ extern void __chk_io_ptr(const volatile void __iomem *);
 # define __chk_user_ptr(x) (void)0
 # define __chk_io_ptr(x) (void)0
 # define __builtin_warning(x, y...) (1)
+# define __must_hold(x)
 # define __acquires(x)
 # define __releases(x)
 # define __acquire(x) (void)0
@@ -58,6 +60,10 @@ extern void __chk_io_ptr(const volatile void __iomem *);
 # define __percpu
 # define __rcu
 #endif
+
+/* Indirect macros required for expanded argument pasting, eg. __LINE__. */
+#define ___PASTE(a,b) a##b
+#define __PASTE(a,b) ___PASTE(a,b)
 
 #ifdef __KERNEL__
 
@@ -197,6 +203,11 @@ likely和unlikely不是指令,它只是给编译器看的，
   ({ unsigned long __ptr;					\
      __ptr = (unsigned long) (ptr);				\
     (typeof(ptr)) (__ptr + (off)); })
+#endif
+
+/* Not-quite-unique ID. */
+#ifndef __UNIQUE_ID
+# define __UNIQUE_ID(prefix) __PASTE(__PASTE(__UNIQUE_ID_, prefix), __LINE__)
 #endif
 
 #endif /* __KERNEL__ */

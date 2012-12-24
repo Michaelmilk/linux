@@ -174,6 +174,27 @@ ssize_t device_show_int(struct device *dev,
 }
 EXPORT_SYMBOL_GPL(device_show_int);
 
+ssize_t device_store_bool(struct device *dev, struct device_attribute *attr,
+			  const char *buf, size_t size)
+{
+	struct dev_ext_attribute *ea = to_ext_attr(attr);
+
+	if (strtobool(buf, ea->var) < 0)
+		return -EINVAL;
+
+	return size;
+}
+EXPORT_SYMBOL_GPL(device_store_bool);
+
+ssize_t device_show_bool(struct device *dev, struct device_attribute *attr,
+			 char *buf)
+{
+	struct dev_ext_attribute *ea = to_ext_attr(attr);
+
+	return snprintf(buf, PAGE_SIZE, "%d\n", *(bool *)(ea->var));
+}
+EXPORT_SYMBOL_GPL(device_show_bool);
+
 /**
  *	device_release - free device structure.
  *	@kobj:	device's kobject.
@@ -1207,7 +1228,6 @@ void device_del(struct device *dev)
 	if (dev->bus)
 		blocking_notifier_call_chain(&dev->bus->p->bus_notifier,
 					     BUS_NOTIFY_DEL_DEVICE, dev);
-	device_pm_remove(dev);
 	dpm_sysfs_remove(dev);
 	/* 如果device有parent，将它从parent的子设备链表中删除 */
 	if (parent)
@@ -1240,6 +1260,7 @@ void device_del(struct device *dev)
 	device_remove_attrs(dev);
 	/* 如果device有总线(bus_type),调用bus_remove_device()把它从总线中删除 */
 	bus_remove_device(dev);
+	device_pm_remove(dev);
 	driver_deferred_probe_del(dev);
 
 	/* Notify the platform of the removal, in case they
@@ -1437,7 +1458,7 @@ struct root_device {
 	struct module *owner;
 };
 
-inline struct root_device *to_root_device(struct device *d)
+static inline struct root_device *to_root_device(struct device *d)
 {
 	return container_of(d, struct root_device, dev);
 }
@@ -1879,10 +1900,12 @@ void device_shutdown(void)
 		pm_runtime_barrier(dev);
 
 		if (dev->bus && dev->bus->shutdown) {
-			dev_dbg(dev, "shutdown\n");
+			if (initcall_debug)
+				dev_info(dev, "shutdown\n");
 			dev->bus->shutdown(dev);
 		} else if (dev->driver && dev->driver->shutdown) {
-			dev_dbg(dev, "shutdown\n");
+			if (initcall_debug)
+				dev_info(dev, "shutdown\n");
 			dev->driver->shutdown(dev);
 		}
 

@@ -447,7 +447,7 @@ int kthreadd(void *unused)
 	/* 在所有cpu上可运行 */
 	set_cpus_allowed_ptr(tsk, cpu_all_mask);
 	/* 允许运行在内存节点的哪个区域 */
-	set_mems_allowed(node_states[N_HIGH_MEMORY]);
+	set_mems_allowed(node_states[N_MEMORY]);
 
 	current->flags |= PF_NOFREEZE;
 

@@ -69,13 +69,13 @@ static void tick_periodic(int cpu)
 {
 	/* 进行滴答处理的cpu */
 	if (tick_do_timer_cpu == cpu) {
-		write_seqlock(&xtime_lock);
+		write_seqlock(&jiffies_lock);
 
 		/* Keep track of the next tick event */
 		tick_next_period = ktime_add(tick_next_period, tick_period);
 
 		do_timer(1);
-		write_sequnlock(&xtime_lock);
+		write_sequnlock(&jiffies_lock);
 	}
 
 	update_process_times(user_mode(get_irq_regs()));
@@ -136,9 +136,9 @@ void tick_setup_periodic(struct clock_event_device *dev, int broadcast)
 		ktime_t next;
 
 		do {
-			seq = read_seqbegin(&xtime_lock);
+			seq = read_seqbegin(&jiffies_lock);
 			next = tick_next_period;
-		} while (read_seqretry(&xtime_lock, seq));
+		} while (read_seqretry(&jiffies_lock, seq));
 
 		clockevents_set_mode(dev, CLOCK_EVT_MODE_ONESHOT);
 

@@ -19,14 +19,8 @@ PS/2电脑上使用的键盘鼠标接口就是现在的PS/2接口。
 这也说明其分辨率和载色数的不足。
 */
 
-/* Internal svga startup constants */
-#define NORMAL_VGA	0xffff		/* 80x25 mode */
-#define EXTENDED_VGA	0xfffe		/* 80x50 mode */
-#define ASK_VGA		0xfffd		/* ask for it at bootup */
-
-#ifdef __KERNEL__
-
 #include <asm/pgtable_types.h>
+#include <uapi/asm/boot.h>
 
 /* Physical address where kernel should be loaded. */
 /*
@@ -63,7 +57,5 @@ CONFIG_PHYSICAL_START由配置决定，在include/generated/autoconf.h中
 #else
 #define BOOT_STACK_SIZE	0x1000
 #endif
-
-#endif /* __KERNEL__ */
 
 #endif /* _ASM_X86_BOOT_H */

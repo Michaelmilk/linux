@@ -218,6 +218,7 @@ extern struct klist *bus_get_device_klist(struct bus_type *bus);
  * @mod_name:	Used for built-in modules.
  * @suppress_bind_attrs: Disables bind/unbind via sysfs.
  * @of_match_table: The open firmware table.
+ * @acpi_match_table: The ACPI match table.
  * @probe:	Called to query the existence of a specific device,
  *		whether this driver can work with it, and bind the driver
  *		to a specific device.
@@ -256,6 +257,7 @@ struct device_driver {
 	bool suppress_bind_attrs;	/* disables bind/unbind via sysfs */
 
 	const struct of_device_id	*of_match_table;
+	const struct acpi_device_id	*acpi_match_table;
 
 	/* 用来查询特定设备是否存在的函数(以及这个驱动程序是否能操作它)
 	   函数probe被调用来验证某一类型硬件的存在。
@@ -551,6 +553,10 @@ ssize_t device_show_int(struct device *dev, struct device_attribute *attr,
 			char *buf);
 ssize_t device_store_int(struct device *dev, struct device_attribute *attr,
 			 const char *buf, size_t count);
+ssize_t device_show_bool(struct device *dev, struct device_attribute *attr,
+			char *buf);
+ssize_t device_store_bool(struct device *dev, struct device_attribute *attr,
+			 const char *buf, size_t count);
 
 #define DEVICE_ATTR(_name, _mode, _show, _store) \
 	struct device_attribute dev_attr_##_name = __ATTR(_name, _mode, _show, _store)
@@ -560,6 +566,9 @@ ssize_t device_store_int(struct device *dev, struct device_attribute *attr,
 #define DEVICE_INT_ATTR(_name, _mode, _var) \
 	struct dev_ext_attribute dev_attr_##_name = \
 		{ __ATTR(_name, _mode, device_show_int, device_store_int), &(_var) }
+#define DEVICE_BOOL_ATTR(_name, _mode, _var) \
+	struct dev_ext_attribute dev_attr_##_name = \
+		{ __ATTR(_name, _mode, device_show_bool, device_store_bool), &(_var) }
 #define DEVICE_ATTR_IGNORE_LOCKDEP(_name, _mode, _show, _store) \
 	struct device_attribute dev_attr_##_name =		\
 		__ATTR_IGNORE_LOCKDEP(_name, _mode, _show, _store)
@@ -631,6 +640,12 @@ struct device_dma_parameters {
 	unsigned long segment_boundary_mask;
 };
 
+struct acpi_dev_node {
+#ifdef CONFIG_ACPI
+	void	*handle;
+#endif
+};
+
 /**
  * struct device - The basic device structure
  * @parent:	The device's "parent" device, the device to which it is attached.
@@ -671,6 +686,7 @@ struct device_dma_parameters {
  * @dma_mem:	Internal for coherent mem override.
  * @archdata:	For arch-specific additions.
  * @of_node:	Associated device tree node.
+ * @acpi_node:	Associated ACPI device node.
  * @devt:	For creating the sysfs "dev".
  * @id:		device instance
  * @devres_lock: Spinlock to protect the resource of the device.
@@ -757,6 +773,7 @@ struct device {
 	struct dev_archdata	archdata;
 
 	struct device_node	*of_node; /* associated device tree node */
+	struct acpi_dev_node	acpi_node; /* associated ACPI device node */
 
 	dev_t			devt;	/* dev_t, creates the sysfs "dev" */
 	u32			id;	/* device instance */
@@ -781,6 +798,14 @@ static inline struct device *kobj_to_dev(struct kobject *kobj)
 {
 	return container_of(kobj, struct device, kobj);
 }
+
+#ifdef CONFIG_ACPI
+#define ACPI_HANDLE(dev)	((dev)->acpi_node.handle)
+#define ACPI_HANDLE_SET(dev, _handle_)	(dev)->acpi_node.handle = (_handle_)
+#else
+#define ACPI_HANDLE(dev)	(NULL)
+#define ACPI_HANDLE_SET(dev, _handle_)	do { } while (0)
+#endif
 
 /* Get the wakeup routines, which depend on struct device */
 #include <linux/pm_wakeup.h>

@@ -230,7 +230,7 @@ asmlinkage void __do_softirq(void)
 
 	/* 得到当前所有pending的软中断 */
 	pending = local_softirq_pending();
-	vtime_account(current);
+	vtime_account_irq_enter(current);
 
 	/* 执行到这里要屏蔽其他软中断，这里也就证明了每个CPU上同时运行的软中断只能有一个 */
 	__local_bh_disable((unsigned long)__builtin_return_address(0),
@@ -343,7 +343,7 @@ restart:
 
 	lockdep_softirq_exit();
 
-	vtime_account(current);
+	vtime_account_irq_exit(current);
 	/* 到最后才开软中断执行环境，允许软中断执行。
 	   注意:这里使用的不是local_bh_enable()，不会再次触发do_softirq()的调用。
 	*/
@@ -428,7 +428,7 @@ static inline void invoke_softirq(void)
  */
 void irq_exit(void)
 {
-	vtime_account(current);
+	vtime_account_irq_exit(current);
 	trace_hardirq_exit();
 	/* 恢复preempt_count的值 */
 	sub_preempt_count(IRQ_EXIT_OFFSET);

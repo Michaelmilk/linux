@@ -153,16 +153,7 @@ int default_check_phys_apicid_present(int phys_apicid)
 }
 #endif
 
-/*
-32位保护模式后使用的boot_params全局变量
-其中的值由arch/x86/boot/main.c的全局变量boot_params复制而来
-复制操作在arch/x86/kernel/head_32.S中
-*/
-#ifndef CONFIG_DEBUG_BOOT_PARAMS
-struct boot_params __initdata boot_params;
-#else
 struct boot_params boot_params;
-#endif
 
 /*
  * Machine setup..
@@ -1045,6 +1036,10 @@ void __init setup_arch(char **cmdline_p)
 	setup_log_buf(1);
 
 	reserve_initrd();
+
+#if defined(CONFIG_ACPI) && defined(CONFIG_BLK_DEV_INITRD)
+	acpi_initrd_override((void *)initrd_start, initrd_end - initrd_start);
+#endif
 
 	reserve_crashkernel();
 
