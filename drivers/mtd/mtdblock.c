@@ -34,13 +34,22 @@
 #include <linux/mutex.h>
 
 
+/*
+mtd块设备
+*/
 struct mtdblk_dev {
+	/* 内嵌的块设备翻译层设备结构 */
 	struct mtd_blktrans_dev mbd;
 	int count;
+	/* 互斥锁 */
 	struct mutex cache_mutex;
+	/* 缓冲区数据地址 */
 	unsigned char *cache_data;
+	/* 在缓冲区中读写位置偏移 */
 	unsigned long cache_offset;
+	/* 缓冲区中数据大小 */
 	unsigned int cache_size;
+	/* 缓冲区状态 */
 	enum { STATE_EMPTY, STATE_CLEAN, STATE_DIRTY } cache_state;
 };
 
@@ -62,6 +71,9 @@ static void erase_callback(struct erase_info *done)
 	wake_up(wait_q);
 }
 
+/*
+擦写函数
+*/
 static int erase_write (struct mtd_info *mtd, unsigned long pos,
 			int len, const char *buf)
 {
@@ -116,6 +128,7 @@ static int write_cached_data (struct mtdblk_dev *mtdblk)
 	struct mtd_info *mtd = mtdblk->mbd.mtd;
 	int ret;
 
+	/* 没有缓存数据要写 */
 	if (mtdblk->cache_state != STATE_DIRTY)
 		return 0;
 
@@ -339,8 +352,10 @@ static int mtdblock_release(struct mtd_blktrans_dev *mbd)
 
 static int mtdblock_flush(struct mtd_blktrans_dev *dev)
 {
+	/* 取容器结构指针 */
 	struct mtdblk_dev *mtdblk = container_of(dev, struct mtdblk_dev, mbd);
 
+	/* 控制并发 */
 	mutex_lock(&mtdblk->cache_mutex);
 	write_cached_data(mtdblk);
 	mutex_unlock(&mtdblk->cache_mutex);
@@ -350,6 +365,7 @@ static int mtdblock_flush(struct mtd_blktrans_dev *dev)
 
 static void mtdblock_add_mtd(struct mtd_blktrans_ops *tr, struct mtd_info *mtd)
 {
+	/* 申请mtd块设备结构 */
 	struct mtdblk_dev *dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 
 	if (!dev)
@@ -388,6 +404,9 @@ static struct mtd_blktrans_ops mtdblock_tr = {
 	.owner		= THIS_MODULE,
 };
 
+/*
+注册mtdblock翻译层设备
+*/
 static int __init init_mtdblock(void)
 {
 	return register_mtd_blktrans(&mtdblock_tr);

@@ -11,6 +11,7 @@
 #include <linux/spinlock.h>
 #include <linux/seqlock.h>
 
+/* proportion: ±ÈÀý */
 /*
  * When maximum proportion of some event type is specified, this is the
  * precision with which we allow limitting. Note that this creates an upper
@@ -18,6 +19,7 @@
  *   ULLONG_MAX >> FPROP_FRAC_SHIFT.
  */
 #define FPROP_FRAC_SHIFT 10
+/* 1024 */
 #define FPROP_FRAC_BASE (1UL << FPROP_FRAC_SHIFT)
 
 /*

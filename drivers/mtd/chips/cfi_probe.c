@@ -394,6 +394,7 @@ struct mtd_info *cfi_probe(struct map_info *map)
 	 * Just use the generic probe stuff to call our CFI-specific
 	 * chip_probe routine in all the possible permutations, etc.
 	 */
+	/* permutation: ееап */
 	return mtd_do_chip_probe(map, &cfi_chip_probe);
 }
 
@@ -403,6 +404,9 @@ static struct mtd_chip_driver cfi_chipdrv = {
 	.module		= THIS_MODULE
 };
 
+/*
+CFI: common flash interface
+*/
 static int __init cfi_probe_init(void)
 {
 	register_mtd_chip_driver(&cfi_chipdrv);

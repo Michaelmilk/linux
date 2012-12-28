@@ -129,6 +129,11 @@ static inline int cfi_interleave_supported(int i)
  * where individually noted.
  */
 
+/*
+CFI: common flash interface通用flash接口
+
+描述flash芯片信息
+*/
 /* Basic Query Structure */
 struct cfi_ident {
 	uint8_t  qry[3];

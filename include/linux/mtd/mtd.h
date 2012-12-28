@@ -29,7 +29,9 @@
 
 #include <asm/div64.h>
 
+/* mtd字符设备主设备号 */
 #define MTD_CHAR_MAJOR 90
+/* mtd块设备主设备号 */
 #define MTD_BLOCK_MAJOR 31
 
 #define MTD_ERASE_PENDING	0x01
@@ -114,11 +116,23 @@ struct nand_ecclayout {
 
 struct module;	/* only needed for owner field in mtd_info */
 
+/*
+每个mtd原始设备都有一个mtd_info结构
+每个分区也实现为一个mtd_info
+*/
 struct mtd_info {
+	/* 内存技术的类型
+	   如MTD_RAM MTD_ROM
+	*/
 	u_char type;
+	/* 标志位
+	   如MTD_CAP_ROM
+	*/
 	uint32_t flags;
+	/* mtd设备的大小 */
 	uint64_t size;	 // Total size of the MTD
 
+	/* 一个erase命令可以擦除的最小块的大小 */
 	/* "Major" erase size for the device. Na茂ve users may take this
 	 * to be the only erase size available, or may use the more detailed
 	 * information below if they desire
@@ -144,6 +158,8 @@ struct mtd_info {
 	 */
 	uint32_t writebufsize;
 
+	/* OOB: out of band */
+	/* OOB块大小 */
 	uint32_t oobsize;   // Amount of OOB data per block (e.g. 16)
 	uint32_t oobavail;  // Available OOB bytes per block
 
@@ -167,6 +183,7 @@ struct mtd_info {
 	unsigned int bitflip_threshold;
 
 	// Kernel-only stuff starts here.
+	/* 设备名称 */
 	const char *name;
 	int index;
 
@@ -245,6 +262,9 @@ struct mtd_info {
 	/* Subpage shift (NAND) */
 	int subpage_sft;
 
+	/* 指向具体设备驱动的私有数据结构
+	   指向map_info结构
+	*/
 	void *priv;
 
 	struct module *owner;
@@ -376,6 +396,9 @@ extern struct mtd_info *get_mtd_device_nm(const char *name);
 extern void put_mtd_device(struct mtd_info *mtd);
 
 
+/*
+用于通知翻译层添加和移除mtd原始设备
+*/
 struct mtd_notifier {
 	void (*add)(struct mtd_info *mtd);
 	void (*remove)(struct mtd_info *mtd);

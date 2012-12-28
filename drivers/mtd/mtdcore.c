@@ -80,6 +80,9 @@ static struct class mtd_class = {
 	.resume = mtd_cls_resume,
 };
 
+/*
+定义一个struct idr结构mtd_idr
+*/
 static DEFINE_IDR(mtd_idr);
 
 /* These are exported solely for the purpose of mtd_blkdevs.c. You
@@ -131,6 +134,9 @@ static int mtd_cls_resume(struct device *dev)
 	return 0;
 }
 
+/*
+打印mtd类型
+*/
 static ssize_t mtd_type_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -469,6 +475,9 @@ out_error:
 	return ret;
 }
 
+/*
+解析分区并注册mtd设备
+*/
 /**
  * mtd_device_parse_register - parse partitions and register an MTD device.
  *
@@ -549,6 +558,9 @@ int mtd_device_unregister(struct mtd_info *master)
 }
 EXPORT_SYMBOL_GPL(mtd_device_unregister);
 
+/*
+注册一个使用mtd设备层的使用者
+*/
 /**
  *	register_mtd_user - register a 'user' of MTD devices.
  *	@new: pointer to notifier info structure
@@ -563,10 +575,15 @@ void register_mtd_user (struct mtd_notifier *new)
 
 	mutex_lock(&mtd_table_mutex);
 
+	/* 将@new加入全局mtd_notifiers链表 */
 	list_add(&new->list, &mtd_notifiers);
 
+	/* 增加模块引用计数 */
 	__module_get(THIS_MODULE);
 
+	/* 遍历mtd设备，调用通知结构的add函数
+	   如blktrans_notify_add
+	*/
 	mtd_for_each_device(mtd)
 		new->add(mtd);
 
@@ -1123,6 +1140,9 @@ EXPORT_SYMBOL_GPL(mtd_kmalloc_up_to);
 
 static struct proc_dir_entry *proc_mtd;
 
+/*
+proc显示信息的格式
+*/
 static int mtd_proc_show(struct seq_file *m, void *v)
 {
 	struct mtd_info *mtd;
@@ -1168,6 +1188,11 @@ static int __init mtd_bdi_init(struct backing_dev_info *bdi, const char *name)
 	return ret;
 }
 
+/*
+MTD: memory technology device内存技术设备
+
+初始化mtd模块
+*/
 static int __init init_mtd(void)
 {
 	int ret;
@@ -1189,6 +1214,7 @@ static int __init init_mtd(void)
 		goto err_bdi3;
 
 #ifdef CONFIG_PROC_FS
+	/* 创建/proc/mtd目录 */
 	proc_mtd = proc_create("mtd", 0, NULL, &mtd_proc_ops);
 #endif /* CONFIG_PROC_FS */
 	return 0;

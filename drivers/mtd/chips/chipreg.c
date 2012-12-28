@@ -12,11 +12,15 @@
 #include <linux/mtd/mtd.h>
 
 static DEFINE_SPINLOCK(chip_drvs_lock);
+/*
+芯片驱动链表
+*/
 static LIST_HEAD(chip_drvs_list);
 
 void register_mtd_chip_driver(struct mtd_chip_driver *drv)
 {
 	spin_lock(&chip_drvs_lock);
+	/* 将@drv加入chip_drvs_list链表 */
 	list_add(&drv->list, &chip_drvs_list);
 	spin_unlock(&chip_drvs_lock);
 }

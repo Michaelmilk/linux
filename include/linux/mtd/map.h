@@ -245,14 +245,20 @@ struct map_info {
 	unsigned long pfow_base;
 	unsigned long map_priv_1;
 	unsigned long map_priv_2;
+	/* 指向cfi_private结构 */
 	void *fldrv_priv;
 	struct mtd_chip_driver *fldrv;
 };
 
+/*
+mtd芯片驱动
+*/
 struct mtd_chip_driver {
+	/* 探测函数 */
 	struct mtd_info *(*probe)(struct map_info *map);
 	void (*destroy)(struct mtd_info *);
 	struct module *module;
+	/* 驱动名称 */
 	char *name;
 	struct list_head list;
 };

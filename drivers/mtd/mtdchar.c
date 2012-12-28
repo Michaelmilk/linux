@@ -1239,10 +1239,14 @@ static struct file_system_type mtd_inodefs_type = {
        .kill_sb = kill_anon_super,
 };
 
+/*
+初始化mtd字符设备
+*/
 static int __init init_mtdchar(void)
 {
 	int ret;
 
+	/* 注册主设备号为90的字符设备范围 */
 	ret = __register_chrdev(MTD_CHAR_MAJOR, 0, 1 << MINORBITS,
 				   "mtd", &mtd_fops);
 	if (ret < 0) {
@@ -1251,6 +1255,7 @@ static int __init init_mtdchar(void)
 		return ret;
 	}
 
+	/* 注册文件系统 */
 	ret = register_filesystem(&mtd_inodefs_type);
 	if (ret) {
 		pr_notice("Can't register mtd_inodefs filesystem: %d\n", ret);

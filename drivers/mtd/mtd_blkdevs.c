@@ -36,6 +36,9 @@
 
 #include "mtdcore.h"
 
+/*
+由函数register_mtd_blktrans向blktrans_majors链表中添加mtd_blktrans_ops
+*/
 static LIST_HEAD(blktrans_majors);
 static DEFINE_MUTEX(blktrans_ref_mutex);
 
@@ -333,6 +336,7 @@ int add_mtd_blktrans_dev(struct mtd_blktrans_dev *new)
 
 	mutex_lock(&blktrans_ref_mutex);
 	list_for_each_entry(d, &tr->devs, list) {
+		/* @new未指定设备号 */
 		if (new->devnum == -1) {
 			/* Use first free number */
 			if (d->devnum != last_devnum+1) {
@@ -341,6 +345,7 @@ int add_mtd_blktrans_dev(struct mtd_blktrans_dev *new)
 				list_add_tail(&new->list, &d->list);
 				goto added;
 			}
+		/* 设备号已使用 */
 		} else if (d->devnum == new->devnum) {
 			/* Required number taken */
 			mutex_unlock(&blktrans_ref_mutex);
@@ -366,6 +371,7 @@ int add_mtd_blktrans_dev(struct mtd_blktrans_dev *new)
 		goto error1;
 	}
 
+	/* 加入mtd_blktrans_ops->devs链表 */
 	list_add_tail(&new->list, &tr->devs);
  added:
 	mutex_unlock(&blktrans_ref_mutex);
@@ -434,6 +440,7 @@ int add_mtd_blktrans_dev(struct mtd_blktrans_dev *new)
 	if (new->readonly)
 		set_disk_ro(gd, 1);
 
+	/* 使磁盘对系统可用 */
 	add_disk(gd);
 
 	if (new->disk_attributes) {
@@ -504,6 +511,9 @@ static void blktrans_notify_remove(struct mtd_info *mtd)
 				tr->remove_dev(dev);
 }
 
+/*
+块翻译层通知添加mtd设备
+*/
 static void blktrans_notify_add(struct mtd_info *mtd)
 {
 	struct mtd_blktrans_ops *tr;
@@ -511,6 +521,9 @@ static void blktrans_notify_add(struct mtd_info *mtd)
 	if (mtd->type == MTD_ABSENT)
 		return;
 
+	/* 遍历blktrans_majors链表，调用add_mtd函数
+	   如mtdblock_add_mtd nftl_add_mtd
+	*/
 	list_for_each_entry(tr, &blktrans_majors, list)
 		tr->add_mtd(tr, mtd);
 }
@@ -518,13 +531,19 @@ static void blktrans_notify_add(struct mtd_info *mtd)
 static struct mtd_notifier blktrans_notifier = {
 	.add = blktrans_notify_add,
 	.remove = blktrans_notify_remove,
+	/* list初始化为空 */
 };
 
+/*
+注册mtd块设备翻译层操作函数集
+*/
 int register_mtd_blktrans(struct mtd_blktrans_ops *tr)
 {
+	/* 用于遍历的局部变量 */
 	struct mtd_info *mtd;
 	int ret;
 
+	/* 将blktrans_notifier加入mtd_notifiers链表 */
 	/* Register the notifier if/when the first device type is
 	   registered, to prevent the link/init ordering from fucking
 	   us over. */
@@ -542,14 +561,17 @@ int register_mtd_blktrans(struct mtd_blktrans_ops *tr)
 		return ret;
 	}
 
+	/* 返回了分配的主设备号 */
 	if (ret)
 		tr->major = ret;
 
 	tr->blkshift = ffs(tr->blksize) - 1;
 
 	INIT_LIST_HEAD(&tr->devs);
+	/* 加入blktrans_majors链表 */
 	list_add(&tr->list, &blktrans_majors);
 
+	/* 遍历mtd_info */
 	mtd_for_each_device(mtd)
 		if (mtd->type != MTD_ABSENT)
 			tr->add_mtd(tr, mtd);

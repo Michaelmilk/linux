@@ -162,15 +162,24 @@ struct disk_part_tbl {
 
 struct disk_events;
 
+/*
+表示一个独立的磁盘设备
+*/
 struct gendisk {
 	/* major, first_minor and minors are input parameters only,
 	 * don't use directly.  Use disk_devt() and disk_max_parts().
 	 */
 	int major;			/* major number of driver */
 	int first_minor;
+	/* 该磁盘使用的次设备号数目
+	   此后不可更改
+	*/
 	int minors;                     /* maximum number of minors, =1 for
                                          * disks that can't be partitioned. */
 
+	/* 磁盘设备的名字
+	   将显示在/proc/partitions和sysfs中
+	*/
 	char disk_name[DISK_NAME_LEN];	/* name of major driver */
 	char *(*devnode)(struct gendisk *gd, umode_t *mode);
 
@@ -185,10 +194,13 @@ struct gendisk {
 	struct disk_part_tbl __rcu *part_tbl;
 	struct hd_struct part0;
 
+	/* 块设备操作函数 */
 	const struct block_device_operations *fops;
+	/* 管理设备的I/O请求 */
 	struct request_queue *queue;
 	void *private_data;
 
+	/* 用来描述驱动器状态的标志 */
 	int flags;
 	struct device *driverfs_dev;  // FIXME: remove
 	struct kobject *slave_dir;

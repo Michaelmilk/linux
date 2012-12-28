@@ -68,6 +68,9 @@ typedef enum {
    if they're interleaved.  This can even refer to individual partitions on
    the same physical chip when present. */
 
+/*
+描述每个flash芯片的专有信息
+*/
 struct flchip {
 	unsigned long start; /* Offset within the map */
 	//	unsigned long len;

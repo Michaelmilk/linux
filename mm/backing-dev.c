@@ -619,6 +619,9 @@ static void bdi_wb_init(struct bdi_writeback *wb, struct backing_dev_info *bdi)
  */
 #define INIT_BW		(100 << (20 - PAGE_SHIFT))
 
+/*
+³õÊ¼»¯@bdi
+*/
 int bdi_init(struct backing_dev_info *bdi)
 {
 	int i, err;

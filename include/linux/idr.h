@@ -67,6 +67,7 @@ struct idr {
 	spinlock_t	  lock;
 };
 
+/* 初始化idr结构@name */
 #define IDR_INIT(name)						\
 {								\
 	.top		= NULL,					\
@@ -75,6 +76,7 @@ struct idr {
 	.id_free_cnt	= 0,					\
 	.lock		= __SPIN_LOCK_UNLOCKED(name.lock),	\
 }
+/* 定义一个idr结构 */
 #define DEFINE_IDR(name)	struct idr name = IDR_INIT(name)
 
 /* Actions to be taken after a call to _idr_sub_alloc */

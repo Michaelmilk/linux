@@ -39,9 +39,13 @@ static DEFINE_MUTEX(mtd_partitions_mutex);
 
 /* Our partition node structure */
 struct mtd_part {
+	/* 分区信息 */
 	struct mtd_info mtd;
+	/* 主分区 */
 	struct mtd_info *master;
+	/* 该分区的偏移地址 */
 	uint64_t offset;
+	/* 组成链表 */
 	struct list_head list;
 };
 

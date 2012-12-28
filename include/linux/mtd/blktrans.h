@@ -33,6 +33,7 @@ struct inode;
 
 struct mtd_blktrans_dev {
 	struct mtd_blktrans_ops *tr;
+	/* 加入mtd_blktrans_ops的devs链表 */
 	struct list_head list;
 	struct mtd_info *mtd;
 	struct mutex lock;
@@ -42,6 +43,7 @@ struct mtd_blktrans_dev {
 	int readonly;
 	int open;
 	struct kref ref;
+	/* 磁盘设备 */
 	struct gendisk *disk;
 	struct attribute_group *disk_attributes;
 	struct workqueue_struct *wq;
@@ -52,8 +54,13 @@ struct mtd_blktrans_dev {
 	fmode_t file_mode;
 };
 
+/*
+mtd块设备翻译层操作函数集
+*/
 struct mtd_blktrans_ops {
+	/* 块设备名称 */
 	char *name;
+	/* 主设备号 */
 	int major;
 	int part_bits;
 	int blksize;
@@ -78,9 +85,14 @@ struct mtd_blktrans_ops {
 
 	/* Called on {de,}registration and on subsequent addition/removal
 	   of devices, with mtd_table_mutex held. */
+	/* 如mtdblock_add_mtd
+	   nftl_add_mtd
+	   inftl_add_mtd
+	*/
 	void (*add_mtd)(struct mtd_blktrans_ops *tr, struct mtd_info *mtd);
 	void (*remove_dev)(struct mtd_blktrans_dev *dev);
 
+	/* 结构mtd_blktrans_dev链表 */
 	struct list_head devs;
 	struct list_head list;
 	struct module *owner;

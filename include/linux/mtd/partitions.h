@@ -37,8 +37,11 @@
  */
 
 struct mtd_partition {
+	/* 分区名称 */
 	char *name;			/* identifier string */
+	/* 分区大小 */
 	uint64_t size;			/* partition size */
+	/* 该分区在主设备中的偏移 */
 	uint64_t offset;		/* offset within the master MTD space */
 	uint32_t mask_flags;		/* master MTD flags to mask out for this partition */
 	struct nand_ecclayout *ecclayout;	/* out of band layout for this partition (NAND only) */

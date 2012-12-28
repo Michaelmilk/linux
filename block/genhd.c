@@ -237,12 +237,18 @@ EXPORT_SYMBOL_GPL(disk_map_sector_rcu);
  * Can be deleted altogether. Later.
  *
  */
+/*
+主设备号与名称的结构定义
+
+定义数组
+*/
 static struct blk_major_name {
 	struct blk_major_name *next;
 	int major;
 	char name[16];
 } *major_names[BLKDEV_MAJOR_HASH_SIZE];
 
+/* 计算索引 */
 /* index in the above - for now: assume no multimajor ranges */
 static inline int major_to_index(unsigned major)
 {
@@ -263,6 +269,7 @@ void blkdev_show(struct seq_file *seqf, off_t offset)
 }
 #endif /* CONFIG_PROC_FS */
 
+/* 注册一个新的块设备 */
 /**
  * register_blkdev - register a new block device
  *
@@ -286,13 +293,18 @@ int register_blkdev(unsigned int major, const char *name)
 
 	mutex_lock(&block_class_lock);
 
+	/* 注册的主设备号为0，分配一个主设备号，并返回该号 */
 	/* temporary */
 	if (major == 0) {
+		/* 从最后一项往前遍历 */
 		for (index = ARRAY_SIZE(major_names)-1; index > 0; index--) {
+			/* 该主设备号还未使用 */
 			if (major_names[index] == NULL)
+				/* 终止循环，分配该主设备号 */
 				break;
 		}
 
+		/* 没有可用的主设备号 */
 		if (index == 0) {
 			printk("register_blkdev: failed to get major for %s\n",
 			       name);
@@ -300,25 +312,31 @@ int register_blkdev(unsigned int major, const char *name)
 			goto out;
 		}
 		major = index;
+		/* 该主设备号作为返回值 */
 		ret = major;
 	}
 
+	/* 分配一个blk_major_name结构 */
 	p = kmalloc(sizeof(struct blk_major_name), GFP_KERNEL);
 	if (p == NULL) {
 		ret = -ENOMEM;
 		goto out;
 	}
 
+	/* 记录主设备号 */
 	p->major = major;
+	/* 记录设备名称 */
 	strlcpy(p->name, name, sizeof(p->name));
 	p->next = NULL;
 	index = major_to_index(major);
 
+	/* 检查主设备号是否重复 */
 	for (n = &major_names[index]; *n; n = &(*n)->next) {
 		if ((*n)->major == major)
 			break;
 	}
 	if (!*n)
+		/* 加入哈希表 */
 		*n = p;
 	else
 		ret = -EBUSY;
