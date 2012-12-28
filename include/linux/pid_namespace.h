@@ -32,7 +32,7 @@ struct pid_namespace {
 	struct pidmap pidmap[PIDMAP_ENTRIES];
 	/* 该命名空间下最后一个使用的pid号 */
 	int last_pid;
-	int nr_hashed;
+	unsigned int nr_hashed;
 	/* 每个命名空间下对孤儿进程调用wait4的进程 */
 	struct task_struct *child_reaper;
 	/* pid的缓存，参见函数create_pid_cachep() */
@@ -56,6 +56,8 @@ struct pid_namespace {
 };
 
 extern struct pid_namespace init_pid_ns;
+
+#define PIDNS_HASH_ADDING (1U << 31)
 
 #ifdef CONFIG_PID_NS
 static inline struct pid_namespace *get_pid_ns(struct pid_namespace *ns)

@@ -396,7 +396,7 @@ struct sock {
 	/* 通过listen()函数设置的最大监听数量，比如inet_listen()函数中进行设置 */
 	unsigned short		sk_max_ack_backlog;
 	__u32			sk_priority;
-#ifdef CONFIG_CGROUPS
+#if IS_ENABLED(CONFIG_NETPRIO_CGROUP)
 	__u32			sk_cgrp_prioidx;
 #endif
 	struct pid		*sk_peer_pid;
