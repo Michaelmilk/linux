@@ -102,6 +102,7 @@
  * (delete uses stop_machine/add uses RCU list operations). */
 DEFINE_MUTEX(module_mutex);
 EXPORT_SYMBOL_GPL(module_mutex);
+/* 所有模块的链表头 */
 static LIST_HEAD(modules);
 #ifdef CONFIG_KGDB_KDB
 struct list_head *kdb_modules = &modules; /* kdb needs the list of modules */
@@ -145,6 +146,7 @@ module_param(sig_enforce, bool_enable_only, 0644);
 #endif /* !CONFIG_MODULE_SIG_FORCE */
 #endif /* CONFIG_MODULE_SIG */
 
+/* 控制是否允许模块的动态加载与卸载 */
 /* Block module loading/unloading? */
 int modules_disabled = 0;
 core_param(nomodule, modules_disabled, bint, 0);
@@ -171,7 +173,9 @@ int unregister_module_notifier(struct notifier_block * nb)
 EXPORT_SYMBOL(unregister_module_notifier);
 
 struct load_info {
+	/* 模块文件的内容 */
 	Elf_Ehdr *hdr;
+	/* 模块文件长度 */
 	unsigned long len;
 	Elf_Shdr *sechdrs;
 	char *secstrings, *strtab;
@@ -179,6 +183,14 @@ struct load_info {
 	struct _ddebug *debug;
 	unsigned int num_debug;
 	bool sig_ok;
+	/* 节头表中索引
+		SHT_SYMTAB
+		符号表对应的字符串表索引
+		.gnu.linkonce.this_module
+		__versions
+		.modinfo
+		.data..percpu
+	*/
 	struct {
 		unsigned int sym, str, mod, vers, info, pcpu;
 	} index;
@@ -213,16 +225,28 @@ void __module_put_and_exit(struct module *mod, long code)
 }
 EXPORT_SYMBOL(__module_put_and_exit);
 
+/*
+查找节
+
+@name	: 节名称
+		.data..percpu
+		__versions
+		.modinfo
+		.gnu.linkonce.this_module
+
+*/
 /* Find a module section: 0 means not found. */
 static unsigned int find_sec(const struct load_info *info, const char *name)
 {
 	unsigned int i;
 
+	/* 遍历节头表 */
 	for (i = 1; i < info->hdr->e_shnum; i++) {
 		Elf_Shdr *shdr = &info->sechdrs[i];
 		/* Alloc bit cleared means "ignore it." */
 		if ((shdr->sh_flags & SHF_ALLOC)
 		    && strcmp(info->secstrings + shdr->sh_name, name) == 0)
+			/* 返回在节头表中的索引 */
 			return i;
 	}
 	return 0;
@@ -248,6 +272,10 @@ static void *section_objs(const struct load_info *info,
 	return (void *)info->sechdrs[sec].sh_addr;
 }
 
+/*
+定义在链接脚本中
+vmlinux.lds.h
+*/
 /* Provided by the linker */
 extern const struct kernel_symbol __start___ksymtab[];
 extern const struct kernel_symbol __stop___ksymtab[];
@@ -454,8 +482,11 @@ struct module *find_module(const char *name)
 {
 	struct module *mod;
 
+	/* 遍历模块链表 */
 	list_for_each_entry(mod, &modules, list) {
+		/* 比较名称 */
 		if (strcmp(mod->name, name) == 0)
+			/* 返回模块结构指针 */
 			return mod;
 	}
 	return NULL;
@@ -2481,6 +2512,7 @@ static int copy_module_from_user(const void __user *umod, unsigned long len,
 {
 	int err;
 
+	/* 模块长度 */
 	info->len = len;
 	if (info->len < sizeof(*(info->hdr)))
 		return -ENOEXEC;
@@ -2489,11 +2521,13 @@ static int copy_module_from_user(const void __user *umod, unsigned long len,
 	if (err)
 		return err;
 
+	/* 分配内核空间 */
 	/* Suck in entire file: we'll want most of it. */
 	info->hdr = vmalloc(info->len);
 	if (!info->hdr)
 		return -ENOMEM;
 
+	/* 将模块复制进内核空间 */
 	if (copy_from_user(info->hdr, umod, info->len) != 0) {
 		vfree(info->hdr);
 		return -EFAULT;
@@ -2558,6 +2592,9 @@ static void free_copy(struct load_info *info)
 	vfree(info->hdr);
 }
 
+/*
+计算重写各个节在内存中的地址
+*/
 static int rewrite_section_headers(struct load_info *info, int flags)
 {
 	unsigned int i;
@@ -2565,7 +2602,9 @@ static int rewrite_section_headers(struct load_info *info, int flags)
 	/* This should always be true, but let's be sure. */
 	info->sechdrs[0].sh_addr = 0;
 
+	/* 遍历节头表，0索引是保留的 */
 	for (i = 1; i < info->hdr->e_shnum; i++) {
+		/* 节头 */
 		Elf_Shdr *shdr = &info->sechdrs[i];
 		if (shdr->sh_type != SHT_NOBITS
 		    && info->len < shdr->sh_offset + shdr->sh_size) {
@@ -2574,6 +2613,7 @@ static int rewrite_section_headers(struct load_info *info, int flags)
 			return -ENOEXEC;
 		}
 
+		/* 该节在内存中的地址 */
 		/* Mark all sections sh_addr with their address in the
 		   temporary image. */
 		shdr->sh_addr = (size_t)info->hdr + shdr->sh_offset;
@@ -2611,7 +2651,9 @@ static struct module *setup_load_info(struct load_info *info, int flags)
 	struct module *mod;
 
 	/* Set up the convenience variables */
+	/* 节头表 */
 	info->sechdrs = (void *)info->hdr + info->hdr->e_shoff;
+	/* 字符串表 */
 	info->secstrings = (void *)info->hdr
 		+ info->sechdrs[info->hdr->e_shstrndx].sh_offset;
 
@@ -2621,9 +2663,13 @@ static struct module *setup_load_info(struct load_info *info, int flags)
 
 	/* Find internal symbols and strings. */
 	for (i = 1; i < info->hdr->e_shnum; i++) {
+		/* 符号表 */
 		if (info->sechdrs[i].sh_type == SHT_SYMTAB) {
+			/* 符号表节索引 */
 			info->index.sym = i;
+			/* 节头表索引链接 */
 			info->index.str = info->sechdrs[i].sh_link;
+			/* 符号表在内存中的地址 */
 			info->strtab = (char *)info->hdr
 				+ info->sechdrs[info->index.str].sh_offset;
 			break;
@@ -2644,6 +2690,7 @@ static struct module *setup_load_info(struct load_info *info, int flags)
 		return ERR_PTR(-ENOEXEC);
 	}
 
+	/* 每cpu变量节 */
 	info->index.pcpu = find_pcpusec(info);
 
 	/* Check module struct version now, before we try to use module. */
@@ -2812,6 +2859,7 @@ static int move_module(struct module *mod, struct load_info *info)
 	pr_debug("final section addresses:\n");
 	for (i = 0; i < info->hdr->e_shnum; i++) {
 		void *dest;
+		/* 节头 */
 		Elf_Shdr *shdr = &info->sechdrs[i];
 
 		if (!(shdr->sh_flags & SHF_ALLOC))
@@ -2823,6 +2871,7 @@ static int move_module(struct module *mod, struct load_info *info)
 		else
 			dest = mod->module_core + shdr->sh_entsize;
 
+		/* 将各节数据复制到module结构记录的空间中 */
 		if (shdr->sh_type != SHT_NOBITS)
 			memcpy(dest, (void *)shdr->sh_addr, shdr->sh_size);
 		/* Update sh_addr to point to copy in image. */
@@ -3082,6 +3131,9 @@ static int do_init_module(struct module *mod)
 	return 0;
 }
 
+/*
+检查动态加载模块的能力
+*/
 static int may_init_module(void)
 {
 	if (!capable(CAP_SYS_MODULE) || modules_disabled)
@@ -3192,6 +3244,7 @@ again:
 		goto ddebug;
 
 	module_bug_finalize(info->hdr, info->sechdrs, mod);
+	/* 加入modules链表 */
 	list_add_rcu(&mod->list, &modules);
 	mutex_unlock(&module_mutex);
 
@@ -3206,6 +3259,7 @@ again:
 	if (err < 0)
 		goto unlink;
 
+	/* 释放在copy_module_from_user中申请的临时内核空间 */
 	/* Get rid of temporary copy. */
 	free_copy(info);
 
@@ -3239,6 +3293,14 @@ again:
 	return err;
 }
 
+/*
+系统调用init_module
+
+@umod	: 用户态读取的模块文件
+@len	: 模块文件长度
+@uargs	: 命令行参数
+
+*/
 SYSCALL_DEFINE3(init_module, void __user *, umod,
 		unsigned long, len, const char __user *, uargs)
 {
@@ -3252,6 +3314,7 @@ SYSCALL_DEFINE3(init_module, void __user *, umod,
 	pr_debug("init_module: umod=%p, len=%lu, uargs=%p\n",
 	       umod, len, uargs);
 
+	/* 将模块复制到@info中 */
 	err = copy_module_from_user(umod, len, &info);
 	if (err)
 		return err;
@@ -3589,6 +3652,7 @@ static const struct file_operations proc_modules_operations = {
 
 static int __init proc_modules_init(void)
 {
+	/* 创建/proc/modules */
 	proc_create("modules", 0, NULL, &proc_modules_operations);
 	return 0;
 }
