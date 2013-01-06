@@ -58,10 +58,13 @@
 
 #define V9FS_MAGIC		0x01021997
 
+/* bdev: b 0x62, d 0x64, e 0x65, v 0x76 */
 #define BDEVFS_MAGIC            0x62646576
+/* BINM: B 0x42, I 0x49, N 0x4e, M 0x4d */
 #define BINFMTFS_MAGIC          0x42494e4d
 #define DEVPTS_SUPER_MAGIC	0x1cd1
 #define FUTEXFS_SUPER_MAGIC	0xBAD1DEA
+/* PIPE: P 0x50, I 0x49, P 0x50, E 0x45 */
 #define PIPEFS_MAGIC            0x50495045
 #define PROC_SUPER_MAGIC	0x9fa0
 
@@ -70,6 +73,7 @@ ASCIIÂë : S 0x53£¬O 0x4F£¬C 0x43£¬K 0x4B
 */
 
 #define SOCKFS_MAGIC		0x534F434B
+/* beer: b 0x62, e 0x65, e 0x65, r 0x72 */
 #define SYSFS_MAGIC		0x62656572
 #define USBDEVICE_SUPER_MAGIC	0x9fa2
 #define MTD_INODE_FS_MAGIC      0x11307854

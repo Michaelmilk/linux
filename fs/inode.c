@@ -210,6 +210,9 @@ static struct inode *alloc_inode(struct super_block *sb)
 
 	/* 如果超级块有alloc_inode函数实现，则调用
 	   例如sock_alloc_inode()函数
+	   sockfs_ops	=> sock_alloc_inode()
+	   sysfs_ops	=>
+
 	*/
 	if (sb->s_op->alloc_inode)
 		inode = sb->s_op->alloc_inode(sb);

@@ -150,6 +150,12 @@ static void destroy_sb_writers(struct super_block *s)
  *	Allocates and initializes a new &struct super_block.  alloc_super()
  *	returns a pointer new superblock or %NULL if allocation had failed.
  */
+
+/*
+sget()中调用
+alloc_super(&sysfs_fs_type, MS_KERNMOUNT)
+
+*/
 static struct super_block *alloc_super(struct file_system_type *type, int flags)
 {
 	struct super_block *s = kzalloc(sizeof(struct super_block),  GFP_USER);
@@ -444,6 +450,10 @@ EXPORT_SYMBOL(generic_shutdown_super);
 @test	:
 @set	:
 @data	:
+
+sysfs_mount() => sget(&sysfs_fs_type, sysfs_test_super, sysfs_set_super, MS_KERNMOUNT, info)
+
+
 */
 
 /**
@@ -497,6 +507,8 @@ retry:
 		goto retry;
 	}
 		
+	/* sysfs_set_super
+	*/
 	err = set(s, data);
 	if (err) {
 		spin_unlock(&sb_lock);
@@ -1121,6 +1133,9 @@ EXPORT_SYMBOL(mount_single);
 @data	:
 
 返回根目录
+
+vfs_kern_mount() => mount_fs(&sysfs_fs_type, MS_KERNMOUNT, "sysfs", NULL)
+
 */
 struct dentry *
 mount_fs(struct file_system_type *type, int flags, const char *name, void *data)
@@ -1142,8 +1157,10 @@ mount_fs(struct file_system_type *type, int flags, const char *name, void *data)
 
 	/* 调用文件系统的mount函数
 	   例如ext3_fs_type文件系统的ext3_mount()函数
-	   sock_fs_type => sockfs_mount()
-	   rootfs_fs_type => rootfs_mount()
+	   ext3_fs_type		=> ext3_mount()
+	   sock_fs_type		=> sockfs_mount()
+	   rootfs_fs_type	=> rootfs_mount()
+	   sysfs_fs_type	=> sysfs_mount()
 	*/
 	root = type->mount(type, flags, name, data);
 	if (IS_ERR(root)) {

@@ -63,6 +63,9 @@ struct bdi_writeback {
 	spinlock_t list_lock;		/* protects the b_* lists */
 };
 
+/*
+备用存储设备信息
+*/
 struct backing_dev_info {
 	struct list_head bdi_list;
 	unsigned long ra_pages;	/* max readahead in PAGE_CACHE_SIZE units */

@@ -79,6 +79,8 @@ static struct file_system_type **find_filesystem(const char *name, unsigned len)
 将@fs通过静态全局变量file_systems及其next指针串成链表
 注册过程实际上将表示各实际文件系统的struct file_system_type数据结构实例化，
 然后形成一个链表，内核中用一个名为file_systems的全局变量来指向该链表的表头。
+
+@fs	: sysfs_fs_type
 */
 int register_filesystem(struct file_system_type * fs)
 {

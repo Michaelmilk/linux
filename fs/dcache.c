@@ -3189,6 +3189,10 @@ void __init vfs_caches_init_early(void)
 	inode_init_early();
 }
 
+/*
+start_kernel() => vfs_caches_init(totalram_pages)
+
+*/
 void __init vfs_caches_init(unsigned long mempages)
 {
 	unsigned long reserve;

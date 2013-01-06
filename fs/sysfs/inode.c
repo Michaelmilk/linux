@@ -287,6 +287,11 @@ static void sysfs_init_inode(struct sysfs_dirent *sd, struct inode *inode)
  *	RETURNS:
  *	Pointer to allocated inode on success, NULL on failure.
  */
+
+/*
+sysfs_fill_super() => sysfs_get_inode(sb, &sysfs_root)
+
+*/
 struct inode * sysfs_get_inode(struct super_block *sb, struct sysfs_dirent *sd)
 {
 	struct inode *inode;

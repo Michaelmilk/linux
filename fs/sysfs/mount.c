@@ -40,6 +40,12 @@ struct sysfs_dirent sysfs_root = {
 	.s_ino		= 1,
 };
 
+/*
+填充sysfs文件系统的超级块
+
+sysfs_mount() => sysfs_fill_super(sb, NULL, 0)
+
+*/
 static int sysfs_fill_super(struct super_block *sb, void *data, int silent)
 {
 	struct inode *inode;
@@ -103,6 +109,12 @@ static void free_sysfs_super_info(struct sysfs_super_info *info)
 	kfree(info);
 }
 
+/*
+从mount_fs()中依据sysfs_fs_type的函数指针mount()调用过来
+
+mount_fs() => sysfs_mount(&sysfs_fs_type, MS_KERNMOUNT, "sysfs", NULL)
+
+*/
 static struct dentry *sysfs_mount(struct file_system_type *fs_type,
 	int flags, const char *dev_name, void *data)
 {
@@ -152,6 +164,10 @@ static struct file_system_type sysfs_fs_type = {
 	.fs_flags	= FS_USERNS_MOUNT,
 };
 
+/*
+mnt_init() => sysfs_init()
+
+*/
 int __init sysfs_init(void)
 {
 	int err = -ENOMEM;

@@ -766,6 +766,13 @@ static struct mount *skip_mnt_tree(struct mount *p)
 @name	: 设备名称，例如/dev/dsk/hda1
 	  使用kern_mount()调用的则为虚拟文件系统的名称，例如sock_fs_type的名称"sockfs"
 @data	:
+
+init_mount_tree() => vfs_kern_mount(&rootfs_fs_type, 0, "rootfs", NULL)
+
+kern_mount_data() => vfs_kern_mount(&sock_fs_type, MS_KERNMOUNT, "sockfs", NULL)
+
+kern_mount_data() => vfs_kern_mount(&sysfs_fs_type, MS_KERNMOUNT, "sysfs", NULL)
+
 */
 struct vfsmount *
 vfs_kern_mount(struct file_system_type *type, int flags, const char *name, void *data)
@@ -2736,6 +2743,10 @@ static void __init init_mount_tree(void)
 	set_fs_root(current->fs, &root);
 }
 
+/*
+vfs_caches_init() => mnt_init()
+
+*/
 void __init mnt_init(void)
 {
 	unsigned u;
@@ -2788,6 +2799,16 @@ void put_mnt_ns(struct mnt_namespace *ns)
 	free_mnt_ns(ns);
 }
 
+/*
+@type	: sysfs_fs_type
+
+@data	:
+
+sock_init() => kern_mount(&sock_fs_type) => kern_mount_data(&sock_fs_type, NULL)
+
+sysfs_init() => kern_mount(&sysfs_fs_type) => kern_mount_data(&sysfs_fs_type, NULL)
+
+*/
 struct vfsmount *kern_mount_data(struct file_system_type *type, void *data)
 {
 	struct vfsmount *mnt;
