@@ -245,6 +245,10 @@ struct dentry *ramfs_mount(struct file_system_type *fs_type,
 	return mount_nodev(fs_type, flags, data, ramfs_fill_super);
 }
 
+/*
+mount_fs() => rootfs_mount(&rootfs_fs_type, 0, "rootfs", NULL)
+
+*/
 static struct dentry *rootfs_mount(struct file_system_type *fs_type,
 	int flags, const char *dev_name, void *data)
 {

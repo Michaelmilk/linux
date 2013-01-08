@@ -152,8 +152,9 @@ static void destroy_sb_writers(struct super_block *s)
  */
 
 /*
-sget()中调用
-alloc_super(&sysfs_fs_type, MS_KERNMOUNT)
+sget() => alloc_super(&sysfs_fs_type, MS_KERNMOUNT)
+
+sget() => alloc_super(&rootfs_fs_type, MS_NOUSER)
 
 */
 static struct super_block *alloc_super(struct file_system_type *type, int flags)
@@ -453,6 +454,7 @@ EXPORT_SYMBOL(generic_shutdown_super);
 
 sysfs_mount() => sget(&sysfs_fs_type, sysfs_test_super, sysfs_set_super, MS_KERNMOUNT, info)
 
+mount_nodev() => sget(&rootfs_fs_type, NULL, set_anon_super, MS_NOUSER, NULL)
 
 */
 
@@ -1074,6 +1076,10 @@ void kill_block_super(struct super_block *sb)
 EXPORT_SYMBOL(kill_block_super);
 #endif
 
+/*
+rootfs_mount() => mount_nodev(&rootfs_fs_type, MS_NOUSER, NULL, ramfs_fill_super)
+
+*/
 struct dentry *mount_nodev(struct file_system_type *fs_type,
 	int flags, void *data,
 	int (*fill_super)(struct super_block *, void *, int))
@@ -1135,6 +1141,8 @@ EXPORT_SYMBOL(mount_single);
 返回根目录
 
 vfs_kern_mount() => mount_fs(&sysfs_fs_type, MS_KERNMOUNT, "sysfs", NULL)
+
+vfs_kern_mount() => mount_fs(&rootfs_fs_type, 0, "rootfs", NULL)
 
 */
 struct dentry *

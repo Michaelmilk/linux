@@ -6,6 +6,7 @@ struct mnt_namespace {
 	atomic_t		count;
 	unsigned int		proc_inum;
 	struct mount *	root;
+	/* 链入mount结构的mnt_list链表 */
 	struct list_head	list;
 	struct user_namespace	*user_ns;
 	u64			seq;	/* Sequence number to prevent loops */
@@ -35,6 +36,7 @@ struct mount {
 	/* 链入超级块的s_mounts */
 	struct list_head mnt_instance;	/* mount instance on sb->s_mounts */
 	const char *mnt_devname;	/* Name of device e.g. /dev/dsk/hda1 */
+	/* mnt_namespace链表 */
 	struct list_head mnt_list;
 	struct list_head mnt_expire;	/* link in fs-specific expiry list */
 	struct list_head mnt_share;	/* circular list of shared mounts */
