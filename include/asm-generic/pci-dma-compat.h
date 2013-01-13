@@ -108,6 +108,9 @@ static inline int pci_set_dma_mask(struct pci_dev *dev, u64 mask)
 	return dma_set_mask(&dev->dev, mask);
 }
 
+/*
+consistent: Á¬ĞøµÄ
+*/
 static inline int pci_set_consistent_dma_mask(struct pci_dev *dev, u64 mask)
 {
 	return dma_set_coherent_mask(&dev->dev, mask);

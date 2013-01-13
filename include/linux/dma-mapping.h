@@ -56,6 +56,10 @@ struct dma_map_ops {
 	int is_phys;
 };
 
+/*
+64λ: 0xffffffffffffffff
+32λ: 0x00000000ffffffff
+*/
 #define DMA_BIT_MASK(n)	(((n) == 64) ? ~0ULL : ((1ULL<<(n))-1))
 
 #define DMA_MASK_NONE	0x0ULL

@@ -2587,6 +2587,17 @@ err_out:
 	return -EBUSY;
 }
 
+/*
+保留PCI I/O和内存资源
+
+@pdev:
+@bar:
+@res_name:
+
+把所有与PCI设备pdev相关联的PCI区进行标记，设备pdev是由属主@res_name保留的。
+除非这次调用成功返回，否则不要访问PCI内的任何地址。
+成功返回0，出错返回%EBUSY，失败时也打印警告信息。
+*/
 /**
  *	pci_request_region - Reserve PCI I/O and memory resource
  *	@pdev: PCI device whose resources are to be reserved
@@ -2794,6 +2805,9 @@ void __weak pcibios_set_master(struct pci_dev *dev)
 	pci_write_config_byte(dev, PCI_LATENCY_TIMER, lat);
 }
 
+/*
+为设备@dev启用总线控制
+*/
 /**
  * pci_set_master - enables bus-mastering for device dev
  * @dev: the PCI device to enable

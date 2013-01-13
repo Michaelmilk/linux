@@ -65,6 +65,14 @@
 #define PCI_CLASS_DEVICE	0x0a	/* Device class */
 
 #define PCI_CACHE_LINE_SIZE	0x0c	/* 8 bits */
+/*
+PCI LATENCY TIMER (PCI延迟时钟)
+此项控制每个PCI设备可以掌控总线多长时间，直到被另一个接管。
+当设置为较高的值时，每个PCI设备可以有更长的时间处理数据传输，
+如此可以增加有效的 PCI带宽。
+为了获取更好的PCI效能，您可将此项设为较高的值。
+可选的设置值范围是从32到248，以32为单位递增。
+*/
 #define PCI_LATENCY_TIMER	0x0d	/* 8 bits */
 #define PCI_HEADER_TYPE		0x0e	/* 8 bits */
 #define  PCI_HEADER_TYPE_NORMAL		0
