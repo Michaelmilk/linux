@@ -1378,6 +1378,12 @@ static int r600_gpu_soft_reset(struct radeon_device *rdev, u32 reset_mask)
 {
 	struct rv515_mc_save save;
 
+	if (!(RREG32(GRBM_STATUS) & GUI_ACTIVE))
+		reset_mask &= ~(RADEON_RESET_GFX | RADEON_RESET_COMPUTE);
+
+	if (RREG32(DMA_STATUS_REG) & DMA_IDLE)
+		reset_mask &= ~RADEON_RESET_DMA;
+
 	if (reset_mask == 0)
 		return 0;
 
@@ -2646,7 +2652,7 @@ int r600_copy_blit(struct radeon_device *rdev,
  * @num_gpu_pages: number of GPU pages to xfer
  * @fence: radeon fence object
  *
- * Copy GPU paging using the DMA engine (r6xx-r7xx).
+ * Copy GPU paging using the DMA engine (r6xx).
  * Used by the radeon ttm implementation to move pages if
  * registered as the asic copy callback.
  */
@@ -2669,8 +2675,8 @@ int r600_copy_dma(struct radeon_device *rdev,
 	}
 
 	size_in_dw = (num_gpu_pages << RADEON_GPU_PAGE_SHIFT) / 4;
-	num_loops = DIV_ROUND_UP(size_in_dw, 0xffff);
-	r = radeon_ring_lock(rdev, ring, num_loops * 5 + 8);
+	num_loops = DIV_ROUND_UP(size_in_dw, 0xFFFE);
+	r = radeon_ring_lock(rdev, ring, num_loops * 4 + 8);
 	if (r) {
 		DRM_ERROR("radeon: moving bo (%d).\n", r);
 		radeon_semaphore_free(rdev, &sem, NULL);
@@ -2693,8 +2699,8 @@ int r600_copy_dma(struct radeon_device *rdev,
 		radeon_ring_write(ring, DMA_PACKET(DMA_PACKET_COPY, 0, 0, cur_size_in_dw));
 		radeon_ring_write(ring, dst_offset & 0xfffffffc);
 		radeon_ring_write(ring, src_offset & 0xfffffffc);
-		radeon_ring_write(ring, upper_32_bits(dst_offset) & 0xff);
-		radeon_ring_write(ring, upper_32_bits(src_offset) & 0xff);
+		radeon_ring_write(ring, (((upper_32_bits(dst_offset) & 0xff) << 16) |
+					 (upper_32_bits(src_offset) & 0xff)));
 		src_offset += cur_size_in_dw * 4;
 		dst_offset += cur_size_in_dw * 4;
 	}

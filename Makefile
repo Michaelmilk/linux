@@ -1,7 +1,7 @@
 VERSION = 3
 PATCHLEVEL = 8
 SUBLEVEL = 0
-EXTRAVERSION = -rc2
+EXTRAVERSION = -rc5
 NAME = Terrified Chipmunk
 
 	# 内核版本信息
@@ -336,7 +336,7 @@ SUBARCH := $(shell uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ \
 				  -e s/arm.*/arm/ -e s/sa110/arm/ \
 				  -e s/s390x/s390/ -e s/parisc64/parisc/ \
 				  -e s/ppc.*/powerpc/ -e s/mips.*/mips/ \
-				  -e s/sh[234].*/sh/ )
+				  -e s/sh[234].*/sh/ -e s/aarch64.*/arm64/ )
 
 	# 为变量SUBARCH追加调用shell执行sed后的返回值。
 	# sed 是一种在线编辑器，它一次处理一行内容。

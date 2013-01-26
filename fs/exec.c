@@ -463,8 +463,9 @@ static int count(struct user_arg_ptr argv, int max)
 				return -EFAULT;
 
 			/* 达到个数上限 */
-			if (i++ >= max)
+			if (i >= max)
 				return -E2BIG;
+			++i;
 
 			if (fatal_signal_pending(current))
 				return -ERESTARTNOHAND;
