@@ -111,10 +111,10 @@
 #include <net/sock.h>
 #include <net/raw.h>
 #include <net/icmp.h>
-#include <net/ipip.h>
 #include <net/inet_common.h>
 #include <net/xfrm.h>
 #include <net/net_namespace.h>
+#include <net/secure_seq.h>
 #ifdef CONFIG_IP_MROUTE
 #include <linux/mroute.h>
 #endif
@@ -248,8 +248,12 @@ EXPORT_SYMBOL(inet_listen);
 u32 inet_ehash_secret __read_mostly;
 EXPORT_SYMBOL(inet_ehash_secret);
 
+u32 ipv6_hash_secret __read_mostly;
+EXPORT_SYMBOL(ipv6_hash_secret);
+
 /*
- * inet_ehash_secret must be set exactly once
+ * inet_ehash_secret must be set exactly once, and to a non nul value
+ * ipv6_hash_secret must be set exactly once.
  */
 /*
 inet_ehash_secret的值只能设置一次
@@ -263,26 +267,12 @@ void build_ehash_secret(void)
 		get_random_bytes(&rnd, sizeof(rnd));
 	} while (rnd == 0);
 
-	/* 如果inet_ehash_secret原来的值是0，则将其置为rnd
-	   如果不是0，则还保持原来的值 */
-	cmpxchg(&inet_ehash_secret, 0, rnd);
+	if (cmpxchg(&inet_ehash_secret, 0, rnd) == 0) {
+		get_random_bytes(&ipv6_hash_secret, sizeof(ipv6_hash_secret));
+		net_secret_init();
+	}
 }
 EXPORT_SYMBOL(build_ehash_secret);
-
-static inline int inet_netns_ok(struct net *net, __u8 protocol)
-{
-	const struct net_protocol *ipprot;
-
-	if (net_eq(net, &init_net))
-		return 1;
-
-	ipprot = rcu_dereference(inet_protos[protocol]);
-	if (ipprot == NULL) {
-		/* raw IP is OK */
-		return 1;
-	}
-	return ipprot->netns_ok;
-}
 
 /*
  *	Create an inet socket.
@@ -376,14 +366,11 @@ lookup_protocol:
 	    !ns_capable(net->user_ns, CAP_NET_RAW))
 		goto out_rcu_unlock;
 
-	err = -EAFNOSUPPORT;
-	if (!inet_netns_ok(net, protocol))
-		goto out_rcu_unlock;
-
 	/* 套接字的操作函数
 	   例如SOCK_STREAM套接字类型 => TCP协议
 	   对应inetsw_array[]数组中的inet_stream_ops
 	*/
+
 	sock->ops = answer->ops;
 	/* 例如tcp_prot udp_prot */
 	answer_prot = answer->prot;
@@ -1356,15 +1343,16 @@ static struct sk_buff *inet_gso_segment(struct sk_buff *skb,
 	int ihl;
 	int id;
 	unsigned int offset = 0;
-
-	if (!(features & NETIF_F_V4_CSUM))
-		features &= ~NETIF_F_SG;
+	bool tunnel;
 
 	if (unlikely(skb_shinfo(skb)->gso_type &
 		     ~(SKB_GSO_TCPV4 |
 		       SKB_GSO_UDP |
 		       SKB_GSO_DODGY |
 		       SKB_GSO_TCP_ECN |
+		       SKB_GSO_GRE |
+		       SKB_GSO_TCPV6 |
+		       SKB_GSO_UDP_TUNNEL |
 		       0)))
 		goto out;
 
@@ -1379,6 +1367,8 @@ static struct sk_buff *inet_gso_segment(struct sk_buff *skb,
 	if (unlikely(!pskb_may_pull(skb, ihl)))
 		goto out;
 
+	tunnel = !!skb->encapsulation;
+
 	__skb_pull(skb, ihl);
 	skb_reset_transport_header(skb);
 	iph = ip_hdr(skb);
@@ -1392,20 +1382,21 @@ static struct sk_buff *inet_gso_segment(struct sk_buff *skb,
 		segs = ops->callbacks.gso_segment(skb, features);
 	rcu_read_unlock();
 
-	if (!segs || IS_ERR(segs))
+	if (IS_ERR_OR_NULL(segs))
 		goto out;
 
 	skb = segs;
 	do {
 		iph = ip_hdr(skb);
-		if (proto == IPPROTO_UDP) {
+		if (!tunnel && proto == IPPROTO_UDP) {
 			iph->id = htons(id);
 			iph->frag_off = htons(offset >> 3);
 			if (skb->next != NULL)
 				iph->frag_off |= htons(IP_MF);
 			offset += (skb->len - skb->mac_len - iph->ihl * 4);
-		} else
+		} else  {
 			iph->id = htons(id++);
+		}
 		iph->tot_len = htons(skb->len - skb->mac_len);
 		iph->check = 0;
 		iph->check = ip_fast_csum(skb_network_header(skb), iph->ihl);
@@ -1649,7 +1640,7 @@ static const struct net_offload udp_offload = {
 
 static const struct net_protocol icmp_protocol = {
 	.handler =	icmp_rcv,
-	.err_handler =	ping_err,
+	.err_handler =	icmp_err,
 	.no_policy =	1,
 	.netns_ok =	1,
 };
@@ -1768,14 +1759,13 @@ do_initcalls()中调用
 */
 static int __init inet_init(void)
 {
-	struct sk_buff *dummy_skb;
 	struct inet_protosw *q;
 	struct list_head *r;
 	int rc = -EINVAL;
 
 	/* IP层在接收skb时，ip_rcv_options()中使用cb[]字段保存option信息
 	   因此要确保cb[]能够容纳struct inet_skb_parm */
-	BUILD_BUG_ON(sizeof(struct inet_skb_parm) > sizeof(dummy_skb->cb));
+	BUILD_BUG_ON(sizeof(struct inet_skb_parm) > FIELD_SIZEOF(struct sk_buff, cb));
 
 	/* 预留端口号的位图内存空间 */
 	sysctl_local_reserved_ports = kzalloc(65536 / 8, GFP_KERNEL);

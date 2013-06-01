@@ -33,6 +33,7 @@ netdev_tx_t br_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 	struct net_bridge_fdb_entry *dst;
 	struct net_bridge_mdb_entry *mdst;
 	struct br_cpu_netstats *brstats = this_cpu_ptr(br->stats);
+	u16 vid = 0;
 
 	rcu_read_lock();
 #ifdef CONFIG_BRIDGE_NETFILTER
@@ -47,6 +48,9 @@ netdev_tx_t br_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 	brstats->tx_packets++;
 	brstats->tx_bytes += skb->len;
 	u64_stats_update_end(&brstats->syncp);
+
+	if (!br_allowed_ingress(br, br_get_vlan_info(br), skb, &vid))
+		goto out;
 
 	BR_INPUT_SKB_CB(skb)->brdev = dev;
 
@@ -72,13 +76,13 @@ netdev_tx_t br_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 			goto out;
 		}
 
-		mdst = br_mdb_get(br, skb);
+		mdst = br_mdb_get(br, skb, vid);
 		if (mdst || BR_INPUT_SKB_CB_MROUTERS_ONLY(skb))
 			br_multicast_deliver(mdst, skb);
 		else
 			br_flood_deliver(br, skb);
 	/* 查找转发表，找到则单播发送 */
-	} else if ((dst = __br_fdb_get(br, dest)) != NULL)
+	} else if ((dst = __br_fdb_get(br, dest, vid)) != NULL)
 		br_deliver(dst->dst, skb);
 	/* 广播发送 */
 	else
@@ -184,12 +188,10 @@ static int br_set_mac_address(struct net_device *dev, void *p)
 
 	spin_lock_bh(&br->lock);
 	if (!ether_addr_equal(dev->dev_addr, addr->sa_data)) {
-		dev->addr_assign_type &= ~NET_ADDR_RANDOM;
 		memcpy(dev->dev_addr, addr->sa_data, ETH_ALEN);
 		br_fdb_change_mac_address(br, addr->sa_data);
 		br_stp_change_bridge_id(br, addr->sa_data);
 	}
-	br->flags |= BR_SET_MAC_ADDR;
 	spin_unlock_bh(&br->lock);
 
 	return 0;
@@ -197,10 +199,10 @@ static int br_set_mac_address(struct net_device *dev, void *p)
 
 static void br_getinfo(struct net_device *dev, struct ethtool_drvinfo *info)
 {
-	strcpy(info->driver, "bridge");
-	strcpy(info->version, BR_VERSION);
-	strcpy(info->fw_version, "N/A");
-	strcpy(info->bus_info, "N/A");
+	strlcpy(info->driver, "bridge", sizeof(info->driver));
+	strlcpy(info->version, BR_VERSION, sizeof(info->version));
+	strlcpy(info->fw_version, "N/A", sizeof(info->fw_version));
+	strlcpy(info->bus_info, "N/A", sizeof(info->bus_info));
 }
 
 static netdev_features_t br_fix_features(struct net_device *dev,
@@ -279,7 +281,7 @@ void br_netpoll_disable(struct net_bridge_port *p)
 
 	p->np = NULL;
 
-	__netpoll_free_rcu(np);
+	__netpoll_free_async(np);
 }
 
 #endif
@@ -335,6 +337,7 @@ static const struct net_device_ops br_netdev_ops = {
 	.ndo_fdb_dump		 = br_fdb_dump,
 	.ndo_bridge_getlink	 = br_getlink,
 	.ndo_bridge_setlink	 = br_setlink,
+	.ndo_bridge_dellink	 = br_dellink,
 };
 
 static void br_dev_free(struct net_device *dev)
@@ -365,10 +368,10 @@ void br_dev_setup(struct net_device *dev)
 
 	dev->features = NETIF_F_SG | NETIF_F_FRAGLIST | NETIF_F_HIGHDMA |
 			NETIF_F_GSO_MASK | NETIF_F_HW_CSUM | NETIF_F_LLTX |
-			NETIF_F_NETNS_LOCAL | NETIF_F_HW_VLAN_TX;
+			NETIF_F_NETNS_LOCAL | NETIF_F_HW_VLAN_CTAG_TX;
 	dev->hw_features = NETIF_F_SG | NETIF_F_FRAGLIST | NETIF_F_HIGHDMA |
 			   NETIF_F_GSO_MASK | NETIF_F_HW_CSUM |
-			   NETIF_F_HW_VLAN_TX;
+			   NETIF_F_HW_VLAN_CTAG_TX;
 
 	br->dev = dev;
 	spin_lock_init(&br->lock);

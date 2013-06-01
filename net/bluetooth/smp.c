@@ -522,7 +522,7 @@ void smp_chan_destroy(struct l2cap_conn *conn)
 	kfree(smp);
 	conn->smp_chan = NULL;
 	conn->hcon->smp_conn = NULL;
-	hci_conn_put(conn->hcon);
+	hci_conn_drop(conn->hcon);
 }
 
 int smp_user_confirm_reply(struct hci_conn *hcon, u16 mgmt_op, __le32 passkey)
@@ -858,6 +858,19 @@ int smp_sig_channel(struct l2cap_conn *conn, struct sk_buff *skb)
 	}
 
 	skb_pull(skb, sizeof(code));
+
+	/*
+	 * The SMP context must be initialized for all other PDUs except
+	 * pairing and security requests. If we get any other PDU when
+	 * not initialized simply disconnect (done if this function
+	 * returns an error).
+	 */
+	if (code != SMP_CMD_PAIRING_REQ && code != SMP_CMD_SECURITY_REQ &&
+	    !conn->smp_chan) {
+		BT_ERR("Unexpected SMP command 0x%02x. Disconnecting.", code);
+		kfree_skb(skb);
+		return -ENOTSUPP;
+	}
 
 	switch (code) {
 	case SMP_CMD_PAIRING_REQ:

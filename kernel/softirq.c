@@ -201,23 +201,22 @@ void local_bh_enable_ip(unsigned long ip)
 EXPORT_SYMBOL(local_bh_enable_ip);
 
 /*
- * We restart softirq processing MAX_SOFTIRQ_RESTART times,
- * and we fall back to softirqd after that.
+ * We restart softirq processing for at most 2 ms,
+ * and if need_resched() is not set.
  *
- * This number has been established via experimentation.
+ * These limits have been established via experimentation.
  * The two things to balance is latency against fairness -
  * we want to handle softirqs as soon as possible, but they
  * should not be able to lock up the box.
  */
-/* 最大软中断调用次数为10次 */
-#define MAX_SOFTIRQ_RESTART 10
+#define MAX_SOFTIRQ_TIME  msecs_to_jiffies(2)
 
 asmlinkage void __do_softirq(void)
 {
 	/* 软件中断处理结构，此结构中包括了ISR中注册的回调函数 */
 	struct softirq_action *h;
 	__u32 pending;
-	int max_restart = MAX_SOFTIRQ_RESTART;
+	unsigned long end = jiffies + MAX_SOFTIRQ_TIME;
 	int cpu;
 	unsigned long old_flags = current->flags;
 
@@ -230,7 +229,7 @@ asmlinkage void __do_softirq(void)
 
 	/* 得到当前所有pending的软中断 */
 	pending = local_softirq_pending();
-	vtime_account_irq_enter(current);
+	account_irq_enter_time(current);
 
 	/* 执行到这里要屏蔽其他软中断，这里也就证明了每个CPU上同时运行的软中断只能有一个 */
 	__local_bh_disable((unsigned long)__builtin_return_address(0),
@@ -308,42 +307,16 @@ restart:
 	   以便下面的代码进行处理后跳回到restart处重复执行。
 	*/
 	pending = local_softirq_pending();
-	/* 如果在上面的开中断执行环境中触发了硬件中断，且每个都注册了一个软中断的话，
-	   这个软中断会设置pending位，但在当前一直屏蔽软中断的环境下无法得到执行，
-	   前面提到过，因为irq_exit()和do_softirq()根本无法进入到这个处理过程中来。
-	   这个在上面详细的记录过了。那么在这里又有了一个执行的机会。
-	   注意:虽然当前环境一直是处于屏蔽软中断执行的环境中，
-	   但在这里又给出了一个执行刚才在开中断环境过程中触发硬件中断时所注册的软中断的机会，
-	   其实只要理解了软中断机制就会知道，
-	   无非是在一些特定环境下调用ISR注册到软中断向量表里的函数而已。
+	if (pending) {
+		if (time_before(jiffies, end) && !need_resched())
+			goto restart;
 
-	   如果刚才触发的硬件中断注册了软中断，并且重复执行次数没有到10次的话，
-	   那么则跳转到restart标志处重复以上所介绍的所有步骤:设置软中断标志位，重新开中断执行...
-	   注意:这里是要两个条件都满足的情况下才可能重复以上步骤。 
-	*/
-	if (pending && --max_restart)
-		goto restart;
-
-	/* 如果以上步骤重复了10次后还有pending的软中断的话，
-	   那么系统在一定时间内可能达到了一个峰值，为了平衡这点。
-	   系统专门建立了一个ksoftirqd线程来处理，这样避免在一定时间内负荷太大。
-	   这个ksoftirqd线程本身是一个大循环，在某些条件下为了不使负载过重，
-	   它是可以被其他进程抢占的，
-	   但注意，它是显式的调用了preempt_xxx()和schedule()才会被抢占和切换的。
-	   这么做的原因是因为在它一旦调用local_softirq_pending()函数
-	   检测到有pending的软中断需要处理的时候，则会显式的调用do_softirq()来处理软中断。
-	   也就是说，下面代码唤醒的ksoftirqd线程有可能会回到这个函数当中来，
-	   尤其是在系统需要响应很多软中断的情况下，它的调用入口是do_softirq()，
-	   这也就是为什么在do_softirq()的入口处也会用in_interrupt()函数
-	   来判断是否有软中断正在处理的原因了，目的还是为了防止重入。
-	*/
-	if (pending)
-		/* 调用wake_up_process()来唤醒ksoftirqd */
 		wakeup_softirqd();
+	}
 
 	lockdep_softirq_exit();
 
-	vtime_account_irq_exit(current);
+	account_irq_exit_time(current);
 	/* 到最后才开软中断执行环境，允许软中断执行。
 	   注意:这里使用的不是local_bh_enable()，不会再次触发do_softirq()的调用。
 	*/
@@ -409,18 +382,23 @@ void irq_enter(void)
 
 static inline void invoke_softirq(void)
 {
-	if (!force_irqthreads) {
-#ifdef __ARCH_IRQ_EXIT_IRQS_DISABLED
+	if (!force_irqthreads)
 		__do_softirq();
-#else
-		do_softirq();
-#endif
-	} else {
-		__local_bh_disable((unsigned long)__builtin_return_address(0),
-				SOFTIRQ_OFFSET);
+	else
 		wakeup_softirqd();
-		__local_bh_enable(SOFTIRQ_OFFSET);
+}
+
+static inline void tick_irq_exit(void)
+{
+#ifdef CONFIG_NO_HZ_COMMON
+	int cpu = smp_processor_id();
+
+	/* Make sure that timer wheel updates are propagated */
+	if ((idle_cpu(cpu) && !need_resched()) || tick_nohz_full_cpu(cpu)) {
+		if (!in_interrupt())
+			tick_nohz_irq_exit();
 	}
+#endif
 }
 
 /*
@@ -428,10 +406,16 @@ static inline void invoke_softirq(void)
  */
 void irq_exit(void)
 {
-	vtime_account_irq_exit(current);
+#ifndef __ARCH_IRQ_EXIT_IRQS_DISABLED
+	local_irq_disable();
+#else
+	WARN_ON_ONCE(!irqs_disabled());
+#endif
+
+	account_irq_exit_time(current);
 	trace_hardirq_exit();
 	/* 恢复preempt_count的值 */
-	sub_preempt_count(IRQ_EXIT_OFFSET);
+	sub_preempt_count(HARDIRQ_OFFSET);
 	/* 判断当前是否有硬件中断嵌套，并且是否有软中断在pending状态
 	   注意:这里只有两个条件同时满足时，才有可能调用do_softirq()进入软中断
 	   也就是说确认当前所有硬件中断处理完成，且有硬件中断安装了软中断处理时理时才会进入
@@ -439,13 +423,8 @@ void irq_exit(void)
 	if (!in_interrupt() && local_softirq_pending())
 		invoke_softirq();
 
-#ifdef CONFIG_NO_HZ
-	/* Make sure that timer wheel updates are propagated */
-	if (idle_cpu(smp_processor_id()) && !in_interrupt() && !need_resched())
-		tick_nohz_irq_exit();
-#endif
+	tick_irq_exit();
 	rcu_irq_exit();
-	sched_preempt_enable_no_resched();
 }
 
 /*
@@ -714,8 +693,7 @@ static void remote_softirq_receive(void *data)
 	unsigned long flags;
 	int softirq;
 
-	softirq = cp->priv;
-
+	softirq = *(int *)cp->info;
 	local_irq_save(flags);
 	__local_trigger(cp, softirq);
 	local_irq_restore(flags);
@@ -725,9 +703,8 @@ static int __try_remote_softirq(struct call_single_data *cp, int cpu, int softir
 {
 	if (cpu_online(cpu)) {
 		cp->func = remote_softirq_receive;
-		cp->info = cp;
+		cp->info = &softirq;
 		cp->flags = 0;
-		cp->priv = softirq;
 
 		__smp_call_function_single(cpu, cp, 0);
 		return 0;

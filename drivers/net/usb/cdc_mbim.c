@@ -68,17 +68,8 @@ static int cdc_mbim_bind(struct usbnet *dev, struct usb_interface *intf)
 	struct cdc_ncm_ctx *ctx;
 	struct usb_driver *subdriver = ERR_PTR(-ENODEV);
 	int ret = -ENODEV;
-	u8 data_altsetting = CDC_NCM_DATA_ALTSETTING_NCM;
+	u8 data_altsetting = cdc_ncm_select_altsetting(dev, intf);
 	struct cdc_mbim_state *info = (void *)&dev->data;
-
-	/* see if interface supports MBIM alternate setting */
-	if (intf->num_altsetting == 2) {
-		if (!cdc_ncm_comm_intf_is_mbim(intf->cur_altsetting))
-			usb_set_interface(dev->udev,
-					  intf->cur_altsetting->desc.bInterfaceNumber,
-					  CDC_NCM_COMM_ALTSETTING_MBIM);
-		data_altsetting = CDC_NCM_DATA_ALTSETTING_MBIM;
-	}
 
 	/* Probably NCM, defer for cdc_ncm_bind */
 	if (!cdc_ncm_comm_intf_is_mbim(intf->cur_altsetting))
@@ -110,7 +101,7 @@ static int cdc_mbim_bind(struct usbnet *dev, struct usb_interface *intf)
 	dev->net->flags |= IFF_NOARP;
 
 	/* no need to put the VLAN tci in the packet headers */
-	dev->net->features |= NETIF_F_HW_VLAN_TX;
+	dev->net->features |= NETIF_F_HW_VLAN_CTAG_TX;
 err:
 	return ret;
 }
@@ -143,7 +134,7 @@ static struct sk_buff *cdc_mbim_tx_fixup(struct usbnet *dev, struct sk_buff *skb
 		goto error;
 
 	if (skb) {
-		if (skb->len <= sizeof(ETH_HLEN))
+		if (skb->len <= ETH_HLEN)
 			goto error;
 
 		/* mapping VLANs to MBIM sessions:
@@ -230,7 +221,7 @@ static struct sk_buff *cdc_mbim_process_dgram(struct usbnet *dev, u8 *buf, size_
 
 	/* map MBIM session to VLAN */
 	if (tci)
-		vlan_put_tag(skb, tci);
+		vlan_put_tag(skb, htons(ETH_P_8021Q), tci);
 err:
 	return skb;
 }
@@ -332,6 +323,11 @@ static int cdc_mbim_suspend(struct usb_interface *intf, pm_message_t message)
 		goto error;
 	}
 
+	/*
+	 * Both usbnet_suspend() and subdriver->suspend() MUST return 0
+	 * in system sleep context, otherwise, the resume callback has
+	 * to recover device from previous suspend failure.
+	 */
 	ret = usbnet_suspend(intf, message);
 	if (ret < 0)
 		goto error;
@@ -374,6 +370,21 @@ static const struct driver_info cdc_mbim_info = {
 	.tx_fixup = cdc_mbim_tx_fixup,
 };
 
+/* MBIM and NCM devices should not need a ZLP after NTBs with
+ * dwNtbOutMaxSize length. This driver_info is for the exceptional
+ * devices requiring it anyway, allowing them to be supported without
+ * forcing the performance penalty on all the sane devices.
+ */
+static const struct driver_info cdc_mbim_info_zlp = {
+	.description = "CDC MBIM",
+	.flags = FLAG_NO_SETINT | FLAG_MULTI_PACKET | FLAG_WWAN | FLAG_SEND_ZLP,
+	.bind = cdc_mbim_bind,
+	.unbind = cdc_mbim_unbind,
+	.manage_power = cdc_mbim_manage_power,
+	.rx_fixup = cdc_mbim_rx_fixup,
+	.tx_fixup = cdc_mbim_tx_fixup,
+};
+
 static const struct usb_device_id mbim_devs[] = {
 	/* This duplicate NCM entry is intentional. MBIM devices can
 	 * be disguised as NCM by default, and this is necessary to
@@ -384,6 +395,10 @@ static const struct usb_device_id mbim_devs[] = {
 	 */
 	{ USB_INTERFACE_INFO(USB_CLASS_COMM, USB_CDC_SUBCLASS_NCM, USB_CDC_PROTO_NONE),
 	  .driver_info = (unsigned long)&cdc_mbim_info,
+	},
+	/* Sierra Wireless MC7710 need ZLPs */
+	{ USB_DEVICE_AND_INTERFACE_INFO(0x1199, 0x68a2, USB_CLASS_COMM, USB_CDC_SUBCLASS_MBIM, USB_CDC_PROTO_NONE),
+	  .driver_info = (unsigned long)&cdc_mbim_info_zlp,
 	},
 	{ USB_INTERFACE_INFO(USB_CLASS_COMM, USB_CDC_SUBCLASS_MBIM, USB_CDC_PROTO_NONE),
 	  .driver_info = (unsigned long)&cdc_mbim_info,

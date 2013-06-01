@@ -341,6 +341,7 @@ DEFINE_BUF_EVENT(xfs_buf_item_relse);
 DEFINE_BUF_EVENT(xfs_buf_item_iodone);
 DEFINE_BUF_EVENT(xfs_buf_item_iodone_async);
 DEFINE_BUF_EVENT(xfs_buf_error_relse);
+DEFINE_BUF_EVENT(xfs_buf_wait_buftarg);
 DEFINE_BUF_EVENT(xfs_trans_read_buf_io);
 DEFINE_BUF_EVENT(xfs_trans_read_buf_shut);
 
@@ -616,6 +617,30 @@ DECLARE_EVENT_CLASS(xfs_iref_class,
 		  __entry->count,
 		  __entry->pincount,
 		  (char *)__entry->caller_ip)
+)
+
+TRACE_EVENT(xfs_iomap_prealloc_size,
+	TP_PROTO(struct xfs_inode *ip, xfs_fsblock_t blocks, int shift,
+		 unsigned int writeio_blocks),
+	TP_ARGS(ip, blocks, shift, writeio_blocks),
+	TP_STRUCT__entry(
+		__field(dev_t, dev)
+		__field(xfs_ino_t, ino)
+		__field(xfs_fsblock_t, blocks)
+		__field(int, shift)
+		__field(unsigned int, writeio_blocks)
+	),
+	TP_fast_assign(
+		__entry->dev = VFS_I(ip)->i_sb->s_dev;
+		__entry->ino = ip->i_ino;
+		__entry->blocks = blocks;
+		__entry->shift = shift;
+		__entry->writeio_blocks = writeio_blocks;
+	),
+	TP_printk("dev %d:%d ino 0x%llx prealloc blocks %llu shift %d "
+		  "m_writeio_blocks %u",
+		  MAJOR(__entry->dev), MINOR(__entry->dev), __entry->ino,
+		  __entry->blocks, __entry->shift, __entry->writeio_blocks)
 )
 
 #define DEFINE_IREF_EVENT(name) \

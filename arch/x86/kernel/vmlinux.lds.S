@@ -121,10 +121,6 @@ SECTIONS
 		/* 根据asm-generic/vmlinux.lds.h头文件中的定义
 		   arch/x86/kernel/head_32.S中从startup_32开始会连接在此处 */
 		HEAD_TEXT
-#ifdef CONFIG_X86_32
-		. = ALIGN(PAGE_SIZE);
-		*(.text..page_aligned)
-#endif
 		. = ALIGN(8);
 		_stext = .;
 		TEXT_TEXT

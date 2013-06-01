@@ -17,6 +17,7 @@
 /*
 通知链的4种类型
 */
+
 /*
  * Notifier chains are of four types:
  *
@@ -50,11 +51,15 @@
  * runtime initialization.
  */
 
+typedef	int (*notifier_fn_t)(struct notifier_block *nb,
+			unsigned long action, void *data);
+
 /*
 通知链中的元素，记录了当发出通知时，应该执行的操作（即回调函数）
 */
+
 struct notifier_block {
-	int (*notifier_call)(struct notifier_block *, unsigned long, void *);
+	notifier_fn_t notifier_call;
 	struct notifier_block __rcu *next;
 	/* 优先级数值大的先被调用 */
 	int priority;

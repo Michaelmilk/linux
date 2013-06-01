@@ -146,7 +146,7 @@ free:
 static void mxs_dt_free_map(struct pinctrl_dev *pctldev,
 			    struct pinctrl_map *map, unsigned num_maps)
 {
-	int i;
+	u32 i;
 
 	for (i = 0; i < num_maps; i++) {
 		if (map[i].type == PIN_MAP_TYPE_MUX_GROUP)
@@ -158,7 +158,7 @@ static void mxs_dt_free_map(struct pinctrl_dev *pctldev,
 	kfree(map);
 }
 
-static struct pinctrl_ops mxs_pinctrl_ops = {
+static const struct pinctrl_ops mxs_pinctrl_ops = {
 	.get_groups_count = mxs_get_groups_count,
 	.get_group_name = mxs_get_group_name,
 	.get_group_pins = mxs_get_group_pins,
@@ -203,7 +203,7 @@ static int mxs_pinctrl_enable(struct pinctrl_dev *pctldev, unsigned selector,
 	void __iomem *reg;
 	u8 bank, shift;
 	u16 pin;
-	int i;
+	u32 i;
 
 	for (i = 0; i < g->npins; i++) {
 		bank = PINID_TO_BANK(g->pins[i]);
@@ -219,7 +219,7 @@ static int mxs_pinctrl_enable(struct pinctrl_dev *pctldev, unsigned selector,
 	return 0;
 }
 
-static struct pinmux_ops mxs_pinmux_ops = {
+static const struct pinmux_ops mxs_pinmux_ops = {
 	.get_functions_count = mxs_pinctrl_get_funcs_count,
 	.get_function_name = mxs_pinctrl_get_func_name,
 	.get_function_groups = mxs_pinctrl_get_func_groups,
@@ -256,7 +256,7 @@ static int mxs_pinconf_group_set(struct pinctrl_dev *pctldev,
 	void __iomem *reg;
 	u8 ma, vol, pull, bank, shift;
 	u16 pin;
-	int i;
+	u32 i;
 
 	ma = CONFIG_TO_MA(config);
 	vol = CONFIG_TO_VOL(config);
@@ -319,7 +319,7 @@ static void mxs_pinconf_group_dbg_show(struct pinctrl_dev *pctldev,
 		seq_printf(s, "0x%lx", config);
 }
 
-static struct pinconf_ops mxs_pinconf_ops = {
+static const struct pinconf_ops mxs_pinconf_ops = {
 	.pin_config_get = mxs_pinconf_get,
 	.pin_config_set = mxs_pinconf_set,
 	.pin_config_group_get = mxs_pinconf_group_get,
@@ -345,8 +345,7 @@ static int mxs_pinctrl_parse_group(struct platform_device *pdev,
 	const char *propname = "fsl,pinmux-ids";
 	char *group;
 	int length = strlen(np->name) + SUFFIX_LEN;
-	int i;
-	u32 val;
+	u32 val, i;
 
 	group = devm_kzalloc(&pdev->dev, length, GFP_KERNEL);
 	if (!group)

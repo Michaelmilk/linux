@@ -81,8 +81,8 @@ struct bcma_device *bcma_find_core(struct bcma_bus *bus, u16 coreid)
 }
 EXPORT_SYMBOL_GPL(bcma_find_core);
 
-static struct bcma_device *bcma_find_core_unit(struct bcma_bus *bus, u16 coreid,
-					       u8 unit)
+struct bcma_device *bcma_find_core_unit(struct bcma_bus *bus, u16 coreid,
+					u8 unit)
 {
 	struct bcma_device *core;
 
@@ -120,6 +120,11 @@ static int bcma_register_cores(struct bcma_bus *bus)
 			continue;
 		}
 
+		/* Only first GMAC core on BCM4706 is connected and working */
+		if (core->id.id == BCMA_CORE_4706_MAC_GBIT &&
+		    core->core_unit > 0)
+			continue;
+
 		core->dev.release = bcma_release_core_dev;
 		core->dev.bus = &bcma_bus_type;
 		dev_set_name(&core->dev, "bcma%d:%d", bus->num, dev_id);
@@ -148,6 +153,14 @@ static int bcma_register_cores(struct bcma_bus *bus)
 		core->dev_registered = true;
 		dev_id++;
 	}
+
+#ifdef CONFIG_BCMA_DRIVER_MIPS
+	if (bus->drv_cc.pflash.present) {
+		err = platform_device_register(&bcma_pflash_dev);
+		if (err)
+			bcma_err(bus, "Error registering parallel flash\n");
+	}
+#endif
 
 #ifdef CONFIG_BCMA_SFLASH
 	if (bus->drv_cc.sflash.present) {
@@ -268,6 +281,13 @@ int bcma_bus_register(struct bcma_bus *bus)
 void bcma_bus_unregister(struct bcma_bus *bus)
 {
 	struct bcma_device *cores[3];
+	int err;
+
+	err = bcma_gpio_unregister(&bus->drv_cc);
+	if (err == -EBUSY)
+		bcma_err(bus, "Some GPIOs are still in use.\n");
+	else if (err)
+		bcma_err(bus, "Can not unregister GPIO driver: %i\n", err);
 
 	cores[0] = bcma_find_core(bus, BCMA_CORE_MIPS_74K);
 	cores[1] = bcma_find_core(bus, BCMA_CORE_PCIE);

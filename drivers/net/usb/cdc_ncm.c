@@ -55,6 +55,14 @@
 
 #define	DRIVER_VERSION				"14-Mar-2012"
 
+#if IS_ENABLED(CONFIG_USB_NET_CDC_MBIM)
+static bool prefer_mbim = true;
+#else
+static bool prefer_mbim;
+#endif
+module_param(prefer_mbim, bool, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(prefer_mbim, "Prefer MBIM setting on dual NCM/MBIM functions");
+
 static void cdc_ncm_txpath_bh(unsigned long param);
 static void cdc_ncm_tx_timeout_start(struct cdc_ncm_ctx *ctx);
 static enum hrtimer_restart cdc_ncm_tx_timer_cb(struct hrtimer *hr_timer);
@@ -65,9 +73,9 @@ cdc_ncm_get_drvinfo(struct net_device *net, struct ethtool_drvinfo *info)
 {
 	struct usbnet *dev = netdev_priv(net);
 
-	strncpy(info->driver, dev->driver_name, sizeof(info->driver));
-	strncpy(info->version, DRIVER_VERSION, sizeof(info->version));
-	strncpy(info->fw_version, dev->driver_info->description,
+	strlcpy(info->driver, dev->driver_name, sizeof(info->driver));
+	strlcpy(info->version, DRIVER_VERSION, sizeof(info->version));
+	strlcpy(info->fw_version, dev->driver_info->description,
 		sizeof(info->fw_version));
 	usb_make_path(dev->udev, info->bus_info, sizeof(info->bus_info));
 }
@@ -354,8 +362,8 @@ int cdc_ncm_bind_common(struct usbnet *dev, struct usb_interface *intf, u8 data_
 	u8 iface_no;
 
 	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
-	if (ctx == NULL)
-		return -ENODEV;
+	if (!ctx)
+		return -ENOMEM;
 
 	hrtimer_init(&ctx->tx_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	ctx->tx_timer.function = &cdc_ncm_tx_timer_cb;
@@ -435,6 +443,13 @@ advance:
 		len -= temp;
 	}
 
+	/* some buggy devices have an IAD but no CDC Union */
+	if (!ctx->union_desc && intf->intf_assoc && intf->intf_assoc->bInterfaceCount == 2) {
+		ctx->control = intf;
+		ctx->data = usb_ifnum_to_if(dev->udev, intf->cur_altsetting->desc.bInterfaceNumber + 1);
+		dev_dbg(&intf->dev, "CDC Union missing - got slave from IAD\n");
+	}
+
 	/* check if we got everything */
 	if ((ctx->control == NULL) || (ctx->data == NULL) ||
 	    ((!ctx->mbim_desc) && ((ctx->ether_desc == NULL) || (ctx->control != intf))))
@@ -497,7 +512,8 @@ advance:
 error2:
 	usb_set_intfdata(ctx->control, NULL);
 	usb_set_intfdata(ctx->data, NULL);
-	usb_driver_release_interface(driver, ctx->data);
+	if (ctx->data != ctx->control)
+		usb_driver_release_interface(driver, ctx->data);
 error:
 	cdc_ncm_free((struct cdc_ncm_ctx *)dev->data[0]);
 	dev->data[0] = 0;
@@ -542,9 +558,12 @@ void cdc_ncm_unbind(struct usbnet *dev, struct usb_interface *intf)
 }
 EXPORT_SYMBOL_GPL(cdc_ncm_unbind);
 
-static int cdc_ncm_bind(struct usbnet *dev, struct usb_interface *intf)
+/* Select the MBIM altsetting iff it is preferred and available,
+ * returning the number of the corresponding data interface altsetting
+ */
+u8 cdc_ncm_select_altsetting(struct usbnet *dev, struct usb_interface *intf)
 {
-	int ret;
+	struct usb_host_interface *alt;
 
 	/* The MBIM spec defines a NCM compatible default altsetting,
 	 * which we may have matched:
@@ -560,18 +579,27 @@ static int cdc_ncm_bind(struct usbnet *dev, struct usb_interface *intf)
 	 *   endpoint descriptors, shall be constructed according to
 	 *   the rules given in section 6 (USB Device Model) of this
 	 *   specification."
-	 *
-	 * Do not bind to such interfaces, allowing cdc_mbim to handle
-	 * them
 	 */
-#if IS_ENABLED(CONFIG_USB_NET_CDC_MBIM)
-	if ((intf->num_altsetting == 2) &&
-	    !usb_set_interface(dev->udev,
-			       intf->cur_altsetting->desc.bInterfaceNumber,
-			       CDC_NCM_COMM_ALTSETTING_MBIM) &&
-	    cdc_ncm_comm_intf_is_mbim(intf->cur_altsetting))
+	if (prefer_mbim && intf->num_altsetting == 2) {
+		alt = usb_altnum_to_altsetting(intf, CDC_NCM_COMM_ALTSETTING_MBIM);
+		if (alt && cdc_ncm_comm_intf_is_mbim(alt) &&
+		    !usb_set_interface(dev->udev,
+				       intf->cur_altsetting->desc.bInterfaceNumber,
+				       CDC_NCM_COMM_ALTSETTING_MBIM))
+			return CDC_NCM_DATA_ALTSETTING_MBIM;
+	}
+	return CDC_NCM_DATA_ALTSETTING_NCM;
+}
+EXPORT_SYMBOL_GPL(cdc_ncm_select_altsetting);
+
+static int cdc_ncm_bind(struct usbnet *dev, struct usb_interface *intf)
+{
+	int ret;
+
+	/* MBIM backwards compatible function? */
+	cdc_ncm_select_altsetting(dev, intf);
+	if (cdc_ncm_comm_intf_is_mbim(intf->cur_altsetting))
 		return -ENODEV;
-#endif
 
 	/* NCM data altsetting is always 1 */
 	ret = cdc_ncm_bind_common(dev, intf, 1);
@@ -582,7 +610,7 @@ static int cdc_ncm_bind(struct usbnet *dev, struct usb_interface *intf)
 	 * (carrier is OFF) during attach, so the IP network stack does not
 	 * start IPv6 negotiation and more.
 	 */
-	netif_carrier_off(dev->net);
+	usbnet_link_change(dev, 0, 0);
 	return ret;
 }
 
@@ -1078,12 +1106,9 @@ static void cdc_ncm_status(struct usbnet *dev, struct urb *urb)
 			" %sconnected\n",
 			ctx->netdev->name, ctx->connected ? "" : "dis");
 
-		if (ctx->connected)
-			netif_carrier_on(dev->net);
-		else {
-			netif_carrier_off(dev->net);
+		usbnet_link_change(dev, ctx->connected, 0);
+		if (!ctx->connected)
 			ctx->tx_speed = ctx->rx_speed = 0;
-		}
 		break;
 
 	case USB_CDC_NOTIFY_SPEED_CHANGE:
@@ -1096,8 +1121,9 @@ static void cdc_ncm_status(struct usbnet *dev, struct urb *urb)
 		break;
 
 	default:
-		dev_err(&dev->udev->dev, "NCM: unexpected "
-			"notification 0x%02x!\n", event->bNotificationType);
+		dev_dbg(&dev->udev->dev,
+			"NCM: unexpected notification 0x%02x!\n",
+			event->bNotificationType);
 		break;
 	}
 }
@@ -1155,6 +1181,20 @@ static const struct driver_info wwan_info = {
 	.tx_fixup = cdc_ncm_tx_fixup,
 };
 
+/* Same as wwan_info, but with FLAG_NOARP  */
+static const struct driver_info wwan_noarp_info = {
+	.description = "Mobile Broadband Network Device (NO ARP)",
+	.flags = FLAG_POINTTOPOINT | FLAG_NO_SETINT | FLAG_MULTI_PACKET
+			| FLAG_WWAN | FLAG_NOARP,
+	.bind = cdc_ncm_bind,
+	.unbind = cdc_ncm_unbind,
+	.check_connect = cdc_ncm_check_connect,
+	.manage_power = usbnet_manage_power,
+	.status = cdc_ncm_status,
+	.rx_fixup = cdc_ncm_rx_fixup,
+	.tx_fixup = cdc_ncm_tx_fixup,
+};
+
 static const struct usb_device_id cdc_devs[] = {
 	/* Ericsson MBM devices like F5521gw */
 	{ .match_flags = USB_DEVICE_ID_MATCH_INT_INFO
@@ -1186,12 +1226,30 @@ static const struct usb_device_id cdc_devs[] = {
 	  .driver_info = (unsigned long) &wwan_info,
 	},
 
+	/* tag Huawei devices as wwan */
+	{ USB_VENDOR_AND_INTERFACE_INFO(0x12d1,
+					USB_CLASS_COMM,
+					USB_CDC_SUBCLASS_NCM,
+					USB_CDC_PROTO_NONE),
+	  .driver_info = (unsigned long)&wwan_info,
+	},
+
 	/* Huawei NCM devices disguised as vendor specific */
 	{ USB_VENDOR_AND_INTERFACE_INFO(0x12d1, 0xff, 0x02, 0x16),
 	  .driver_info = (unsigned long)&wwan_info,
 	},
 	{ USB_VENDOR_AND_INTERFACE_INFO(0x12d1, 0xff, 0x02, 0x46),
 	  .driver_info = (unsigned long)&wwan_info,
+	},
+	{ USB_VENDOR_AND_INTERFACE_INFO(0x12d1, 0xff, 0x02, 0x76),
+	  .driver_info = (unsigned long)&wwan_info,
+	},
+
+	/* Infineon(now Intel) HSPA Modem platform */
+	{ USB_DEVICE_AND_INTERFACE_INFO(0x1519, 0x0443,
+		USB_CLASS_COMM,
+		USB_CDC_SUBCLASS_NCM, USB_CDC_PROTO_NONE),
+	  .driver_info = (unsigned long)&wwan_noarp_info,
 	},
 
 	/* Generic CDC-NCM devices */

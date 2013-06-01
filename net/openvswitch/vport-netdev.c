@@ -35,21 +35,25 @@
 /* Must be called with rcu_read_lock. */
 static void netdev_port_receive(struct vport *vport, struct sk_buff *skb)
 {
-	if (unlikely(!vport)) {
-		kfree_skb(skb);
-		return;
-	}
+	if (unlikely(!vport))
+		goto error;
+
+	if (unlikely(skb_warn_if_lro(skb)))
+		goto error;
 
 	/* Make our own copy of the packet.  Otherwise we will mangle the
 	 * packet for anyone who came before us (e.g. tcpdump via AF_PACKET).
-	 * (No one comes after us, since we tell handle_bridge() that we took
-	 * the packet.) */
+	 */
 	skb = skb_share_check(skb, GFP_ATOMIC);
 	if (unlikely(!skb))
 		return;
 
 	skb_push(skb, ETH_HLEN);
 	ovs_vport_receive(vport, skb);
+	return;
+
+error:
+	kfree_skb(skb);
 }
 
 /* Called with rcu_read_lock and bottom-halves disabled. */
@@ -96,16 +100,20 @@ static struct vport *netdev_create(const struct vport_parms *parms)
 		goto error_put;
 	}
 
+	rtnl_lock();
 	err = netdev_rx_handler_register(netdev_vport->dev, netdev_frame_hook,
 					 vport);
 	if (err)
-		goto error_put;
+		goto error_unlock;
 
 	dev_set_promiscuity(netdev_vport->dev, 1);
 	netdev_vport->dev->priv_flags |= IFF_OVS_DATAPATH;
+	rtnl_unlock();
 
 	return vport;
 
+error_unlock:
+	rtnl_unlock();
 error_put:
 	dev_put(netdev_vport->dev);
 error_free_vport:
@@ -127,9 +135,11 @@ static void netdev_destroy(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 
+	rtnl_lock();
 	netdev_vport->dev->priv_flags &= ~IFF_OVS_DATAPATH;
 	netdev_rx_handler_unregister(netdev_vport->dev);
 	dev_set_promiscuity(netdev_vport->dev, -1);
+	rtnl_unlock();
 
 	call_rcu(&netdev_vport->rcu, free_port_rcu);
 }
@@ -138,12 +148,6 @@ const char *ovs_netdev_get_name(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return netdev_vport->dev->name;
-}
-
-int ovs_netdev_get_ifindex(const struct vport *vport)
-{
-	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-	return netdev_vport->dev->ifindex;
 }
 
 static unsigned int packet_length(const struct sk_buff *skb)
@@ -168,9 +172,6 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 				     packet_length(skb), mtu);
 		goto error;
 	}
-
-	if (unlikely(skb_warn_if_lro(skb)))
-		goto error;
 
 	skb->dev = netdev_vport->dev;
 	len = skb->len;
@@ -199,6 +200,5 @@ const struct vport_ops ovs_netdev_vport_ops = {
 	.create		= netdev_create,
 	.destroy	= netdev_destroy,
 	.get_name	= ovs_netdev_get_name,
-	.get_ifindex	= ovs_netdev_get_ifindex,
 	.send		= netdev_send,
 };

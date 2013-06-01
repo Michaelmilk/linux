@@ -219,7 +219,8 @@ __be16 eth_type_trans(struct sk_buff *skb, struct net_device *dev)
 	   据此返回帧头中的协议类型(网络字节序)，如cpu_to_be16(ETH_P_IP)
 	   1536 = 0x0600
 	*/
-	if (ntohs(eth->h_proto) >= 1536)
+
+	if (ntohs(eth->h_proto) >= ETH_P_802_3_MIN)
 		return eth->h_proto;
 
 	/*
@@ -296,6 +297,36 @@ void eth_header_cache_update(struct hh_cache *hh,
 EXPORT_SYMBOL(eth_header_cache_update);
 
 /**
+ * eth_prepare_mac_addr_change - prepare for mac change
+ * @dev: network device
+ * @p: socket address
+ */
+int eth_prepare_mac_addr_change(struct net_device *dev, void *p)
+{
+	struct sockaddr *addr = p;
+
+	if (!(dev->priv_flags & IFF_LIVE_ADDR_CHANGE) && netif_running(dev))
+		return -EBUSY;
+	if (!is_valid_ether_addr(addr->sa_data))
+		return -EADDRNOTAVAIL;
+	return 0;
+}
+EXPORT_SYMBOL(eth_prepare_mac_addr_change);
+
+/**
+ * eth_commit_mac_addr_change - commit mac change
+ * @dev: network device
+ * @p: socket address
+ */
+void eth_commit_mac_addr_change(struct net_device *dev, void *p)
+{
+	struct sockaddr *addr = p;
+
+	memcpy(dev->dev_addr, addr->sa_data, ETH_ALEN);
+}
+EXPORT_SYMBOL(eth_commit_mac_addr_change);
+
+/**
  * eth_mac_addr - set new Ethernet hardware address
  * @dev: network device
  * @p: socket address
@@ -307,15 +338,12 @@ EXPORT_SYMBOL(eth_header_cache_update);
  */
 int eth_mac_addr(struct net_device *dev, void *p)
 {
-	struct sockaddr *addr = p;
+	int ret;
 
-	if (!(dev->priv_flags & IFF_LIVE_ADDR_CHANGE) && netif_running(dev))
-		return -EBUSY;
-	if (!is_valid_ether_addr(addr->sa_data))
-		return -EADDRNOTAVAIL;
-	memcpy(dev->dev_addr, addr->sa_data, ETH_ALEN);
-	/* if device marked as NET_ADDR_RANDOM, reset it */
-	dev->addr_assign_type &= ~NET_ADDR_RANDOM;
+	ret = eth_prepare_mac_addr_change(dev, p);
+	if (ret < 0)
+		return ret;
+	eth_commit_mac_addr_change(dev, p);
 	return 0;
 }
 EXPORT_SYMBOL(eth_mac_addr);

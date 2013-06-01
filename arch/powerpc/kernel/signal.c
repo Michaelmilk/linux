@@ -13,6 +13,7 @@
 #include <linux/signal.h>
 #include <linux/uprobes.h>
 #include <linux/key.h>
+#include <linux/context_tracking.h>
 #include <asm/hw_breakpoint.h>
 #include <asm/uaccess.h>
 #include <asm/unistd.h>
@@ -24,7 +25,7 @@
  * through debug.exception-trace sysctl.
  */
 
-int show_unhandled_signals = 0;
+int show_unhandled_signals = 1;
 
 /*
  * Allocate space for the signal frame
@@ -130,8 +131,9 @@ static int do_signal(struct pt_regs *regs)
 	 * user space. The DABR will have been cleared if it
 	 * triggered inside the kernel.
 	 */
-	if (current->thread.dabr)
-		set_dabr(current->thread.dabr, current->thread.dabrx);
+	if (current->thread.hw_brk.address &&
+		current->thread.hw_brk.type)
+		set_breakpoint(&current->thread.hw_brk);
 #endif
 	/* Re-enable the breakpoints for the signal stack */
 	thread_change_pc(current, regs);
@@ -158,6 +160,8 @@ static int do_signal(struct pt_regs *regs)
 
 void do_notify_resume(struct pt_regs *regs, unsigned long thread_info_flags)
 {
+	user_exit();
+
 	if (thread_info_flags & _TIF_UPROBE)
 		uprobe_notify_resume(regs);
 
@@ -168,11 +172,6 @@ void do_notify_resume(struct pt_regs *regs, unsigned long thread_info_flags)
 		clear_thread_flag(TIF_NOTIFY_RESUME);
 		tracehook_notify_resume(regs);
 	}
-}
 
-long sys_sigaltstack(const stack_t __user *uss, stack_t __user *uoss,
-		unsigned long r5, unsigned long r6, unsigned long r7,
-		unsigned long r8, struct pt_regs *regs)
-{
-	return do_sigaltstack(uss, uoss, regs->gpr[1]);
+	user_enter();
 }

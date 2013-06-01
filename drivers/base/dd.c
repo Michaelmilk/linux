@@ -24,6 +24,7 @@
 #include <linux/wait.h>
 #include <linux/async.h>
 #include <linux/pm_runtime.h>
+#include <linux/pinctrl/devinfo.h>
 
 #include "base.h"
 #include "power/power.h"
@@ -172,6 +173,8 @@ static int deferred_probe_initcall(void)
 
 	driver_deferred_probe_enable = true;
 	driver_deferred_probe_trigger();
+	/* Sort as many dependencies as possible before exiting initcalls */
+	flush_workqueue(deferred_wq);
 	return 0;
 }
 late_initcall(deferred_probe_initcall);
@@ -278,6 +281,12 @@ static int really_probe(struct device *dev, struct device_driver *drv)
 	   虽然其内嵌的struct dev的driver字段已有驱动
 	*/
 	dev->driver = drv;
+
+	/* If using pinctrl, bind pins now before probing */
+	ret = pinctrl_bind_pins(dev);
+	if (ret)
+		goto probe_failed;
+
 	if (driver_sysfs_add(dev)) {
 		printk(KERN_ERR "%s: driver_sysfs_add(%s) failed\n",
 			__func__, dev_name(dev));
@@ -388,7 +397,7 @@ int driver_probe_device(struct device_driver *drv, struct device *dev)
 
 	pm_runtime_barrier(dev);
 	ret = really_probe(dev, drv);
-	pm_runtime_idle(dev);
+	pm_request_idle(dev);
 
 	return ret;
 }
@@ -441,7 +450,7 @@ int device_attach(struct device *dev)
 	/* 设备没有驱动，则遍历总线，寻找驱动 */
 	} else {
 		ret = bus_for_each_drv(dev->bus, NULL, dev, __device_attach);
-		pm_runtime_idle(dev);
+		pm_request_idle(dev);
 	}
 out_unlock:
 	device_unlock(dev);
@@ -526,7 +535,7 @@ static void __device_release_driver(struct device *dev)
 						     BUS_NOTIFY_UNBIND_DRIVER,
 						     dev);
 
-		pm_runtime_put_sync(dev);
+		pm_runtime_put(dev);
 
 		/* 调用bus_type或device_driver中定义的remove()方法
 		   (先调用bus_type中的方法，如果未定义，则去调用device_driver中的方法)

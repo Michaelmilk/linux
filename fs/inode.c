@@ -750,7 +750,7 @@ void prune_icache_sb(struct super_block *sb, int nr_to_scan)
 		 * inode to the back of the list so we don't spin on it.
 		 */
 		if (!spin_trylock(&inode->i_lock)) {
-			list_move_tail(&inode->i_lru, &sb->s_inode_lru);
+			list_move(&inode->i_lru, &sb->s_inode_lru);
 			continue;
 		}
 
@@ -823,11 +823,10 @@ static struct inode *find_inode(struct super_block *sb,
 				int (*test)(struct inode *, void *),
 				void *data)
 {
-	struct hlist_node *node;
 	struct inode *inode = NULL;
 
 repeat:
-	hlist_for_each_entry(inode, node, head, i_hash) {
+	hlist_for_each_entry(inode, head, i_hash) {
 		spin_lock(&inode->i_lock);
 		if (inode->i_sb != sb) {
 			spin_unlock(&inode->i_lock);
@@ -855,11 +854,10 @@ repeat:
 static struct inode *find_inode_fast(struct super_block *sb,
 				struct hlist_head *head, unsigned long ino)
 {
-	struct hlist_node *node;
 	struct inode *inode = NULL;
 
 repeat:
-	hlist_for_each_entry(inode, node, head, i_hash) {
+	hlist_for_each_entry(inode, head, i_hash) {
 		spin_lock(&inode->i_lock);
 		if (inode->i_ino != ino) {
 			spin_unlock(&inode->i_lock);
@@ -1170,11 +1168,10 @@ EXPORT_SYMBOL(iget_locked);
 static int test_inode_iunique(struct super_block *sb, unsigned long ino)
 {
 	struct hlist_head *b = inode_hashtable + hash(sb, ino);
-	struct hlist_node *node;
 	struct inode *inode;
 
 	spin_lock(&inode_hash_lock);
-	hlist_for_each_entry(inode, node, b, i_hash) {
+	hlist_for_each_entry(inode, b, i_hash) {
 		if (inode->i_ino == ino && inode->i_sb == sb) {
 			spin_unlock(&inode_hash_lock);
 			return 0;
@@ -1329,10 +1326,9 @@ int insert_inode_locked(struct inode *inode)
 	struct hlist_head *head = inode_hashtable + hash(sb, ino);
 
 	while (1) {
-		struct hlist_node *node;
 		struct inode *old = NULL;
 		spin_lock(&inode_hash_lock);
-		hlist_for_each_entry(old, node, head, i_hash) {
+		hlist_for_each_entry(old, head, i_hash) {
 			if (old->i_ino != ino)
 				continue;
 			if (old->i_sb != sb)
@@ -1344,7 +1340,7 @@ int insert_inode_locked(struct inode *inode)
 			}
 			break;
 		}
-		if (likely(!node)) {
+		if (likely(!old)) {
 			spin_lock(&inode->i_lock);
 			inode->i_state |= I_NEW;
 			hlist_add_head(&inode->i_hash, head);
@@ -1372,11 +1368,10 @@ int insert_inode_locked4(struct inode *inode, unsigned long hashval,
 	struct hlist_head *head = inode_hashtable + hash(sb, hashval);
 
 	while (1) {
-		struct hlist_node *node;
 		struct inode *old = NULL;
 
 		spin_lock(&inode_hash_lock);
-		hlist_for_each_entry(old, node, head, i_hash) {
+		hlist_for_each_entry(old, head, i_hash) {
 			if (old->i_sb != sb)
 				continue;
 			if (!test(old, data))
@@ -1388,7 +1383,7 @@ int insert_inode_locked4(struct inode *inode, unsigned long hashval,
 			}
 			break;
 		}
-		if (likely(!node)) {
+		if (likely(!old)) {
 			spin_lock(&inode->i_lock);
 			inode->i_state |= I_NEW;
 			hlist_add_head(&inode->i_hash, head);
@@ -1693,7 +1688,7 @@ EXPORT_SYMBOL(file_remove_suid);
 
 int file_update_time(struct file *file)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	struct timespec now;
 	int sync_it = 0;
 	int ret;
@@ -1863,7 +1858,7 @@ void init_special_inode(struct inode *inode, umode_t mode, dev_t rdev)
 		inode->i_rdev = rdev;
 	} else if (S_ISFIFO(mode))
 		/* 如果是 FIFO，则使用 def_fifo_fops 函数集 */
-		inode->i_fop = &def_fifo_fops;
+		inode->i_fop = &pipefifo_fops;
 	else if (S_ISSOCK(mode))
 		/* 如果是 SOCKET，则使用 def_sock_fops 函数集 */
 		inode->i_fop = &bad_sock_fops;

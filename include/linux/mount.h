@@ -49,6 +49,8 @@ struct mnt_namespace;
 
 #define MNT_INTERNAL	0x4000
 
+#define MNT_LOCK_READONLY	0x400000
+
 /*
 对于每一个mount的文件系统，都由一个vfsmount实例来表示
 
@@ -61,6 +63,7 @@ vfsmount->mnt_mountpoint = /mnt/d的dentry；
 vfsmount->mnt_parent = /mnt/d所属的文件系统的vfsmount。
 并且把这个新建的vfsmount链入一个全局的hash表mount_hashtable中。
 */
+
 struct vfsmount {
 	struct dentry *mnt_root;	/* root of the mounted tree */
 	struct super_block *mnt_sb;	/* pointer to superblock */

@@ -53,7 +53,10 @@ extern int rcutorture_runnable; /* for sysctl */
 extern void rcutorture_record_test_transition(void);
 extern void rcutorture_record_progress(unsigned long vernum);
 extern void do_trace_rcu_torture_read(char *rcutorturename,
-				      struct rcu_head *rhp);
+				      struct rcu_head *rhp,
+				      unsigned long secs,
+				      unsigned long c_old,
+				      unsigned long c);
 #else
 static inline void rcutorture_record_test_transition(void)
 {
@@ -63,9 +66,13 @@ static inline void rcutorture_record_progress(unsigned long vernum)
 }
 #ifdef CONFIG_RCU_TRACE
 extern void do_trace_rcu_torture_read(char *rcutorturename,
-				      struct rcu_head *rhp);
+				      struct rcu_head *rhp,
+				      unsigned long secs,
+				      unsigned long c_old,
+				      unsigned long c);
 #else
-#define do_trace_rcu_torture_read(rcutorturename, rhp) do { } while (0)
+#define do_trace_rcu_torture_read(rcutorturename, rhp, secs, c_old, c) \
+	do { } while (0)
 #endif
 #endif
 
@@ -79,6 +86,7 @@ extern void do_trace_rcu_torture_read(char *rcutorturename,
 /* 用于unsigned long型的数比较大小 */
 #define ULONG_CMP_GE(a, b)	(ULONG_MAX / 2 >= (a) - (b))
 #define ULONG_CMP_LT(a, b)	(ULONG_MAX / 2 < (a) - (b))
+#define ulong2long(a)		(*(long *)(&(a)))
 
 /* Exported common interfaces */
 
@@ -770,7 +778,7 @@ static inline void rcu_preempt_sleep_check(void)
  * preemptible RCU implementations (TREE_PREEMPT_RCU and TINY_PREEMPT_RCU)
  * in CONFIG_PREEMPT kernel builds, RCU read-side critical sections may
  * be preempted, but explicit blocking is illegal.  Finally, in preemptible
- * RCU implementations in real-time (CONFIG_PREEMPT_RT) kernel builds,
+ * RCU implementations in real-time (with -rt patchset) kernel builds,
  * RCU read-side critical sections may be preempted and they may also
  * block, but only when acquiring spinlocks that are subject to priority
  * inheritance.
@@ -1022,5 +1030,12 @@ static inline notrace void rcu_read_unlock_sched_notrace(void)
  */
 #define kfree_rcu(ptr, rcu_head)					\
 	__kfree_rcu(&((ptr)->rcu_head), offsetof(typeof(*(ptr)), rcu_head))
+
+#ifdef CONFIG_RCU_NOCB_CPU
+extern bool rcu_is_nocb_cpu(int cpu);
+#else
+static inline bool rcu_is_nocb_cpu(int cpu) { return false; }
+#endif /* #else #ifdef CONFIG_RCU_NOCB_CPU */
+
 
 #endif /* __LINUX_RCUPDATE_H */

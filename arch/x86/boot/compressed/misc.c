@@ -341,6 +341,8 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 {
 	real_mode = rmode;
 
+	sanitize_boot_params(real_mode);
+
 	/* 准备视频输出的地址和端口
 	   用于此处调试向显示器输出信息 */
 

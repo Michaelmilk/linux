@@ -27,6 +27,7 @@
 #include <plat/regs-serial.h>
 #include <mach/regs-clock.h>
 #include <mach/regs-irq.h>
+#include <mach/irqs.h>
 #include <asm/irq.h>
 
 #include <plat/pm.h>
@@ -51,7 +52,7 @@ void s3c_pm_dbg(const char *fmt, ...)
 	char buff[256];
 
 	va_start(va, fmt);
-	vsprintf(buff, fmt, va);
+	vsnprintf(buff, sizeof(buff), fmt, va);
 	va_end(va);
 
 	printascii(buff);
@@ -243,6 +244,7 @@ int (*pm_cpu_sleep)(unsigned long);
 
 static int s3c_pm_enter(suspend_state_t state)
 {
+	int ret;
 	/* ensure the debug is initialised (if enabled) */
 
 	s3c_pm_debug_init();
@@ -300,7 +302,9 @@ static int s3c_pm_enter(suspend_state_t state)
 	 * we resume as it saves its own register state and restores it
 	 * during the resume.  */
 
-	cpu_suspend(0, pm_cpu_sleep);
+	ret = cpu_suspend(0, pm_cpu_sleep);
+	if (ret)
+		return ret;
 
 	/* restore the system state */
 

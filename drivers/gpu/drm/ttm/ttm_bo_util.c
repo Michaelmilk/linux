@@ -86,6 +86,7 @@ int ttm_mem_io_lock(struct ttm_mem_type_manager *man, bool interruptible)
 	mutex_lock(&man->io_reserve_mutex);
 	return 0;
 }
+EXPORT_SYMBOL(ttm_mem_io_lock);
 
 void ttm_mem_io_unlock(struct ttm_mem_type_manager *man)
 {
@@ -94,6 +95,7 @@ void ttm_mem_io_unlock(struct ttm_mem_type_manager *man)
 
 	mutex_unlock(&man->io_reserve_mutex);
 }
+EXPORT_SYMBOL(ttm_mem_io_unlock);
 
 static int ttm_mem_io_evict(struct ttm_mem_type_manager *man)
 {
@@ -111,8 +113,9 @@ static int ttm_mem_io_evict(struct ttm_mem_type_manager *man)
 	return 0;
 }
 
-static int ttm_mem_io_reserve(struct ttm_bo_device *bdev,
-			      struct ttm_mem_reg *mem)
+
+int ttm_mem_io_reserve(struct ttm_bo_device *bdev,
+		       struct ttm_mem_reg *mem)
 {
 	struct ttm_mem_type_manager *man = &bdev->man[mem->mem_type];
 	int ret = 0;
@@ -134,9 +137,10 @@ retry:
 	}
 	return ret;
 }
+EXPORT_SYMBOL(ttm_mem_io_reserve);
 
-static void ttm_mem_io_free(struct ttm_bo_device *bdev,
-			    struct ttm_mem_reg *mem)
+void ttm_mem_io_free(struct ttm_bo_device *bdev,
+		     struct ttm_mem_reg *mem)
 {
 	struct ttm_mem_type_manager *man = &bdev->man[mem->mem_type];
 
@@ -149,6 +153,7 @@ static void ttm_mem_io_free(struct ttm_bo_device *bdev,
 		bdev->driver->io_mem_free(bdev, mem);
 
 }
+EXPORT_SYMBOL(ttm_mem_io_free);
 
 int ttm_mem_io_reserve_vm(struct ttm_buffer_object *bo)
 {
@@ -429,7 +434,7 @@ static int ttm_buffer_object_transfer(struct ttm_buffer_object *bo,
 	struct ttm_bo_device *bdev = bo->bdev;
 	struct ttm_bo_driver *driver = bdev->driver;
 
-	fbo = kzalloc(sizeof(*fbo), GFP_KERNEL);
+	fbo = kmalloc(sizeof(*fbo), GFP_KERNEL);
 	if (!fbo)
 		return -ENOMEM;
 
@@ -448,7 +453,12 @@ static int ttm_buffer_object_transfer(struct ttm_buffer_object *bo,
 	fbo->vm_node = NULL;
 	atomic_set(&fbo->cpu_writers, 0);
 
-	fbo->sync_obj = driver->sync_obj_ref(bo->sync_obj);
+	spin_lock(&bdev->fence_lock);
+	if (bo->sync_obj)
+		fbo->sync_obj = driver->sync_obj_ref(bo->sync_obj);
+	else
+		fbo->sync_obj = NULL;
+	spin_unlock(&bdev->fence_lock);
 	kref_init(&fbo->list_kref);
 	kref_init(&fbo->kref);
 	fbo->destroy = &ttm_transfered_destroy;
@@ -661,13 +671,11 @@ int ttm_bo_move_accel_cleanup(struct ttm_buffer_object *bo,
 		 */
 
 		set_bit(TTM_BO_PRIV_FLAG_MOVING, &bo->priv_flags);
-
-		/* ttm_buffer_object_transfer accesses bo->sync_obj */
-		ret = ttm_buffer_object_transfer(bo, &ghost_obj);
 		spin_unlock(&bdev->fence_lock);
 		if (tmp_obj)
 			driver->sync_obj_unref(&tmp_obj);
 
+		ret = ttm_buffer_object_transfer(bo, &ghost_obj);
 		if (ret)
 			return ret;
 

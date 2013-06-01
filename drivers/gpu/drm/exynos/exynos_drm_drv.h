@@ -148,8 +148,8 @@ struct exynos_drm_overlay {
 struct exynos_drm_display_ops {
 	enum exynos_drm_output_type type;
 	bool (*is_connected)(struct device *dev);
-	int (*get_edid)(struct device *dev, struct drm_connector *connector,
-				u8 *edid, int len);
+	struct edid *(*get_edid)(struct device *dev,
+			struct drm_connector *connector);
 	void *(*get_panel)(struct device *dev);
 	int (*check_timing)(struct device *dev, void *timing);
 	int (*power_on)(struct device *dev, int mode);
@@ -322,12 +322,22 @@ void exynos_drm_subdrv_close(struct drm_device *dev, struct drm_file *file);
  * this function registers exynos drm hdmi platform device. It ensures only one
  * instance of the device is created.
  */
-extern int exynos_platform_device_hdmi_register(void);
+int exynos_platform_device_hdmi_register(void);
 
 /*
  * this function unregisters exynos drm hdmi platform device if it exists.
  */
 void exynos_platform_device_hdmi_unregister(void);
+
+/*
+ * this function registers exynos drm ipp platform device.
+ */
+int exynos_platform_device_ipp_register(void);
+
+/*
+ * this function unregisters exynos drm ipp platform device if it exists.
+ */
+void exynos_platform_device_ipp_unregister(void);
 
 extern struct platform_driver fimd_driver;
 extern struct platform_driver hdmi_driver;

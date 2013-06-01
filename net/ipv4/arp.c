@@ -698,12 +698,20 @@ struct sk_buff *arp_create(int type, int ptype, __be32 dest_ip,
 	/* 设置源IP地址 */
 	memcpy(arp_ptr, &src_ip, 4);
 	arp_ptr += 4;
-	/* 设置目的硬件地址 */
-	if (target_hw != NULL)
-		memcpy(arp_ptr, target_hw, dev->addr_len);
-	else
-		memset(arp_ptr, 0, dev->addr_len);
-	arp_ptr += dev->addr_len;
+
+	switch (dev->type) {
+#if IS_ENABLED(CONFIG_FIREWIRE_NET)
+	case ARPHRD_IEEE1394:
+		break;
+#endif
+	default:
+		/* 设置目的硬件地址 */
+		if (target_hw != NULL)
+			memcpy(arp_ptr, target_hw, dev->addr_len);
+		else
+			memset(arp_ptr, 0, dev->addr_len);
+		arp_ptr += dev->addr_len;
+	}
 	/* 设置目的IP地址 */
 	memcpy(arp_ptr, &dest_ip, 4);
 
@@ -839,8 +847,15 @@ static int arp_process(struct sk_buff *skb)
 	/* 发送者IP地址 */
 	memcpy(&sip, arp_ptr, 4);
 	arp_ptr += 4;
-	/* 跳过发送者所(要)解析的硬件地址 */
-	arp_ptr += dev->addr_len;
+	switch (dev_type) {
+#if IS_ENABLED(CONFIG_FIREWIRE_NET)
+	case ARPHRD_IEEE1394:
+		break;
+#endif
+	default:
+		/* 跳过发送者所(要)解析的硬件地址 */
+		arp_ptr += dev->addr_len;
+	}
 	/* 发送者所(要)解析的IP地址 */
 	memcpy(&tip, arp_ptr, 4);
 /*
@@ -1010,7 +1025,16 @@ arp包的接收处理函数
 static int arp_rcv(struct sk_buff *skb, struct net_device *dev,
 		   struct packet_type *pt, struct net_device *orig_dev)
 {
-	struct arphdr *arp;
+	const struct arphdr *arp;
+
+	if (dev->flags & IFF_NOARP ||
+	    skb->pkt_type == PACKET_OTHERHOST ||
+	    skb->pkt_type == PACKET_LOOPBACK)
+		goto freeskb;
+
+	skb = skb_share_check(skb, GFP_ATOMIC);
+	if (!skb)
+		goto out_of_mem;
 
 	/* ARP header, plus 2 device addresses, plus 2 IP addresses.  */
 	/* 确保线性区数据至少达到arp头长度，含硬件地址和ip地址长度 */
@@ -1019,23 +1043,8 @@ static int arp_rcv(struct sk_buff *skb, struct net_device *dev,
 
 	/* 取arp头，判断 */
 	arp = arp_hdr(skb);
-		/* 硬件地址长度不一致 */
-	if (arp->ar_hln != dev->addr_len ||
-		/* 接收该arp包的接口不支持arp */
-	    dev->flags & IFF_NOARP ||
-		/* 接收到的skb目的mac不是本接口 */
-	    skb->pkt_type == PACKET_OTHERHOST ||
-		/* 回环端口 */
-	    skb->pkt_type == PACKET_LOOPBACK ||
-		/* 地址长度不是4，这里只解析ip地址 */
-	    arp->ar_pln != 4)
+	if (arp->ar_hln != dev->addr_len || arp->ar_pln != 4)
 		goto freeskb;
-
-	/* 判断skb共享性
-	   参考__netif_receive_skb()中的deliver_skb() */
-	skb = skb_share_check(skb, GFP_ATOMIC);
-	if (skb == NULL)
-		goto out_of_mem;
 
 	memset(NEIGH_CB(skb), 0, sizeof(struct neighbour_cb));
 
@@ -1500,14 +1509,14 @@ static const struct file_operations arp_seq_fops = {
 
 static int __net_init arp_net_init(struct net *net)
 {
-	if (!proc_net_fops_create(net, "arp", S_IRUGO, &arp_seq_fops))
+	if (!proc_create("arp", S_IRUGO, net->proc_net, &arp_seq_fops))
 		return -ENOMEM;
 	return 0;
 }
 
 static void __net_exit arp_net_exit(struct net *net)
 {
-	proc_net_remove(net, "arp");
+	remove_proc_entry("arp", net->proc_net);
 }
 
 static struct pernet_operations arp_net_ops = {

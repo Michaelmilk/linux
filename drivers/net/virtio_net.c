@@ -26,8 +26,9 @@
 #include <linux/scatterlist.h>
 #include <linux/if_vlan.h>
 #include <linux/slab.h>
+#include <linux/cpu.h>
 
-static int napi_weight = 128;
+static int napi_weight = NAPI_POLL_WEIGHT;
 module_param(napi_weight, int, 0444);
 
 static bool csum = true, gso = true;
@@ -38,7 +39,6 @@ module_param(gso, bool, 0444);
 #define MAX_PACKET_LEN (ETH_HLEN + VLAN_HLEN + ETH_DATA_LEN)
 #define GOOD_COPY_LEN	128
 
-#define VIRTNET_SEND_COMMAND_SG_MAX    2
 #define VIRTNET_DRIVER_VERSION "1.0.0"
 
 struct virtnet_stats {
@@ -123,6 +123,12 @@ struct virtnet_info {
 
 	/* Does the affinity hint is set for virtqueues? */
 	bool affinity_hint_set;
+
+	/* Per-cpu variable to show the mapping from CPU to virtqueue */
+	int __percpu *vq_index;
+
+	/* CPU hot plug notifier */
+	struct notifier_block nb;
 };
 
 struct skb_vnet_hdr {
@@ -147,7 +153,7 @@ struct padded_vnet_hdr {
  */
 static int vq2txq(struct virtqueue *vq)
 {
-	return (virtqueue_get_queue_index(vq) - 1) / 2;
+	return (vq->index - 1) / 2;
 }
 
 static int txq2vq(int txq)
@@ -157,7 +163,7 @@ static int txq2vq(int txq)
 
 static int vq2rxq(struct virtqueue *vq)
 {
-	return virtqueue_get_queue_index(vq) / 2;
+	return vq->index / 2;
 }
 
 static int rxq2vq(int rxq)
@@ -220,6 +226,7 @@ static void set_skb_frag(struct sk_buff *skb, struct page *page,
 	skb->len += size;
 	skb->truesize += PAGE_SIZE;
 	skb_shinfo(skb)->nr_frags++;
+	skb_shinfo(skb)->tx_flags |= SKBTX_SHARED_FRAG;
 	*len -= size;
 }
 
@@ -436,7 +443,7 @@ static int add_recvbuf_small(struct receive_queue *rq, gfp_t gfp)
 
 	skb_to_sgvec(skb, rq->sg + 1, 0, skb->len);
 
-	err = virtqueue_add_buf(rq->vq, rq->sg, 0, 2, skb, gfp);
+	err = virtqueue_add_inbuf(rq->vq, rq->sg, 2, skb, gfp);
 	if (err < 0)
 		dev_kfree_skb(skb);
 
@@ -481,8 +488,8 @@ static int add_recvbuf_big(struct receive_queue *rq, gfp_t gfp)
 
 	/* chain first in list head */
 	first->private = (unsigned long)list;
-	err = virtqueue_add_buf(rq->vq, rq->sg, 0, MAX_SKB_FRAGS + 2,
-				first, gfp);
+	err = virtqueue_add_inbuf(rq->vq, rq->sg, MAX_SKB_FRAGS + 2,
+				  first, gfp);
 	if (err < 0)
 		give_pages(rq, first);
 
@@ -500,7 +507,7 @@ static int add_recvbuf_mergeable(struct receive_queue *rq, gfp_t gfp)
 
 	sg_init_one(rq->sg, page_address(page), PAGE_SIZE);
 
-	err = virtqueue_add_buf(rq->vq, rq->sg, 0, 1, page, gfp);
+	err = virtqueue_add_inbuf(rq->vq, rq->sg, 1, page, gfp);
 	if (err < 0)
 		give_pages(rq, page);
 
@@ -574,7 +581,7 @@ static void refill_work(struct work_struct *work)
 	bool still_empty;
 	int i;
 
-	for (i = 0; i < vi->max_queue_pairs; i++) {
+	for (i = 0; i < vi->curr_queue_pairs; i++) {
 		struct receive_queue *rq = &vi->rq[i];
 
 		napi_disable(&rq->napi);
@@ -630,9 +637,10 @@ static int virtnet_open(struct net_device *dev)
 	int i;
 
 	for (i = 0; i < vi->max_queue_pairs; i++) {
-		/* Make sure we have some buffers: if oom use wq. */
-		if (!try_fill_recv(&vi->rq[i], GFP_KERNEL))
-			schedule_delayed_work(&vi->refill, 0);
+		if (i < vi->curr_queue_pairs)
+			/* Make sure we have some buffers: if oom use wq. */
+			if (!try_fill_recv(&vi->rq[i], GFP_KERNEL))
+				schedule_delayed_work(&vi->refill, 0);
 		virtnet_napi_enable(&vi->rq[i]);
 	}
 
@@ -703,8 +711,7 @@ static int xmit_skb(struct send_queue *sq, struct sk_buff *skb)
 		sg_set_buf(sq->sg, &hdr->hdr, sizeof hdr->hdr);
 
 	num_sg = skb_to_sgvec(skb, sq->sg + 1, 0, skb->len) + 1;
-	return virtqueue_add_buf(sq->vq, sq->sg, num_sg,
-				 0, skb, GFP_ATOMIC);
+	return virtqueue_add_outbuf(sq->vq, sq->sg, num_sg, skb, GFP_ATOMIC);
 }
 
 static netdev_tx_t start_xmit(struct sk_buff *skb, struct net_device *dev)
@@ -753,19 +760,80 @@ static netdev_tx_t start_xmit(struct sk_buff *skb, struct net_device *dev)
 	return NETDEV_TX_OK;
 }
 
+/*
+ * Send command via the control virtqueue and check status.  Commands
+ * supported by the hypervisor, as indicated by feature bits, should
+ * never fail unless improperly formated.
+ */
+static bool virtnet_send_command(struct virtnet_info *vi, u8 class, u8 cmd,
+				 struct scatterlist *out,
+				 struct scatterlist *in)
+{
+	struct scatterlist *sgs[4], hdr, stat;
+	struct virtio_net_ctrl_hdr ctrl;
+	virtio_net_ctrl_ack status = ~0;
+	unsigned out_num = 0, in_num = 0, tmp;
+
+	/* Caller should know better */
+	BUG_ON(!virtio_has_feature(vi->vdev, VIRTIO_NET_F_CTRL_VQ));
+
+	ctrl.class = class;
+	ctrl.cmd = cmd;
+	/* Add header */
+	sg_init_one(&hdr, &ctrl, sizeof(ctrl));
+	sgs[out_num++] = &hdr;
+
+	if (out)
+		sgs[out_num++] = out;
+	if (in)
+		sgs[out_num + in_num++] = in;
+
+	/* Add return status. */
+	sg_init_one(&stat, &status, sizeof(status));
+	sgs[out_num + in_num++] = &stat;
+
+	BUG_ON(out_num + in_num > ARRAY_SIZE(sgs));
+	BUG_ON(virtqueue_add_sgs(vi->cvq, sgs, out_num, in_num, vi, GFP_ATOMIC)
+	       < 0);
+
+	virtqueue_kick(vi->cvq);
+
+	/* Spin for a response, the kick causes an ioport write, trapping
+	 * into the hypervisor, so the request should be handled immediately.
+	 */
+	while (!virtqueue_get_buf(vi->cvq, &tmp))
+		cpu_relax();
+
+	return status == VIRTIO_NET_OK;
+}
+
 static int virtnet_set_mac_address(struct net_device *dev, void *p)
 {
 	struct virtnet_info *vi = netdev_priv(dev);
 	struct virtio_device *vdev = vi->vdev;
 	int ret;
+	struct sockaddr *addr = p;
+	struct scatterlist sg;
 
-	ret = eth_mac_addr(dev, p);
+	ret = eth_prepare_mac_addr_change(dev, p);
 	if (ret)
 		return ret;
 
-	if (virtio_has_feature(vdev, VIRTIO_NET_F_MAC))
+	if (virtio_has_feature(vdev, VIRTIO_NET_F_CTRL_MAC_ADDR)) {
+		sg_init_one(&sg, addr->sa_data, dev->addr_len);
+		if (!virtnet_send_command(vi, VIRTIO_NET_CTRL_MAC,
+					  VIRTIO_NET_CTRL_MAC_ADDR_SET,
+					  &sg, NULL)) {
+			dev_warn(&vdev->dev,
+				 "Failed to set mac address by vq command.\n");
+			return -EINVAL;
+		}
+	} else if (virtio_has_feature(vdev, VIRTIO_NET_F_MAC)) {
 		vdev->config->set(vdev, offsetof(struct virtio_net_config, mac),
-		                  dev->dev_addr, dev->addr_len);
+				  addr->sa_data, dev->addr_len);
+	}
+
+	eth_commit_mac_addr_change(dev, p);
 
 	return 0;
 }
@@ -819,57 +887,11 @@ static void virtnet_netpoll(struct net_device *dev)
 }
 #endif
 
-/*
- * Send command via the control virtqueue and check status.  Commands
- * supported by the hypervisor, as indicated by feature bits, should
- * never fail unless improperly formated.
- */
-static bool virtnet_send_command(struct virtnet_info *vi, u8 class, u8 cmd,
-				 struct scatterlist *data, int out, int in)
-{
-	struct scatterlist *s, sg[VIRTNET_SEND_COMMAND_SG_MAX + 2];
-	struct virtio_net_ctrl_hdr ctrl;
-	virtio_net_ctrl_ack status = ~0;
-	unsigned int tmp;
-	int i;
-
-	/* Caller should know better */
-	BUG_ON(!virtio_has_feature(vi->vdev, VIRTIO_NET_F_CTRL_VQ) ||
-		(out + in > VIRTNET_SEND_COMMAND_SG_MAX));
-
-	out++; /* Add header */
-	in++; /* Add return status */
-
-	ctrl.class = class;
-	ctrl.cmd = cmd;
-
-	sg_init_table(sg, out + in);
-
-	sg_set_buf(&sg[0], &ctrl, sizeof(ctrl));
-	for_each_sg(data, s, out + in - 2, i)
-		sg_set_buf(&sg[i + 1], sg_virt(s), s->length);
-	sg_set_buf(&sg[out + in - 1], &status, sizeof(status));
-
-	BUG_ON(virtqueue_add_buf(vi->cvq, sg, out, in, vi, GFP_ATOMIC) < 0);
-
-	virtqueue_kick(vi->cvq);
-
-	/*
-	 * Spin for a response, the kick causes an ioport write, trapping
-	 * into the hypervisor, so the request should be handled immediately.
-	 */
-	while (!virtqueue_get_buf(vi->cvq, &tmp))
-		cpu_relax();
-
-	return status == VIRTIO_NET_OK;
-}
-
 static void virtnet_ack_link_announce(struct virtnet_info *vi)
 {
 	rtnl_lock();
 	if (!virtnet_send_command(vi, VIRTIO_NET_CTRL_ANNOUNCE,
-				  VIRTIO_NET_CTRL_ANNOUNCE_ACK, NULL,
-				  0, 0))
+				  VIRTIO_NET_CTRL_ANNOUNCE_ACK, NULL, NULL))
 		dev_warn(&vi->dev->dev, "Failed to ack link announce.\n");
 	rtnl_unlock();
 }
@@ -879,6 +901,7 @@ static int virtnet_set_queues(struct virtnet_info *vi, u16 queue_pairs)
 	struct scatterlist sg;
 	struct virtio_net_ctrl_mq s;
 	struct net_device *dev = vi->dev;
+	int i;
 
 	if (!vi->has_cvq || !virtio_has_feature(vi->vdev, VIRTIO_NET_F_MQ))
 		return 0;
@@ -887,12 +910,16 @@ static int virtnet_set_queues(struct virtnet_info *vi, u16 queue_pairs)
 	sg_init_one(&sg, &s, sizeof(s));
 
 	if (!virtnet_send_command(vi, VIRTIO_NET_CTRL_MQ,
-				  VIRTIO_NET_CTRL_MQ_VQ_PAIRS_SET, &sg, 1, 0)){
+				  VIRTIO_NET_CTRL_MQ_VQ_PAIRS_SET, &sg, NULL)) {
 		dev_warn(&dev->dev, "Fail to set num of queue pairs to %d\n",
 			 queue_pairs);
 		return -EINVAL;
-	} else
+	} else {
+		for (i = vi->curr_queue_pairs; i < queue_pairs; i++)
+			if (!try_fill_recv(&vi->rq[i], GFP_KERNEL))
+				schedule_delayed_work(&vi->refill, 0);
 		vi->curr_queue_pairs = queue_pairs;
+	}
 
 	return 0;
 }
@@ -934,7 +961,7 @@ static void virtnet_set_rx_mode(struct net_device *dev)
 
 	if (!virtnet_send_command(vi, VIRTIO_NET_CTRL_RX,
 				  VIRTIO_NET_CTRL_RX_PROMISC,
-				  sg, 1, 0))
+				  sg, NULL))
 		dev_warn(&dev->dev, "Failed to %sable promisc mode.\n",
 			 promisc ? "en" : "dis");
 
@@ -942,7 +969,7 @@ static void virtnet_set_rx_mode(struct net_device *dev)
 
 	if (!virtnet_send_command(vi, VIRTIO_NET_CTRL_RX,
 				  VIRTIO_NET_CTRL_RX_ALLMULTI,
-				  sg, 1, 0))
+				  sg, NULL))
 		dev_warn(&dev->dev, "Failed to %sable allmulti mode.\n",
 			 allmulti ? "en" : "dis");
 
@@ -952,10 +979,8 @@ static void virtnet_set_rx_mode(struct net_device *dev)
 	buf = kzalloc(((uc_count + mc_count) * ETH_ALEN) +
 		      (2 * sizeof(mac_data->entries)), GFP_ATOMIC);
 	mac_data = buf;
-	if (!buf) {
-		dev_warn(&dev->dev, "No memory for MAC address buffer\n");
+	if (!buf)
 		return;
-	}
 
 	sg_init_table(sg, 2);
 
@@ -981,13 +1006,14 @@ static void virtnet_set_rx_mode(struct net_device *dev)
 
 	if (!virtnet_send_command(vi, VIRTIO_NET_CTRL_MAC,
 				  VIRTIO_NET_CTRL_MAC_TABLE_SET,
-				  sg, 2, 0))
+				  sg, NULL))
 		dev_warn(&dev->dev, "Failed to set MAC fitler table.\n");
 
 	kfree(buf);
 }
 
-static int virtnet_vlan_rx_add_vid(struct net_device *dev, u16 vid)
+static int virtnet_vlan_rx_add_vid(struct net_device *dev,
+				   __be16 proto, u16 vid)
 {
 	struct virtnet_info *vi = netdev_priv(dev);
 	struct scatterlist sg;
@@ -995,12 +1021,13 @@ static int virtnet_vlan_rx_add_vid(struct net_device *dev, u16 vid)
 	sg_init_one(&sg, &vid, sizeof(vid));
 
 	if (!virtnet_send_command(vi, VIRTIO_NET_CTRL_VLAN,
-				  VIRTIO_NET_CTRL_VLAN_ADD, &sg, 1, 0))
+				  VIRTIO_NET_CTRL_VLAN_ADD, &sg, NULL))
 		dev_warn(&dev->dev, "Failed to add VLAN ID %d.\n", vid);
 	return 0;
 }
 
-static int virtnet_vlan_rx_kill_vid(struct net_device *dev, u16 vid)
+static int virtnet_vlan_rx_kill_vid(struct net_device *dev,
+				    __be16 proto, u16 vid)
 {
 	struct virtnet_info *vi = netdev_priv(dev);
 	struct scatterlist sg;
@@ -1008,37 +1035,80 @@ static int virtnet_vlan_rx_kill_vid(struct net_device *dev, u16 vid)
 	sg_init_one(&sg, &vid, sizeof(vid));
 
 	if (!virtnet_send_command(vi, VIRTIO_NET_CTRL_VLAN,
-				  VIRTIO_NET_CTRL_VLAN_DEL, &sg, 1, 0))
+				  VIRTIO_NET_CTRL_VLAN_DEL, &sg, NULL))
 		dev_warn(&dev->dev, "Failed to kill VLAN ID %d.\n", vid);
 	return 0;
 }
 
-static void virtnet_set_affinity(struct virtnet_info *vi, bool set)
+static void virtnet_clean_affinity(struct virtnet_info *vi, long hcpu)
 {
 	int i;
+	int cpu;
+
+	if (vi->affinity_hint_set) {
+		for (i = 0; i < vi->max_queue_pairs; i++) {
+			virtqueue_set_affinity(vi->rq[i].vq, -1);
+			virtqueue_set_affinity(vi->sq[i].vq, -1);
+		}
+
+		vi->affinity_hint_set = false;
+	}
+
+	i = 0;
+	for_each_online_cpu(cpu) {
+		if (cpu == hcpu) {
+			*per_cpu_ptr(vi->vq_index, cpu) = -1;
+		} else {
+			*per_cpu_ptr(vi->vq_index, cpu) =
+				++i % vi->curr_queue_pairs;
+		}
+	}
+}
+
+static void virtnet_set_affinity(struct virtnet_info *vi)
+{
+	int i;
+	int cpu;
 
 	/* In multiqueue mode, when the number of cpu is equal to the number of
 	 * queue pairs, we let the queue pairs to be private to one cpu by
 	 * setting the affinity hint to eliminate the contention.
 	 */
-	if ((vi->curr_queue_pairs == 1 ||
-	     vi->max_queue_pairs != num_online_cpus()) && set) {
-		if (vi->affinity_hint_set)
-			set = false;
-		else
-			return;
+	if (vi->curr_queue_pairs == 1 ||
+	    vi->max_queue_pairs != num_online_cpus()) {
+		virtnet_clean_affinity(vi, -1);
+		return;
 	}
 
-	for (i = 0; i < vi->max_queue_pairs; i++) {
-		int cpu = set ? i : -1;
+	i = 0;
+	for_each_online_cpu(cpu) {
 		virtqueue_set_affinity(vi->rq[i].vq, cpu);
 		virtqueue_set_affinity(vi->sq[i].vq, cpu);
+		*per_cpu_ptr(vi->vq_index, cpu) = i;
+		i++;
 	}
 
-	if (set)
-		vi->affinity_hint_set = true;
-	else
-		vi->affinity_hint_set = false;
+	vi->affinity_hint_set = true;
+}
+
+static int virtnet_cpu_callback(struct notifier_block *nfb,
+			        unsigned long action, void *hcpu)
+{
+	struct virtnet_info *vi = container_of(nfb, struct virtnet_info, nb);
+
+	switch(action & ~CPU_TASKS_FROZEN) {
+	case CPU_ONLINE:
+	case CPU_DOWN_FAILED:
+	case CPU_DEAD:
+		virtnet_set_affinity(vi);
+		break;
+	case CPU_DOWN_PREPARE:
+		virtnet_clean_affinity(vi, (long)hcpu);
+		break;
+	default:
+		break;
+	}
+	return NOTIFY_OK;
 }
 
 static void virtnet_get_ringparam(struct net_device *dev,
@@ -1082,13 +1152,15 @@ static int virtnet_set_channels(struct net_device *dev,
 	if (queue_pairs > vi->max_queue_pairs)
 		return -EINVAL;
 
+	get_online_cpus();
 	err = virtnet_set_queues(vi, queue_pairs);
 	if (!err) {
 		netif_set_real_num_tx_queues(dev, queue_pairs);
 		netif_set_real_num_rx_queues(dev, queue_pairs);
 
-		virtnet_set_affinity(vi, true);
+		virtnet_set_affinity(vi);
 	}
+	put_online_cpus();
 
 	return err;
 }
@@ -1127,12 +1199,19 @@ static int virtnet_change_mtu(struct net_device *dev, int new_mtu)
 
 /* To avoid contending a lock hold by a vcpu who would exit to host, select the
  * txq based on the processor id.
- * TODO: handle cpu hotplug.
  */
 static u16 virtnet_select_queue(struct net_device *dev, struct sk_buff *skb)
 {
-	int txq = skb_rx_queue_recorded(skb) ? skb_get_rx_queue(skb) :
-		  smp_processor_id();
+	int txq;
+	struct virtnet_info *vi = netdev_priv(dev);
+
+	if (skb_rx_queue_recorded(skb)) {
+		txq = skb_get_rx_queue(skb);
+	} else {
+		txq = *__this_cpu_ptr(vi->vq_index);
+		if (txq == -1)
+			txq = 0;
+	}
 
 	while (unlikely(txq >= dev->real_num_tx_queues))
 		txq -= dev->real_num_tx_queues;
@@ -1248,7 +1327,7 @@ static void virtnet_del_vqs(struct virtnet_info *vi)
 {
 	struct virtio_device *vdev = vi->vdev;
 
-	virtnet_set_affinity(vi, false);
+	virtnet_clean_affinity(vi, -1);
 
 	vdev->config->del_vqs(vdev);
 
@@ -1305,7 +1384,7 @@ static int virtnet_find_vqs(struct virtnet_info *vi)
 	if (vi->has_cvq) {
 		vi->cvq = vqs[total_vqs - 1];
 		if (virtio_has_feature(vi->vdev, VIRTIO_NET_F_CTRL_VLAN))
-			vi->dev->features |= NETIF_F_HW_VLAN_FILTER;
+			vi->dev->features |= NETIF_F_HW_VLAN_CTAG_FILTER;
 	}
 
 	for (i = 0; i < vi->max_queue_pairs; i++) {
@@ -1371,7 +1450,10 @@ static int init_vqs(struct virtnet_info *vi)
 	if (ret)
 		goto err_free;
 
-	virtnet_set_affinity(vi, true);
+	get_online_cpus();
+	virtnet_set_affinity(vi);
+	put_online_cpus();
+
 	return 0;
 
 err_free:
@@ -1437,6 +1519,8 @@ static int virtnet_probe(struct virtio_device *vdev)
 		/* (!csum && gso) case will be fixed by register_netdev() */
 	}
 
+	dev->vlan_features = dev->features;
+
 	/* Configuration may specify what MAC to use.  Otherwise random. */
 	if (virtio_config_val_len(vdev, VIRTIO_NET_F_MAC,
 				  offsetof(struct virtio_net_config, mac),
@@ -1452,6 +1536,10 @@ static int virtnet_probe(struct virtio_device *vdev)
 	err = -ENOMEM;
 	if (vi->stats == NULL)
 		goto free;
+
+	vi->vq_index = alloc_percpu(int);
+	if (vi->vq_index == NULL)
+		goto free_stats;
 
 	mutex_init(&vi->config_lock);
 	vi->config_enable = true;
@@ -1476,7 +1564,7 @@ static int virtnet_probe(struct virtio_device *vdev)
 	/* Allocate/initialize the rx/tx queues, and invoke find_vqs */
 	err = init_vqs(vi);
 	if (err)
-		goto free_stats;
+		goto free_index;
 
 	netif_set_real_num_tx_queues(dev, 1);
 	netif_set_real_num_rx_queues(dev, 1);
@@ -1488,7 +1576,7 @@ static int virtnet_probe(struct virtio_device *vdev)
 	}
 
 	/* Last of all, set up some receive buffers. */
-	for (i = 0; i < vi->max_queue_pairs; i++) {
+	for (i = 0; i < vi->curr_queue_pairs; i++) {
 		try_fill_recv(&vi->rq[i], GFP_KERNEL);
 
 		/* If we didn't even get one input buffer, we're useless. */
@@ -1497,6 +1585,13 @@ static int virtnet_probe(struct virtio_device *vdev)
 			err = -ENOMEM;
 			goto free_recv_bufs;
 		}
+	}
+
+	vi->nb.notifier_call = &virtnet_cpu_callback;
+	err = register_hotcpu_notifier(&vi->nb);
+	if (err) {
+		pr_debug("virtio_net: registering cpu notifier failed\n");
+		goto free_recv_bufs;
 	}
 
 	/* Assume link up if device can't report link status,
@@ -1520,6 +1615,8 @@ free_recv_bufs:
 free_vqs:
 	cancel_delayed_work_sync(&vi->refill);
 	virtnet_del_vqs(vi);
+free_index:
+	free_percpu(vi->vq_index);
 free_stats:
 	free_percpu(vi->stats);
 free:
@@ -1543,6 +1640,8 @@ static void virtnet_remove(struct virtio_device *vdev)
 {
 	struct virtnet_info *vi = vdev->priv;
 
+	unregister_hotcpu_notifier(&vi->nb);
+
 	/* Prevent config work handler from accessing the device. */
 	mutex_lock(&vi->config_lock);
 	vi->config_enable = false;
@@ -1554,6 +1653,7 @@ static void virtnet_remove(struct virtio_device *vdev)
 
 	flush_work(&vi->config_work);
 
+	free_percpu(vi->vq_index);
 	free_percpu(vi->stats);
 	free_netdev(vi->dev);
 }
@@ -1600,7 +1700,7 @@ static int virtnet_restore(struct virtio_device *vdev)
 
 	netif_device_attach(vi->dev);
 
-	for (i = 0; i < vi->max_queue_pairs; i++)
+	for (i = 0; i < vi->curr_queue_pairs; i++)
 		if (!try_fill_recv(&vi->rq[i], GFP_KERNEL))
 			schedule_delayed_work(&vi->refill, 0);
 
@@ -1628,6 +1728,7 @@ static unsigned int features[] = {
 	VIRTIO_NET_F_MRG_RXBUF, VIRTIO_NET_F_STATUS, VIRTIO_NET_F_CTRL_VQ,
 	VIRTIO_NET_F_CTRL_RX, VIRTIO_NET_F_CTRL_VLAN,
 	VIRTIO_NET_F_GUEST_ANNOUNCE, VIRTIO_NET_F_MQ,
+	VIRTIO_NET_F_CTRL_MAC_ADDR,
 };
 
 static struct virtio_driver virtio_net_driver = {
@@ -1645,17 +1746,7 @@ static struct virtio_driver virtio_net_driver = {
 #endif
 };
 
-static int __init init(void)
-{
-	return register_virtio_driver(&virtio_net_driver);
-}
-
-static void __exit fini(void)
-{
-	unregister_virtio_driver(&virtio_net_driver);
-}
-module_init(init);
-module_exit(fini);
+module_virtio_driver(virtio_net_driver);
 
 MODULE_DEVICE_TABLE(virtio, id_table);
 MODULE_DESCRIPTION("Virtio network driver");

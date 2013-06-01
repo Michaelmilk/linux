@@ -17,7 +17,7 @@ SECTIONS
 	/* boot sector data */
 	.bsdata		: { *(.bsdata) }
 
-	. = 497;
+	. = 495;
 	.header		: { *(.header) }
 	.entrytext	: { *(.entrytext) }
 	.inittext	: { *(.inittext) }

@@ -181,8 +181,10 @@ static int __cpuinit pcpu_alloc_lowcore(struct pcpu *pcpu, int cpu)
 	lc = pcpu->lowcore;
 	memcpy(lc, &S390_lowcore, 512);
 	memset((char *) lc + 512, 0, sizeof(*lc) - 512);
-	lc->async_stack = pcpu->async_stack + ASYNC_SIZE;
-	lc->panic_stack = pcpu->panic_stack + PAGE_SIZE;
+	lc->async_stack = pcpu->async_stack + ASYNC_SIZE
+		- STACK_FRAME_OVERHEAD - sizeof(struct pt_regs);
+	lc->panic_stack = pcpu->panic_stack + PAGE_SIZE
+		- STACK_FRAME_OVERHEAD - sizeof(struct pt_regs);
 	lc->cpu_nr = cpu;
 #ifndef CONFIG_64BIT
 	if (MACHINE_HAS_IEEE) {
@@ -253,7 +255,8 @@ static void pcpu_attach_task(struct pcpu *pcpu, struct task_struct *tsk)
 	struct _lowcore *lc = pcpu->lowcore;
 	struct thread_info *ti = task_thread_info(tsk);
 
-	lc->kernel_stack = (unsigned long) task_stack_page(tsk) + THREAD_SIZE;
+	lc->kernel_stack = (unsigned long) task_stack_page(tsk)
+		+ THREAD_SIZE - STACK_FRAME_OVERHEAD - sizeof(struct pt_regs);
 	lc->thread_info = (unsigned long) task_thread_info(tsk);
 	lc->current_task = (unsigned long) tsk;
 	lc->user_timer = ti->user_timer;
@@ -365,16 +368,16 @@ void smp_emergency_stop(cpumask_t *cpumask)
 	u64 end;
 	int cpu;
 
-	end = get_clock() + (1000000UL << 12);
+	end = get_tod_clock() + (1000000UL << 12);
 	for_each_cpu(cpu, cpumask) {
 		struct pcpu *pcpu = pcpu_devices + cpu;
 		set_bit(ec_stop_cpu, &pcpu->ec_mask);
 		while (__pcpu_sigp(pcpu->address, SIGP_EMERGENCY_SIGNAL,
 				   0, NULL) == SIGP_CC_BUSY &&
-		       get_clock() < end)
+		       get_tod_clock() < end)
 			cpu_relax();
 	}
-	while (get_clock() < end) {
+	while (get_tod_clock() < end) {
 		for_each_cpu(cpu, cpumask)
 			if (pcpu_stopped(pcpu_devices + cpu))
 				cpumask_clear_cpu(cpu, cpumask);
@@ -642,7 +645,7 @@ static int __cpuinit __smp_rescan_cpus(struct sclp_cpu_info *info,
 			continue;
 		pcpu = pcpu_devices + cpu;
 		pcpu->address = info->cpu[i].address;
-		pcpu->state = (cpu >= info->configured) ?
+		pcpu->state = (i >= info->configured) ?
 			CPU_STATE_STANDBY : CPU_STATE_CONFIGURED;
 		smp_cpu_set_polarization(cpu, POLARIZATION_UNKNOWN);
 		set_cpu_present(cpu, true);
@@ -694,7 +697,7 @@ static void __init smp_detect_cpus(void)
  */
 static void __cpuinit smp_start_secondary(void *cpuvoid)
 {
-	S390_lowcore.last_update_clock = get_clock();
+	S390_lowcore.last_update_clock = get_tod_clock();
 	S390_lowcore.restart_stack = (unsigned long) restart_stack;
 	S390_lowcore.restart_fn = (unsigned long) do_restart;
 	S390_lowcore.restart_data = 0;
@@ -711,8 +714,7 @@ static void __cpuinit smp_start_secondary(void *cpuvoid)
 	set_cpu_online(smp_processor_id(), true);
 	inc_irq_stat(CPU_RST);
 	local_irq_enable();
-	/* cpu_idle will call schedule for us */
-	cpu_idle();
+	cpu_startup_entry(CPUHP_ONLINE);
 }
 
 /* Upping and downing of CPUs */
@@ -810,8 +812,10 @@ void __init smp_prepare_boot_cpu(void)
 	pcpu->state = CPU_STATE_CONFIGURED;
 	pcpu->address = boot_cpu_address;
 	pcpu->lowcore = (struct _lowcore *)(unsigned long) store_prefix();
-	pcpu->async_stack = S390_lowcore.async_stack - ASYNC_SIZE;
-	pcpu->panic_stack = S390_lowcore.panic_stack - PAGE_SIZE;
+	pcpu->async_stack = S390_lowcore.async_stack - ASYNC_SIZE
+		+ STACK_FRAME_OVERHEAD + sizeof(struct pt_regs);
+	pcpu->panic_stack = S390_lowcore.panic_stack - PAGE_SIZE
+		+ STACK_FRAME_OVERHEAD + sizeof(struct pt_regs);
 	S390_lowcore.percpu_offset = __per_cpu_offset[0];
 	smp_cpu_set_polarization(0, POLARIZATION_UNKNOWN);
 	set_cpu_present(0, true);
@@ -947,7 +951,7 @@ static ssize_t show_idle_time(struct device *dev,
 	unsigned int sequence;
 
 	do {
-		now = get_clock();
+		now = get_tod_clock();
 		sequence = ACCESS_ONCE(idle->sequence);
 		idle_time = ACCESS_ONCE(idle->idle_time);
 		idle_enter = ACCESS_ONCE(idle->clock_idle_enter);

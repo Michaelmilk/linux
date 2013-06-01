@@ -41,6 +41,12 @@ const struct net_offload __rcu *inet_offloads[MAX_INET_PROTOS] __read_mostly;
 
 int inet_add_protocol(const struct net_protocol *prot, unsigned char protocol)
 {
+	if (!prot->netns_ok) {
+		pr_err("Protocol %u is not namespace aware, cannot register.\n",
+			protocol);
+		return -EINVAL;
+	}
+
 	/* 同一位置上只能记录一种协议，传输层协议编号不能重复
 	   参考IPPROTO_TCP等的枚举值 */
 	return !cmpxchg((const struct net_protocol **)&inet_protos[protocol],

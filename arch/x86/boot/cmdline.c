@@ -27,6 +27,7 @@ static inline int myisspace(u8 c)
  * Returns the length of the argument (regardless of if it was
  * truncated to fit in the buffer), or -1 on not found.
  */
+
 /*
 查找@option在命令行中对应的参数值，'='号后面的参数
 命令行中option重复的话，则@buffer中为最后一项的值
@@ -38,7 +39,8 @@ static inline int myisspace(u8 c)
 @buffer			:
 @bufsize		:
 */
-int __cmdline_find_option(u32 cmdline_ptr, const char *option, char *buffer, int bufsize)
+
+int __cmdline_find_option(unsigned long cmdline_ptr, const char *option, char *buffer, int bufsize)
 {
 	addr_t cptr;
 	char c;
@@ -52,10 +54,9 @@ int __cmdline_find_option(u32 cmdline_ptr, const char *option, char *buffer, int
 		st_bufcpy	/* Copying this to buffer */
 	} state = st_wordstart;
 
-	/* 没有命令行参数
-	   或者命令行参数的地址超过了1M */
-	if (!cmdline_ptr || cmdline_ptr >= 0x100000)
-		return -1;	/* No command line, or inaccessible */
+	/* 没有命令行参数 */
+	if (!cmdline_ptr)
+		return -1;      /* No command line */
 
 	/* 取低4位，作为段内偏移 */
 	cptr = cmdline_ptr & 0xf;
@@ -132,13 +133,15 @@ int __cmdline_find_option(u32 cmdline_ptr, const char *option, char *buffer, int
  * Returns the position of that option (starts counting with 1)
  * or 0 on not found
  */
+
 /*
 查找选项@option是否存在于命令行中
 
 找到则返回@option从命令行参数中第几个字符开始，从1开始计算
 未找到则返回0
 */
-int __cmdline_find_option_bool(u32 cmdline_ptr, const char *option)
+
+int __cmdline_find_option_bool(unsigned long cmdline_ptr, const char *option)
 {
 	addr_t cptr;
 	char c;
@@ -150,8 +153,8 @@ int __cmdline_find_option_bool(u32 cmdline_ptr, const char *option)
 		st_wordskip,	/* Miscompare, skip */
 	} state = st_wordstart;
 
-	if (!cmdline_ptr || cmdline_ptr >= 0x100000)
-		return -1;	/* No command line, or inaccessible */
+	if (!cmdline_ptr)
+		return -1;      /* No command line */
 
 	cptr = cmdline_ptr & 0xf;
 	set_fs(cmdline_ptr >> 4);

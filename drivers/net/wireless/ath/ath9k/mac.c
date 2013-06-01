@@ -605,16 +605,24 @@ int ath9k_hw_rxprocdesc(struct ath_hw *ah, struct ath_desc *ds,
 		 * reported, then decryption and MIC errors are irrelevant,
 		 * the frame is going to be dropped either way
 		 */
-		if (ads.ds_rxstatus8 & AR_CRCErr)
-			rs->rs_status |= ATH9K_RXERR_CRC;
-		else if (ads.ds_rxstatus8 & AR_PHYErr) {
+		if (ads.ds_rxstatus8 & AR_PHYErr) {
 			rs->rs_status |= ATH9K_RXERR_PHY;
 			phyerr = MS(ads.ds_rxstatus8, AR_PHYErrCode);
 			rs->rs_phyerr = phyerr;
-		} else if (ads.ds_rxstatus8 & AR_DecryptCRCErr)
+		} else if (ads.ds_rxstatus8 & AR_CRCErr)
+			rs->rs_status |= ATH9K_RXERR_CRC;
+		else if (ads.ds_rxstatus8 & AR_DecryptCRCErr)
 			rs->rs_status |= ATH9K_RXERR_DECRYPT;
 		else if (ads.ds_rxstatus8 & AR_MichaelErr)
 			rs->rs_status |= ATH9K_RXERR_MIC;
+	} else {
+		if (ads.ds_rxstatus8 &
+		    (AR_CRCErr | AR_PHYErr | AR_DecryptCRCErr | AR_MichaelErr))
+			rs->rs_status |= ATH9K_RXERR_CORRUPT_DESC;
+
+		/* Only up to MCS16 supported, everything above is invalid */
+		if (rs->rs_rate >= 0x90)
+			rs->rs_status |= ATH9K_RXERR_CORRUPT_DESC;
 	}
 
 	if (ads.ds_rxstatus8 & AR_KeyMiss)

@@ -21,7 +21,30 @@
 #include <linux/rtnetlink.h>
 #include <linux/slab.h>
 
+#include <net/sock.h>
 #include <net/inet_frag.h>
+#include <net/inet_ecn.h>
+
+/* Given the OR values of all fragments, apply RFC 3168 5.3 requirements
+ * Value : 0xff if frame should be dropped.
+ *         0 or INET_ECN_CE value, to be ORed in to final iph->tos field
+ */
+const u8 ip_frag_ecn_table[16] = {
+	/* at least one fragment had CE, and others ECT_0 or ECT_1 */
+	[IPFRAG_ECN_CE | IPFRAG_ECN_ECT_0]			= INET_ECN_CE,
+	[IPFRAG_ECN_CE | IPFRAG_ECN_ECT_1]			= INET_ECN_CE,
+	[IPFRAG_ECN_CE | IPFRAG_ECN_ECT_0 | IPFRAG_ECN_ECT_1]	= INET_ECN_CE,
+
+	/* invalid combinations : drop frame */
+	[IPFRAG_ECN_NOT_ECT | IPFRAG_ECN_CE] = 0xff,
+	[IPFRAG_ECN_NOT_ECT | IPFRAG_ECN_ECT_0] = 0xff,
+	[IPFRAG_ECN_NOT_ECT | IPFRAG_ECN_ECT_1] = 0xff,
+	[IPFRAG_ECN_NOT_ECT | IPFRAG_ECN_ECT_0 | IPFRAG_ECN_ECT_1] = 0xff,
+	[IPFRAG_ECN_NOT_ECT | IPFRAG_ECN_CE | IPFRAG_ECN_ECT_0] = 0xff,
+	[IPFRAG_ECN_NOT_ECT | IPFRAG_ECN_CE | IPFRAG_ECN_ECT_1] = 0xff,
+	[IPFRAG_ECN_NOT_ECT | IPFRAG_ECN_CE | IPFRAG_ECN_ECT_0 | IPFRAG_ECN_ECT_1] = 0xff,
+};
+EXPORT_SYMBOL(ip_frag_ecn_table);
 
 static void inet_frag_secret_rebuild(unsigned long dummy)
 {
@@ -29,20 +52,27 @@ static void inet_frag_secret_rebuild(unsigned long dummy)
 	unsigned long now = jiffies;
 	int i;
 
+	/* Per bucket lock NOT needed here, due to write lock protection */
 	write_lock(&f->lock);
+
 	get_random_bytes(&f->rnd, sizeof(u32));
 	for (i = 0; i < INETFRAGS_HASHSZ; i++) {
+		struct inet_frag_bucket *hb;
 		struct inet_frag_queue *q;
-		struct hlist_node *p, *n;
+		struct hlist_node *n;
 
-		hlist_for_each_entry_safe(q, p, n, &f->hash[i], list) {
+		hb = &f->hash[i];
+		hlist_for_each_entry_safe(q, n, &hb->chain, list) {
 			unsigned int hval = f->hashfn(q);
 
 			if (hval != i) {
+				struct inet_frag_bucket *hb_dest;
+
 				hlist_del(&q->list);
 
 				/* Relink to new hash chain. */
-				hlist_add_head(&q->list, &f->hash[hval]);
+				hb_dest = &f->hash[hval];
+				hlist_add_head(&q->list, &hb_dest->chain);
 			}
 		}
 	}
@@ -55,9 +85,12 @@ void inet_frags_init(struct inet_frags *f)
 {
 	int i;
 
-	for (i = 0; i < INETFRAGS_HASHSZ; i++)
-		INIT_HLIST_HEAD(&f->hash[i]);
+	for (i = 0; i < INETFRAGS_HASHSZ; i++) {
+		struct inet_frag_bucket *hb = &f->hash[i];
 
+		spin_lock_init(&hb->chain_lock);
+		INIT_HLIST_HEAD(&hb->chain);
+	}
 	rwlock_init(&f->lock);
 
 	f->rnd = (u32) ((num_physpages ^ (num_physpages>>7)) ^
@@ -73,8 +106,9 @@ EXPORT_SYMBOL(inet_frags_init);
 void inet_frags_init_net(struct netns_frags *nf)
 {
 	nf->nqueues = 0;
-	atomic_set(&nf->mem, 0);
+	init_frag_mem_limit(nf);
 	INIT_LIST_HEAD(&nf->lru_list);
+	spin_lock_init(&nf->lru_lock);
 }
 EXPORT_SYMBOL(inet_frags_init_net);
 
@@ -91,6 +125,8 @@ void inet_frags_exit_net(struct netns_frags *nf, struct inet_frags *f)
 	local_bh_disable();
 	inet_frag_evictor(nf, f, true);
 	local_bh_enable();
+
+	percpu_counter_destroy(&nf->mem);
 }
 EXPORT_SYMBOL(inet_frags_exit_net);
 
@@ -99,11 +135,19 @@ EXPORT_SYMBOL(inet_frags_exit_net);
 */
 static inline void fq_unlink(struct inet_frag_queue *fq, struct inet_frags *f)
 {
-	write_lock(&f->lock);
+	struct inet_frag_bucket *hb;
+	unsigned int hash;
+
+	read_lock(&f->lock);
+	hash = f->hashfn(fq);
+	hb = &f->hash[hash];
+
+	spin_lock(&hb->chain_lock);
 	hlist_del(&fq->list);
-	list_del(&fq->lru_list);
-	fq->net->nqueues--;
-	write_unlock(&f->lock);
+	spin_unlock(&hb->chain_lock);
+
+	read_unlock(&f->lock);
+	inet_frag_lru_del(fq);
 }
 
 void inet_frag_kill(struct inet_frag_queue *fq, struct inet_frags *f)
@@ -121,12 +165,8 @@ void inet_frag_kill(struct inet_frag_queue *fq, struct inet_frags *f)
 EXPORT_SYMBOL(inet_frag_kill);
 
 static inline void frag_kfree_skb(struct netns_frags *nf, struct inet_frags *f,
-		struct sk_buff *skb, int *work)
+		struct sk_buff *skb)
 {
-	if (work)
-		*work -= skb->truesize;
-
-	atomic_sub(skb->truesize, &nf->mem);
 	if (f->skb_free)
 		f->skb_free(skb);
 	kfree_skb(skb);
@@ -137,6 +177,7 @@ void inet_frag_destroy(struct inet_frag_queue *q, struct inet_frags *f,
 {
 	struct sk_buff *fp;
 	struct netns_frags *nf;
+	unsigned int sum, sum_truesize = 0;
 
 	WARN_ON(!(q->last_in & INET_FRAG_COMPLETE));
 	WARN_ON(del_timer(&q->timer) != 0);
@@ -147,13 +188,14 @@ void inet_frag_destroy(struct inet_frag_queue *q, struct inet_frags *f,
 	while (fp) {
 		struct sk_buff *xp = fp->next;
 
-		frag_kfree_skb(nf, f, fp, work);
+		sum_truesize += fp->truesize;
+		frag_kfree_skb(nf, f, fp);
 		fp = xp;
 	}
-
+	sum = sum_truesize + f->qsize;
 	if (work)
-		*work -= f->qsize;
-	atomic_sub(f->qsize, &nf->mem);
+		*work -= sum;
+	sub_frag_mem_limit(q, sum);
 
 	/* ipfrag_init()中为ip4_frags注册的destructor函数为ip4_frag_free() */
 	if (f->destructor)
@@ -172,22 +214,26 @@ int inet_frag_evictor(struct netns_frags *nf, struct inet_frags *f, bool force)
 	int work, evicted = 0;
 
 	if (!force) {
-		if (atomic_read(&nf->mem) <= nf->high_thresh)
+		if (frag_mem_limit(nf) <= nf->high_thresh)
 			return 0;
 	}
 
-	work = atomic_read(&nf->mem) - nf->low_thresh;
+	work = frag_mem_limit(nf) - nf->low_thresh;
 	while (work > 0) {
-		read_lock(&f->lock);
+		spin_lock(&nf->lru_lock);
+
 		if (list_empty(&nf->lru_list)) {
-			read_unlock(&f->lock);
+			spin_unlock(&nf->lru_lock);
 			break;
 		}
 
 		q = list_first_entry(&nf->lru_list,
 				struct inet_frag_queue, lru_list);
 		atomic_inc(&q->refcnt);
-		read_unlock(&f->lock);
+		/* Remove q from list to avoid several CPUs grabbing it */
+		list_del_init(&q->lru_list);
+
+		spin_unlock(&nf->lru_lock);
 
 		spin_lock(&q->lock);
 		if (!(q->last_in & INET_FRAG_COMPLETE))
@@ -207,13 +253,13 @@ static struct inet_frag_queue *inet_frag_intern(struct netns_frags *nf,
 		struct inet_frag_queue *qp_in, struct inet_frags *f,
 		void *arg)
 {
+	struct inet_frag_bucket *hb;
 	struct inet_frag_queue *qp;
 #ifdef CONFIG_SMP
-	struct hlist_node *n;
 #endif
 	unsigned int hash;
 
-	write_lock(&f->lock);
+	read_lock(&f->lock); /* Protects against hash rebuild */
 	/*
 	 * While we stayed w/o the lock other CPU could update
 	 * the rnd seed, so we need to re-calculate the hash
@@ -223,19 +269,24 @@ static struct inet_frag_queue *inet_frag_intern(struct netns_frags *nf,
 	   ip4_hashfn()
 	   计算新节点所在的哈希桶下标 */
 	hash = f->hashfn(qp_in);
+	hb = &f->hash[hash];
+	spin_lock(&hb->chain_lock);
+
 #ifdef CONFIG_SMP
 	/* With SMP race we have to recheck hash table, because
 	 * such entry could be created on other cpu, while we
-	 * promoted read lock to write lock.
+	 * released the hash bucket lock.
 	 */
+
 	/* 在SMP情况下，前面查找的时候使用的是读锁
 	   现在创建了新的节点要加入链表，获得了写锁
 	   再次查找看是否在读锁期间，已经在另外的cpu上创建了相同key的分片管理节点
 	   有相同的话则释放这个@qp_in */
-	hlist_for_each_entry(qp, n, &f->hash[hash], list) {
+	hlist_for_each_entry(qp, &hb->chain, list) {
 		if (qp->net == nf && f->match(qp, arg)) {
 			atomic_inc(&qp->refcnt);
-			write_unlock(&f->lock);
+			spin_unlock(&hb->chain_lock);
+			read_unlock(&f->lock);
 			qp_in->last_in |= INET_FRAG_COMPLETE;
 			inet_frag_put(qp_in, f);
 			/* 返回已经存在的那个管理节点 */
@@ -250,13 +301,10 @@ static struct inet_frag_queue *inet_frag_intern(struct netns_frags *nf,
 	/* 增加引用计数，此时应该为0增加为1 */
 	atomic_inc(&qp->refcnt);
 	/* 链入struct inet_frags的hash[]数组 */
-	hlist_add_head(&qp->list, &f->hash[hash]);
-	/* 增加到最近最少使用链表的末尾 */
-	list_add_tail(&qp->lru_list, &nf->lru_list);
-	/* 统计分片节点ipq的个数 */
-	nf->nqueues++;
-	/* 释放写锁 */
-	write_unlock(&f->lock);
+	hlist_add_head(&qp->list, &hb->chain);
+	spin_unlock(&hb->chain_lock);
+	read_unlock(&f->lock);
+	inet_frag_lru_add(nf, qp);
 	return qp;
 }
 
@@ -282,12 +330,14 @@ static struct inet_frag_queue *inet_frag_alloc(struct netns_frags *nf,
 	   在新分配的节点q中记录新报文的各项参数 */
 	f->constructor(q, arg);
 	/* 记录内存分配 */
-	atomic_add(f->qsize, &nf->mem);
+	add_frag_mem_limit(q, f->qsize);
+
 	/* 注册定时器函数ip_expire() */
 	setup_timer(&q->timer, f->frag_expire, (unsigned long)q);
 	spin_lock_init(&q->lock);
 	/* 引用记录置为1 */
 	atomic_set(&q->refcnt, 1);
+	INIT_LIST_HEAD(&q->lru_list);
 
 	/* 返回新节点 */
 	return q;
@@ -313,23 +363,45 @@ struct inet_frag_queue *inet_frag_find(struct netns_frags *nf,
 		struct inet_frags *f, void *key, unsigned int hash)
 	__releases(&f->lock)
 {
+	struct inet_frag_bucket *hb;
 	struct inet_frag_queue *q;
-	struct hlist_node *n;
+	int depth = 0;
 
+	hb = &f->hash[hash];
+
+	spin_lock(&hb->chain_lock);
 	/* 根据计算出的@hash值下标
 	   遍历对应桶下面的链表 */
-	hlist_for_each_entry(q, n, &f->hash[hash], list) {
+	hlist_for_each_entry(q, &hb->chain, list) {
 		/* ipfrag_init()中初始化变量ip4_frags时的match()方法为
 		   ip4_frag_match()
 		   判断链表中的节点q是否与传递进来的key参数一致 */
 		if (q->net == nf && f->match(q, key)) {
 			atomic_inc(&q->refcnt);
+			spin_unlock(&hb->chain_lock);
 			read_unlock(&f->lock);
 			return q;
 		}
+		depth++;
 	}
+	spin_unlock(&hb->chain_lock);
 	read_unlock(&f->lock);
 
-	return inet_frag_create(nf, f, key);
+	if (depth <= INETFRAGS_MAXDEPTH)
+		return inet_frag_create(nf, f, key);
+	else
+		return ERR_PTR(-ENOBUFS);
 }
 EXPORT_SYMBOL(inet_frag_find);
+
+void inet_frag_maybe_warn_overflow(struct inet_frag_queue *q,
+				   const char *prefix)
+{
+	static const char msg[] = "inet_frag_find: Fragment hash bucket"
+		" list length grew over limit " __stringify(INETFRAGS_MAXDEPTH)
+		". Dropping fragment.\n";
+
+	if (PTR_ERR(q) == -ENOBUFS)
+		LIMIT_NETDEBUG(KERN_WARNING "%s%s", prefix, msg);
+}
+EXPORT_SYMBOL(inet_frag_maybe_warn_overflow);

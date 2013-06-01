@@ -408,10 +408,10 @@ xfs_qm_scall_getqstat(
 {
 	struct xfs_quotainfo	*q = mp->m_quotainfo;
 	struct xfs_inode	*uip, *gip;
-	boolean_t		tempuqip, tempgqip;
+	bool                    tempuqip, tempgqip;
 
 	uip = gip = NULL;
-	tempuqip = tempgqip = B_FALSE;
+	tempuqip = tempgqip = false;
 	memset(out, 0, sizeof(fs_quota_stat_t));
 
 	out->qs_version = FS_QSTAT_VERSION;
@@ -434,12 +434,12 @@ xfs_qm_scall_getqstat(
 	if (!uip && mp->m_sb.sb_uquotino != NULLFSINO) {
 		if (xfs_iget(mp, NULL, mp->m_sb.sb_uquotino,
 					0, 0, &uip) == 0)
-			tempuqip = B_TRUE;
+			tempuqip = true;
 	}
 	if (!gip && mp->m_sb.sb_gquotino != NULLFSINO) {
 		if (xfs_iget(mp, NULL, mp->m_sb.sb_gquotino,
 					0, 0, &gip) == 0)
-			tempgqip = B_TRUE;
+			tempgqip = true;
 	}
 	if (uip) {
 		out->qs_uquota.qfs_nblks = uip->i_d.di_nblocks;
@@ -472,15 +472,15 @@ xfs_qm_scall_getqstat(
  */
 int
 xfs_qm_scall_setqlim(
-	xfs_mount_t		*mp,
+	struct xfs_mount	*mp,
 	xfs_dqid_t		id,
 	uint			type,
 	fs_disk_quota_t		*newlim)
 {
 	struct xfs_quotainfo	*q = mp->m_quotainfo;
-	xfs_disk_dquot_t	*ddq;
-	xfs_dquot_t		*dqp;
-	xfs_trans_t		*tp;
+	struct xfs_disk_dquot	*ddq;
+	struct xfs_dquot	*dqp;
+	struct xfs_trans	*tp;
 	int			error;
 	xfs_qcnt_t		hard, soft;
 
@@ -490,8 +490,9 @@ xfs_qm_scall_setqlim(
 		return 0;
 
 	tp = xfs_trans_alloc(mp, XFS_TRANS_QM_SETQLIM);
-	if ((error = xfs_trans_reserve(tp, 0, sizeof(xfs_disk_dquot_t) + 128,
-				      0, 0, XFS_DEFAULT_LOG_COUNT))) {
+	error = xfs_trans_reserve(tp, 0, XFS_QM_SETQLIM_LOG_RES(mp),
+				  0, 0, XFS_DEFAULT_LOG_COUNT);
+	if (error) {
 		xfs_trans_cancel(tp, 0);
 		return (error);
 	}
@@ -528,6 +529,7 @@ xfs_qm_scall_setqlim(
 	if (hard == 0 || hard >= soft) {
 		ddq->d_blk_hardlimit = cpu_to_be64(hard);
 		ddq->d_blk_softlimit = cpu_to_be64(soft);
+		xfs_dquot_set_prealloc_limits(dqp);
 		if (id == 0) {
 			q->qi_bhardlimit = hard;
 			q->qi_bsoftlimit = soft;
@@ -638,8 +640,9 @@ xfs_qm_log_quotaoff_end(
 
 	tp = xfs_trans_alloc(mp, XFS_TRANS_QM_QUOTAOFF_END);
 
-	if ((error = xfs_trans_reserve(tp, 0, sizeof(xfs_qoff_logitem_t) * 2,
-				      0, 0, XFS_DEFAULT_LOG_COUNT))) {
+	error = xfs_trans_reserve(tp, 0, XFS_QM_QUOTAOFF_END_LOG_RES(mp),
+				  0, 0, XFS_DEFAULT_LOG_COUNT);
+	if (error) {
 		xfs_trans_cancel(tp, 0);
 		return (error);
 	}
@@ -671,14 +674,10 @@ xfs_qm_log_quotaoff(
 	uint			oldsbqflag=0;
 
 	tp = xfs_trans_alloc(mp, XFS_TRANS_QM_QUOTAOFF);
-	if ((error = xfs_trans_reserve(tp, 0,
-				      sizeof(xfs_qoff_logitem_t) * 2 +
-				      mp->m_sb.sb_sectsize + 128,
-				      0,
-				      0,
-				      XFS_DEFAULT_LOG_COUNT))) {
+	error = xfs_trans_reserve(tp, 0, XFS_QM_QUOTAOFF_LOG_RES(mp),
+				  0, 0, XFS_DEFAULT_LOG_COUNT);
+	if (error)
 		goto error0;
-	}
 
 	qoffi = xfs_trans_get_qoff_item(tp, NULL, flags & XFS_ALL_QUOTA_ACCT);
 	xfs_trans_log_quotaoff_item(tp, qoffi);

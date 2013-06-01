@@ -78,9 +78,10 @@ static int receiver_wake_function(wait_queue_t *wait, unsigned int mode, int syn
 	return autoremove_wake_function(wait, mode, sync, key);
 }
 /*
- * Wait for a packet..
+ * Wait for the last received packet to be different from skb
  */
-static int wait_for_packet(struct sock *sk, int *err, long *timeo_p)
+static int wait_for_more_packets(struct sock *sk, int *err, long *timeo_p,
+				 const struct sk_buff *skb)
 {
 	int error;
 	DEFINE_WAIT_FUNC(wait, receiver_wake_function);
@@ -92,7 +93,7 @@ static int wait_for_packet(struct sock *sk, int *err, long *timeo_p)
 	if (error)
 		goto out_err;
 
-	if (!skb_queue_empty(&sk->sk_receive_queue))
+	if (sk->sk_receive_queue.prev != skb)
 		goto out;
 
 	/* Socket shut down? */
@@ -132,9 +133,9 @@ out_noerr:
  *	__skb_recv_datagram - Receive a datagram skbuff
  *	@sk: socket
  *	@flags: MSG_ flags
+ *	@peeked: returns non-zero if this packet has been seen before
  *	@off: an offset in bytes to peek skb from. Returns an offset
  *	      within an skb where data actually starts
- *	@peeked: returns non-zero if this packet has been seen before
  *	@err: error code returned
  *
  *	Get a datagram skbuff, understands the peeking, nonblocking wakeups
@@ -165,7 +166,7 @@ out_noerr:
 struct sk_buff *__skb_recv_datagram(struct sock *sk, unsigned int flags,
 				    int *peeked, int *off, int *err)
 {
-	struct sk_buff *skb;
+	struct sk_buff *skb, *last;
 	long timeo;
 	/*
 	 * Caller is allowed not to check sk->sk_err before skb_recv_datagram()
@@ -188,16 +189,20 @@ struct sk_buff *__skb_recv_datagram(struct sock *sk, unsigned int flags,
 		unsigned long cpu_flags;
 		/* 接收的skb队列 */
 		struct sk_buff_head *queue = &sk->sk_receive_queue;
+		int _off = *off;
 
+		last = (struct sk_buff *)queue;
 		spin_lock_irqsave(&queue->lock, cpu_flags);
 		/* 遍历接收队列 */
 		skb_queue_walk(queue, skb) {
+			last = skb;
 			/* 记录这个skb是否在别处被查看过 */
 			*peeked = skb->peeked;
 			if (flags & MSG_PEEK) {
 				/* 跳过@off偏移 */
-				if (*off >= skb->len) {
-					*off -= skb->len;
+				if (_off >= skb->len && (skb->len || _off ||
+							 skb->peeked)) {
+					_off -= skb->len;
 					continue;
 				}
 				/* 标记该skb是被peek的 */
@@ -209,6 +214,7 @@ struct sk_buff *__skb_recv_datagram(struct sock *sk, unsigned int flags,
 				__skb_unlink(skb, queue);
 
 			spin_unlock_irqrestore(&queue->lock, cpu_flags);
+			*off = _off;
 			/* 返回取出的skb */
 			return skb;
 		}
@@ -220,7 +226,7 @@ struct sk_buff *__skb_recv_datagram(struct sock *sk, unsigned int flags,
 		if (!timeo)
 			goto no_packet;
 
-	} while (!wait_for_packet(sk, err, &timeo));
+	} while (!wait_for_more_packets(sk, err, &timeo, last));
 
 	return NULL;
 
@@ -769,7 +775,9 @@ unsigned int datagram_poll(struct file *file, struct socket *sock,
 
 	/* exceptional events? */
 	if (sk->sk_err || !skb_queue_empty(&sk->sk_error_queue))
-		mask |= POLLERR;
+		mask |= POLLERR |
+			(sock_flag(sk, SOCK_SELECT_ERR_QUEUE) ? POLLPRI : 0);
+
 	if (sk->sk_shutdown & RCV_SHUTDOWN)
 		mask |= POLLRDHUP | POLLIN | POLLRDNORM;
 	if (sk->sk_shutdown == SHUTDOWN_MASK)

@@ -4,6 +4,7 @@
 #include <linux/sched.h>
 #include <linux/bug.h>
 #include <linux/mm.h>
+#include <linux/workqueue.h>
 #include <linux/threads.h>
 #include <linux/nsproxy.h>
 #include <linux/kref.h>
@@ -18,11 +19,15 @@ struct pidmap {
        void *page;
 };
 
+
 /*
 需要多少个页来表示这么多的pid号个bit位
 8是一个字节的bit个数
 */
-#define PIDMAP_ENTRIES         ((PID_MAX_LIMIT + 8*PAGE_SIZE - 1)/PAGE_SIZE/8)
+
+#define BITS_PER_PAGE		(PAGE_SIZE * 8)
+#define BITS_PER_PAGE_MASK	(BITS_PER_PAGE-1)
+#define PIDMAP_ENTRIES		((PID_MAX_LIMIT+BITS_PER_PAGE-1)/BITS_PER_PAGE)
 
 struct bsd_acct_struct;
 
@@ -43,6 +48,7 @@ struct pid_namespace {
 	struct pid_namespace *parent;
 #ifdef CONFIG_PROC_FS
 	struct vfsmount *proc_mnt;
+	struct dentry *proc_self;
 #endif
 #ifdef CONFIG_BSD_PROCESS_ACCT
 	struct bsd_acct_struct *bacct;

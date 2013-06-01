@@ -1000,13 +1000,19 @@ handle_syscall:
 
 	/* Trace syscalls, if requested. */
 	addi	r31, r31, THREAD_INFO_FLAGS_OFFSET
-	ld	r30, r31
-	andi    r30, r30, _TIF_SYSCALL_TRACE
+	{
+	 ld     r30, r31
+	 moveli r32, _TIF_SYSCALL_ENTRY_WORK
+	}
+	and     r30, r30, r32
 	{
 	 addi   r30, r31, THREAD_INFO_STATUS_OFFSET - THREAD_INFO_FLAGS_OFFSET
 	 beqzt	r30, .Lrestore_syscall_regs
 	}
-	jal	do_syscall_trace
+	{
+	 PTREGS_PTR(r0, PTREGS_OFFSET_BASE)
+	 jal    do_syscall_trace_enter
+	}
 	FEEDBACK_REENTER(handle_syscall)
 
 	/*
@@ -1035,7 +1041,9 @@ handle_syscall:
 	/* Ensure that the syscall number is within the legal range. */
 	{
 	 moveli r20, hw2(sys_call_table)
+#ifdef CONFIG_COMPAT
 	 blbs   r30, .Lcompat_syscall
+#endif
 	}
 	{
 	 cmpltu r21, TREG_SYSCALL_NR_NAME, r21
@@ -1069,13 +1077,19 @@ handle_syscall:
 	FEEDBACK_REENTER(handle_syscall)
 
 	/* Do syscall trace again, if requested. */
-	ld	r30, r31
-	andi    r0, r30, _TIF_SYSCALL_TRACE
+	{
+	 ld      r30, r31
+	 moveli  r32, _TIF_SYSCALL_EXIT_WORK
+	}
+	and      r0, r30, r32
 	{
 	 andi    r0, r30, _TIF_SINGLESTEP
 	 beqzt   r0, 1f
 	}
-	jal	do_syscall_trace
+	{
+	 PTREGS_PTR(r0, PTREGS_OFFSET_BASE)
+	 jal    do_syscall_trace_exit
+	}
 	FEEDBACK_REENTER(handle_syscall)
 	andi    r0, r30, _TIF_SINGLESTEP
 
@@ -1093,6 +1107,7 @@ handle_syscall:
 	 j      .Lresume_userspace   /* jump into middle of interrupt_return */
 	}
 
+#ifdef CONFIG_COMPAT
 .Lcompat_syscall:
 	/*
 	 * Load the base of the compat syscall table in r20, and
@@ -1117,6 +1132,7 @@ handle_syscall:
 	{ move r15, r4; addxi r4, r4, 0 }
 	{ move r16, r5; addxi r5, r5, 0 }
 	j .Lload_syscall_pointer
+#endif
 
 .Linvalid_syscall:
 	/* Report an invalid syscall back to the user program */

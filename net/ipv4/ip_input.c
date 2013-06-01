@@ -222,14 +222,6 @@ static int ip_local_deliver_finish(struct sk_buff *skb)
 		if (ipprot != NULL) {
 			int ret;
 
-			/* 检查命名空间 */
-			if (!net_eq(net, &init_net) && !ipprot->netns_ok) {
-				net_info_ratelimited("%s: proto %d isn't netns-ready\n",
-						     __func__, protocol);
-				kfree_skb(skb);
-				goto out;
-			}
-
 			/* 有检查策略 */
 			if (!ipprot->no_policy) {
 				if (!xfrm4_policy_check(NULL, XFRM_POLICY_IN, skb)) {
@@ -255,9 +247,11 @@ static int ip_local_deliver_finish(struct sk_buff *skb)
 					icmp_send(skb, ICMP_DEST_UNREACH,
 						  ICMP_PROT_UNREACH, 0);
 				}
-			} else
+				kfree_skb(skb);
+			} else {
 				IP_INC_STATS_BH(net, IPSTATS_MIB_INDELIVERS);
-			kfree_skb(skb);
+				consume_skb(skb);
+			}
 		}
 	}
  out:
@@ -495,7 +489,7 @@ int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt, 
 
 	/* IP头校验和检查 */
 	if (unlikely(ip_fast_csum((u8 *)iph, iph->ihl)))
-		goto inhdr_error;
+		goto csum_error;
 
 	/* IP数据总长度检查 */
 	len = ntohs(iph->tot_len);
@@ -534,6 +528,8 @@ int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt, 
 	return NF_HOOK(NFPROTO_IPV4, NF_INET_PRE_ROUTING, skb, dev, NULL,
 		       ip_rcv_finish);
 
+csum_error:
+	IP_INC_STATS_BH(dev_net(dev), IPSTATS_MIB_CSUMERRORS);
 inhdr_error:
 	IP_INC_STATS_BH(dev_net(dev), IPSTATS_MIB_INHDRERRORS);
 drop:

@@ -32,7 +32,6 @@ struct fdtable {
 	/* 打开的文件描述符位图 */
 	unsigned long *open_fds;
 	struct rcu_head rcu;
-	struct fdtable *next;
 };
 
 static inline bool close_on_exec(int fd, const struct fdtable *fdt)

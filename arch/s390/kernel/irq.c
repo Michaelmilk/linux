@@ -33,7 +33,7 @@ struct irq_class {
 };
 
 /*
- * The list of "main" irq classes on s390. This is the list of interrrupts
+ * The list of "main" irq classes on s390. This is the list of interrupts
  * that appear both in /proc/stat ("intr" line) and /proc/interrupts.
  * Historically only external and I/O interrupts have been part of /proc/stat.
  * We can't add the split external and I/O sub classes since the first field
@@ -81,6 +81,7 @@ static const struct irq_class irqclass_sub_desc[NR_ARCH_IRQS] = {
 	[IRQIO_CSC]  = {.name = "CSC", .desc = "[I/O] CHSC Subchannel"},
 	[IRQIO_PCI]  = {.name = "PCI", .desc = "[I/O] PCI Interrupt" },
 	[IRQIO_MSI]  = {.name = "MSI", .desc = "[I/O] MSI Interrupt" },
+	[IRQIO_VIR]  = {.name = "VIR", .desc = "[I/O] Virtual I/O Devices"},
 	[NMI_NMI]    = {.name = "NMI", .desc = "[NMI] Machine Check"},
 	[CPU_RST]    = {.name = "RST", .desc = "[CPU] CPU Restart"},
 };
@@ -161,10 +162,8 @@ asmlinkage void do_softirq(void)
 #ifdef CONFIG_PROC_FS
 void init_irq_proc(void)
 {
-	struct proc_dir_entry *root_irq_dir;
-
-	root_irq_dir = proc_mkdir("irq", NULL);
-	create_prof_cpu_mask(root_irq_dir);
+	if (proc_mkdir("irq", NULL))
+		create_prof_cpu_mask();
 }
 #endif
 

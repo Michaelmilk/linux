@@ -9,6 +9,7 @@
 #include <asm/leon_amba.h>
 #include <asm/cpu_type.h>
 #include <asm/leon.h>
+#include <asm/processor.h>
 
 /* List of Systems that need fixup instructions around power-down instruction */
 unsigned int pmc_leon_fixup_ids[] = {
@@ -47,7 +48,7 @@ void pmc_leon_idle_fixup(void)
 	 */
 	register unsigned int address = (unsigned int)leon3_irqctrl_regs;
 	__asm__ __volatile__ (
-		"mov	%%g0, %%asr19\n"
+		"wr	%%g0, %%asr19\n"
 		"lda	[%0] %1, %%g0\n"
 		:
 		: "r"(address), "i"(ASI_LEON_BYPASS));
@@ -60,7 +61,7 @@ void pmc_leon_idle_fixup(void)
 void pmc_leon_idle(void)
 {
 	/* For systems without power-down, this will be no-op */
-	__asm__ __volatile__ ("mov	%g0, %asr19\n\t");
+	__asm__ __volatile__ ("wr	%g0, %asr19\n\t");
 }
 
 /* Install LEON Power Down function */
@@ -69,9 +70,9 @@ static int __init leon_pmc_install(void)
 	if (sparc_cpu_model == sparc_leon) {
 		/* Assign power management IDLE handler */
 		if (pmc_leon_need_fixup())
-			pm_idle = pmc_leon_idle_fixup;
+			sparc_idle = pmc_leon_idle_fixup;
 		else
-			pm_idle = pmc_leon_idle;
+			sparc_idle = pmc_leon_idle;
 
 		printk(KERN_INFO "leon: power management initialized\n");
 	}

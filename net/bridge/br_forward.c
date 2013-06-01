@@ -34,6 +34,7 @@ static inline int should_deliver(const struct net_bridge_port *p,
 	   p->dev是网桥根据其转发表找到的出口接口
 	*/
 	return (((p->flags & BR_HAIRPIN_MODE) || skb->dev != p->dev) &&
+		br_allowed_egress(p->br, nbp_get_vlan_info(p), skb) &&
 		p->state == BR_STATE_FORWARDING);
 }
 
@@ -72,6 +73,10 @@ int br_forward_finish(struct sk_buff *skb)
 
 static void __br_deliver(const struct net_bridge_port *to, struct sk_buff *skb)
 {
+	skb = br_handle_vlan(to->br, nbp_get_vlan_info(to), skb);
+	if (!skb)
+		return;
+
 	/* skb->dev指向报文出去的那个物理接口 */
 	skb->dev = to->dev;
 
@@ -97,6 +102,10 @@ static void __br_forward(const struct net_bridge_port *to, struct sk_buff *skb)
 		kfree_skb(skb);
 		return;
 	}
+
+	skb = br_handle_vlan(to->br, nbp_get_vlan_info(to), skb);
+	if (!skb)
+		return;
 
 	/* indev记录该报文进来的那个接口
 	   修改skb->dev为找到的出口接口

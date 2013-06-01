@@ -406,9 +406,10 @@ static void pci_device_shutdown(struct device *dev)
 
 	/*
 	 * Turn off Bus Master bit on the device to tell it to not
-	 * continue to do DMA
+	 * continue to do DMA. Don't touch devices in D3cold or unknown states.
 	 */
-	pci_disable_device(pci_dev);
+	if (pci_dev->current_state <= PCI_D3hot)
+		pci_clear_master(pci_dev);
 }
 
 #ifdef CONFIG_PM
@@ -644,6 +645,7 @@ static int pci_pm_suspend(struct device *dev)
 		goto Fixup;
 	}
 
+	pci_dev->state_saved = false;
 	if (pm->suspend) {
 		pci_power_t prev = pci_dev->current_state;
 		int error;
@@ -790,6 +792,7 @@ static int pci_pm_freeze(struct device *dev)
 		return 0;
 	}
 
+	pci_dev->state_saved = false;
 	if (pm->freeze) {
 		int error;
 
@@ -878,6 +881,7 @@ static int pci_pm_poweroff(struct device *dev)
 		goto Fixup;
 	}
 
+	pci_dev->state_saved = false;
 	if (pm->poweroff) {
 		int error;
 
@@ -1003,6 +1007,7 @@ static int pci_pm_runtime_suspend(struct device *dev)
 	if (!pm || !pm->runtime_suspend)
 		return -ENOSYS;
 
+	pci_dev->state_saved = false;
 	pci_dev->no_d3cold = false;
 	error = pm->runtime_suspend(dev);
 	suspend_report_result(pm->runtime_suspend, error);
@@ -1216,9 +1221,13 @@ static int pci_bus_match(struct device *dev, struct device_driver *drv)
 	   通过container_of宏取得对应的完整结构以供pci_match_device()使用
 	*/
 	struct pci_dev *pci_dev = to_pci_dev(dev);
-	struct pci_driver *pci_drv = to_pci_driver(drv);
+	struct pci_driver *pci_drv;
 	const struct pci_device_id *found_id;
 
+	if (!pci_dev->match_driver)
+		return 0;
+
+	pci_drv = to_pci_driver(drv);
 	found_id = pci_match_device(pci_drv, pci_dev);
 	if (found_id)
 		return 1;

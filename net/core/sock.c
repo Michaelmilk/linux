@@ -186,8 +186,10 @@ void mem_cgroup_sockets_destroy(struct mem_cgroup *memcg)
 static struct lock_class_key af_family_keys[AF_MAX];
 static struct lock_class_key af_family_slock_keys[AF_MAX];
 
+#if defined(CONFIG_MEMCG_KMEM)
 struct static_key memcg_socket_limit_enabled;
 EXPORT_SYMBOL(memcg_socket_limit_enabled);
+#endif
 
 /*
  * Make lock validator output more readable. (we pre-construct these
@@ -665,6 +667,9 @@ int sock_setsockopt(struct socket *sock, int level, int optname,
 	case SO_REUSEADDR:
 		sk->sk_reuse = (valbool ? SK_CAN_REUSE : SK_NO_REUSE);
 		break;
+	case SO_REUSEPORT:
+		sk->sk_reuseport = valbool;
+		break;
 	case SO_TYPE:
 	case SO_PROTOCOL:
 	case SO_DOMAIN:
@@ -861,6 +866,13 @@ set_rcvbuf:
 		ret = sk_detach_filter(sk);
 		break;
 
+	case SO_LOCK_FILTER:
+		if (sock_flag(sk, SOCK_FILTER_LOCKED) && !valbool)
+			ret = -EPERM;
+		else
+			sock_valbool_flag(sk, SOCK_FILTER_LOCKED, valbool);
+		break;
+
 	case SO_PASSSEC:
 		if (valbool)
 			set_bit(SOCK_PASSSEC, &sock->flags);
@@ -893,6 +905,10 @@ set_rcvbuf:
 
 	case SO_NOFCS:
 		sock_valbool_flag(sk, SOCK_NOFCS, valbool);
+		break;
+
+	case SO_SELECT_ERR_QUEUE:
+		sock_valbool_flag(sk, SOCK_SELECT_ERR_QUEUE, valbool);
 		break;
 
 	default:
@@ -963,6 +979,10 @@ int sock_getsockopt(struct socket *sock, int level, int optname,
 
 	case SO_REUSEADDR:
 		v.val = sk->sk_reuse;
+		break;
+
+	case SO_REUSEPORT:
+		v.val = sk->sk_reuseport;
 		break;
 
 	case SO_KEEPALIVE:
@@ -1140,6 +1160,14 @@ int sock_getsockopt(struct socket *sock, int level, int optname,
 
 		goto lenout;
 
+	case SO_LOCK_FILTER:
+		v.val = sock_flag(sk, SOCK_FILTER_LOCKED);
+		break;
+
+	case SO_SELECT_ERR_QUEUE:
+		v.val = sock_flag(sk, SOCK_SELECT_ERR_QUEUE);
+		break;
+
 	default:
 		return -ENOPROTOOPT;
 	}
@@ -1187,18 +1215,6 @@ static void sock_copy(struct sock *nsk, const struct sock *osk)
 	nsk->sk_security = sptr;
 	security_sk_clone(osk, nsk);
 #endif
-}
-
-/*
- * caches using SLAB_DESTROY_BY_RCU should let .next pointer from nulls nodes
- * un-modified. Special care is taken when initializing object to zero.
- */
-static inline void sk_prot_clear_nulls(struct sock *sk, int size)
-{
-	if (offsetof(struct sock, sk_node.next) != 0)
-		memset(sk, 0, offsetof(struct sock, sk_node.next));
-	memset(&sk->sk_node.pprev, 0,
-	       size - offsetof(struct sock, sk_node.pprev));
 }
 
 void sk_prot_clear_portaddr_nulls(struct sock *sk, int size)
@@ -1288,13 +1304,12 @@ static void sk_prot_free(struct proto *prot, struct sock *sk)
 	module_put(owner);
 }
 
-#ifdef CONFIG_CGROUPS
 #if IS_ENABLED(CONFIG_NET_CLS_CGROUP)
-void sock_update_classid(struct sock *sk, struct task_struct *task)
+void sock_update_classid(struct sock *sk)
 {
 	u32 classid;
 
-	classid = task_cls_classid(task);
+	classid = task_cls_classid(current);
 	if (classid != sk->sk_classid)
 		sk->sk_classid = classid;
 }
@@ -1302,15 +1317,14 @@ EXPORT_SYMBOL(sock_update_classid);
 #endif
 
 #if IS_ENABLED(CONFIG_NETPRIO_CGROUP)
-void sock_update_netprioidx(struct sock *sk, struct task_struct *task)
+void sock_update_netprioidx(struct sock *sk)
 {
 	if (in_interrupt())
 		return;
 
-	sk->sk_cgrp_prioidx = task_netprioidx(task);
+	sk->sk_cgrp_prioidx = task_netprioidx(current);
 }
 EXPORT_SYMBOL_GPL(sock_update_netprioidx);
-#endif
 #endif
 
 /**
@@ -1342,8 +1356,8 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 		sock_net_set(sk, get_net(net));
 		atomic_set(&sk->sk_wmem_alloc, 1);
 
-		sock_update_classid(sk, current);
-		sock_update_netprioidx(sk, current);
+		sock_update_classid(sk);
+		sock_update_netprioidx(sk);
 	}
 
 	return sk;
@@ -2234,7 +2248,7 @@ EXPORT_SYMBOL(sk_reset_timer);
 
 void sk_stop_timer(struct sock *sk, struct timer_list* timer)
 {
-	if (timer_pending(timer) && del_timer(timer))
+	if (del_timer(timer))
 		__sock_put(sk);
 }
 EXPORT_SYMBOL(sk_stop_timer);
@@ -2858,7 +2872,7 @@ static const struct file_operations proto_seq_fops = {
 
 static __net_init int proto_init_net(struct net *net)
 {
-	if (!proc_net_fops_create(net, "protocols", S_IRUGO, &proto_seq_fops))
+	if (!proc_create("protocols", S_IRUGO, net->proc_net, &proto_seq_fops))
 		return -ENOMEM;
 
 	return 0;
@@ -2866,7 +2880,7 @@ static __net_init int proto_init_net(struct net *net)
 
 static __net_exit void proto_exit_net(struct net *net)
 {
-	proc_net_remove(net, "protocols");
+	remove_proc_entry("protocols", net->proc_net);
 }
 
 

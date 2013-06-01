@@ -36,6 +36,7 @@
 #include <linux/pid_namespace.h>
 #include <linux/init_task.h>
 #include <linux/syscalls.h>
+#include <linux/proc_ns.h>
 #include <linux/proc_fs.h>
 
 /* 根据@nr和@ns计算哈希值 */
@@ -57,11 +58,6 @@ int pid_max = PID_MAX_DEFAULT;
 
 int pid_max_min = RESERVED_PIDS + 1;
 int pid_max_max = PID_MAX_LIMIT;
-
-/* 一个页中含有的bit位数 */
-#define BITS_PER_PAGE		(PAGE_SIZE*8)
-/* bit位数为2的n次方，减1成为掩码 */
-#define BITS_PER_PAGE_MASK	(BITS_PER_PAGE-1)
 
 static inline int mk_pid(struct pid_namespace *pid_ns,
 		struct pidmap *map, int off)
@@ -212,8 +208,8 @@ static int alloc_pidmap(struct pid_namespace *pid_ns)
 		}
 		/* 读可用pid的数量 */
 		if (likely(atomic_read(&map->nr_free))) {
-			do {
-				/* 找到一个未使用的pid号 */
+			/* 找到一个未使用的pid号 */
+			for ( ; ; ) {
 				if (!test_and_set_bit(offset, map->page)) {
 					/* 可用数减1 */
 					atomic_dec(&map->nr_free);
@@ -224,10 +220,14 @@ static int alloc_pidmap(struct pid_namespace *pid_ns)
 				}
 				/* 下一个为0的bit */
 				offset = find_next_offset(map, offset);
+				/* 循环直到该页内的bit都检查完 */
+				if (offset >= BITS_PER_PAGE)
+					break;
 				/* 该offset处bit对应的pid号 */
 				pid = mk_pid(pid_ns, map, offset);
-			/* 循环直到该页内的bit都检查完 */
-			} while (offset < BITS_PER_PAGE && pid < pid_max);
+				if (pid >= pid_max)
+					break;
+			}
 		}
 		if (map < &pid_ns->pidmap[(pid_max-1)/BITS_PER_PAGE]) {
 		/* 下一个页面中的位图 */
@@ -385,7 +385,7 @@ out:
 	return pid;
 
 out_unlock:
-	spin_unlock(&pidmap_lock);
+	spin_unlock_irq(&pidmap_lock);
 out_free:
 	while (++i <= ns->level)
 		free_pidmap(pid->numbers + i);
@@ -404,10 +404,9 @@ void disable_pid_allocation(struct pid_namespace *ns)
 
 struct pid *find_pid_ns(int nr, struct pid_namespace *ns)
 {
-	struct hlist_node *elem;
 	struct upid *pnr;
 
-	hlist_for_each_entry_rcu(pnr, elem,
+	hlist_for_each_entry_rcu(pnr,
 			&pid_hash[pid_hashfn(nr, ns)], pid_chain)
 		if (pnr->nr == nr && pnr->ns == ns)
 			return container_of(pnr, struct pid,

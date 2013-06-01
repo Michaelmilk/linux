@@ -9,6 +9,8 @@
  *  Simplified starting of init:  Michael A. Griffith <grif@acm.org> 
  */
 
+#define DEBUG		/* Enable initcall_debug */
+
 #include <linux/types.h>
 #include <linux/module.h>
 #include <linux/proc_fs.h>
@@ -70,6 +72,8 @@
 #include <linux/perf_event.h>
 #include <linux/file.h>
 #include <linux/ptrace.h>
+#include <linux/blkdev.h>
+#include <linux/elevator.h>
 
 #include <asm/io.h>
 #include <asm/bugs.h>
@@ -200,8 +204,8 @@ static int __init obsolete_checksetup(char *line)
 				if (line[n] == '\0' || line[n] == '=')
 					had_early_param = 1;
 			} else if (!p->setup_func) {
-				printk(KERN_WARNING "Parameter %s is obsolete,"
-				       " ignored\n", p->str);
+				pr_warn("Parameter %s is obsolete, ignored\n",
+					p->str);
 				return 1;
 			} else if (p->setup_func(line + n))
 				return 1;
@@ -423,7 +427,7 @@ static noinline void __init_refok rest_init(void)
 	init_idle_bootup_task(current);
 	schedule_preempt_disabled();
 	/* Call into cpu_idle with preempt disabled */
-	cpu_idle();
+	cpu_startup_entry(CPUHP_ONLINE);
 }
 
 /* Check for early params. */
@@ -440,9 +444,8 @@ static int __init do_early_param(char *param, char *val, const char *unused)
 		) {
 			/* 调用处理函数 */
 			if (p->setup_func(val) != 0)
-				printk(KERN_WARNING
-				       "Malformed early option '%s'\n", param);
 				/* malformed: 畸形的 */
+				pr_warn("Malformed early option '%s'\n", param);
 		}
 	}
 	/* We accept everything at this stage. */
@@ -555,15 +558,13 @@ asmlinkage void __init start_kernel(void)
  * Interrupts are still disabled. Do necessary setups, then
  * enable them
  */
-	/* 时钟中断初始化，向通知链clockevents_chain注册了tick_notifier
-	   回调函数tick_notify()处理时钟事件 */
-	tick_init();
 	/* 激活引导cpu，即设置当前cpu所对应的几个bit位 */
 	boot_cpu_init();
 	/* 初始化页地址，使用链表将其链接起来 */
 	page_address_init();
 	/* 打印linux内核版本信息 */
-	printk(KERN_NOTICE "%s", linux_banner);
+	pr_notice("%s", linux_banner);
+
 	/* 根据bios和boot loader传递的参数收集系统硬件信息
 	   设置与体系结构相关的环境
 
@@ -584,7 +585,7 @@ asmlinkage void __init start_kernel(void)
 	page_alloc_init();
 
 	/* 在终端打印内核参数 */
-	printk(KERN_NOTICE "Kernel command line: %s\n", boot_command_line);
+	pr_notice("Kernel command line: %s\n", boot_command_line);
 	/* 处理内核参数 */
 	parse_early_param();
 	/* 对模块参数进行处理 */
@@ -622,21 +623,20 @@ asmlinkage void __init start_kernel(void)
 	 */
 	preempt_disable();
 	/* 检查中断是否已经打开，如果已经打开，则关闭中断 */
-	if (!irqs_disabled()) {
-		printk(KERN_WARNING "start_kernel(): bug: interrupts were "
-				"enabled *very* early, fixing it\n");
+	if (WARN(!irqs_disabled(), "Interrupts were enabled *very* early, fixing it\n"))
 		local_irq_disable();
-	}
 	idr_init_cache();
 	perf_event_init();
 	/* 初始化RCU(Read-Copy Update)机制 */
 	rcu_init();
+	tick_nohz_init();
 	/* 基数树初始化 */
 	radix_tree_init();
 	/* init some links before init_ISA_irqs() */
 	early_irq_init();
 	/* init_IRQ()函数则完成其余中断向量(外部中断)的初始化 */
 	init_IRQ();
+	tick_init();
 	/* 初始化定时器相关的数据结构 */
 	init_timers();
 	/* 对高精度时钟进行初始化 */
@@ -650,9 +650,7 @@ asmlinkage void __init start_kernel(void)
 	/* oprofile系统性能分析模块的初始化 */
 	profile_init();
 	call_function_init();
-	if (!irqs_disabled())
-		printk(KERN_CRIT "start_kernel(): bug: interrupts were "
-				 "enabled early\n");
+	WARN(!irqs_disabled(), "Interrupts were enabled early\n");
 	early_boot_irqs_disabled = false;
 	local_irq_enable();
 
@@ -680,8 +678,7 @@ asmlinkage void __init start_kernel(void)
 #ifdef CONFIG_BLK_DEV_INITRD
 	if (initrd_start && !initrd_below_start_ok &&
 	    page_to_pfn(virt_to_page((void *)initrd_start)) < min_low_pfn) {
-		printk(KERN_CRIT "initrd overwritten (0x%08lx < 0x%08lx) - "
-		    "disabling it.\n",
+		pr_crit("initrd overwritten (0x%08lx < 0x%08lx) - disabling it.\n",
 		    page_to_pfn(virt_to_page((void *)initrd_start)),
 		    min_low_pfn);
 		initrd_start = 0;
@@ -703,7 +700,7 @@ asmlinkage void __init start_kernel(void)
 	pidmap_init();
 	anon_vma_init();
 #ifdef CONFIG_X86
-	if (efi_enabled)
+	if (efi_enabled(EFI_RUNTIME_SERVICES))
 		efi_enter_virtual_mode();
 #endif
 	thread_info_cache_init();
@@ -736,7 +733,7 @@ asmlinkage void __init start_kernel(void)
 	/* SFI: Simple Firmware Interface */
 	sfi_init_late();
 
-	if (efi_enabled) {
+	if (efi_enabled(EFI_RUNTIME_SERVICES)) {
 		efi_late_init();
 		efi_free_boot_services();
 	}
@@ -770,14 +767,14 @@ static int __init_or_module do_one_initcall_debug(initcall_t fn)
 	unsigned long long duration;
 	int ret;
 
-	printk(KERN_DEBUG "calling  %pF @ %i\n", fn, task_pid_nr(current));
+	pr_debug("calling  %pF @ %i\n", fn, task_pid_nr(current));
 	calltime = ktime_get();
 	ret = fn();
 	rettime = ktime_get();
 	delta = ktime_sub(rettime, calltime);
 	duration = (unsigned long long) ktime_to_ns(delta) >> 10;
-	printk(KERN_DEBUG "initcall %pF returned %d after %lld usecs\n", fn,
-		ret, duration);
+	pr_debug("initcall %pF returned %d after %lld usecs\n",
+		 fn, ret, duration);
 
 	return ret;
 }
@@ -794,20 +791,15 @@ int __init_or_module do_one_initcall(initcall_t fn)
 
 	msgbuf[0] = 0;
 
-	if (ret && ret != -ENODEV && initcall_debug)
-		sprintf(msgbuf, "error code %d ", ret);
-
 	if (preempt_count() != count) {
-		strlcat(msgbuf, "preemption imbalance ", sizeof(msgbuf));
+		sprintf(msgbuf, "preemption imbalance ");
 		preempt_count() = count;
 	}
 	if (irqs_disabled()) {
 		strlcat(msgbuf, "disabled interrupts ", sizeof(msgbuf));
 		local_irq_enable();
 	}
-	if (msgbuf[0]) {
-		printk("initcall %pF returned with %s\n", fn, msgbuf);
-	}
+	WARN(msgbuf[0], "initcall %pF returned with %s\n", fn, msgbuf);
 
 	return ret;
 }
@@ -900,10 +892,22 @@ static void __init do_pre_smp_initcalls(void)
 }
 
 /*
+ * This function requests modules which should be loaded by default and is
+ * called twice right after initrd is mounted and right before init is
+ * exec'd.  If such modules are on either initrd or rootfs, they will be
+ * loaded before control is passed to userland.
+ */
+void __init load_default_modules(void)
+{
+	load_default_elevator_module();
+}
+
+/*
 run_init_process()在调用相应程序运行的时候，用的是kernel_execve()
 也就是说调用进程@init_filename后会替换run_init_process()运行的当前进程。
 只要调用成功，就不会返回到调用它的函数。
 */
+
 static int run_init_process(const char *init_filename)
 {
 	argv_init[0] = init_filename;
@@ -934,8 +938,7 @@ static int __ref kernel_init(void *unused)
 	if (ramdisk_execute_command) {
 		if (!run_init_process(ramdisk_execute_command))
 			return 0;
-		printk(KERN_WARNING "Failed to execute %s\n",
-				ramdisk_execute_command);
+		pr_err("Failed to execute %s\n", ramdisk_execute_command);
 	}
 
 	/*
@@ -951,8 +954,8 @@ static int __ref kernel_init(void *unused)
 	if (execute_command) {
 		if (!run_init_process(execute_command))
 			return 0;
-		printk(KERN_WARNING "Failed to execute %s.  Attempting "
-					"defaults...\n", execute_command);
+		pr_err("Failed to execute %s.  Attempting defaults...\n",
+			execute_command);
 	}
 	/* 运行init进程，init进程是linux系统上其他进程的父进程
 	   到这里内核启动就完成了
@@ -1017,7 +1020,7 @@ static noinline void __init kernel_init_freeable(void)
 	   如果成功执行open，/dev/console即成为init的标准输入源（文件描述符0）。
 	*/
 	if (sys_open((const char __user *) "/dev/console", O_RDWR, 0) < 0)
-		printk(KERN_WARNING "Warning: unable to open an initial console.\n");
+		pr_err("Warning: unable to open an initial console.\n");
 
 	/* 调用dup打开/dev/console文件描述符两次。
 	   这样，该控制台设备就也可以供标准输出和标准错误使用（文件描述符1和2）。
@@ -1042,4 +1045,7 @@ static noinline void __init kernel_init_freeable(void)
 	 * we're essentially up and running. Get rid of the
 	 * initmem segments and start the user-mode stuff..
 	 */
+
+	/* rootfs is available now, try loading default modules */
+	load_default_modules();
 }

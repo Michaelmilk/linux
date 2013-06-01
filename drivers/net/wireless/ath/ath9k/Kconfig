@@ -17,7 +17,7 @@ config ATH9K_BTCOEX_SUPPORT
 
 config ATH9K
 	tristate "Atheros 802.11n wireless cards support"
-	depends on MAC80211
+	depends on MAC80211 && HAS_DMA
 	select ATH9K_HW
 	select MAC80211_LEDS
 	select LEDS_CLASS
@@ -58,6 +58,7 @@ config ATH9K_DEBUGFS
 	bool "Atheros ath9k debugging"
 	depends on ATH9K
 	select MAC80211_DEBUGFS
+	select RELAY
 	---help---
 	  Say Y, if you need access to ath9k's statistics for
 	  interrupts, rate control, etc.

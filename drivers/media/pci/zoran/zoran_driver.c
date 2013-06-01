@@ -1334,7 +1334,7 @@ static int zoran_v4l2_buffer_status(struct zoran_fh *fh,
 	struct zoran *zr = fh->zr;
 	unsigned long flags;
 
-	buf->flags = V4L2_BUF_FLAG_MAPPED;
+	buf->flags = V4L2_BUF_FLAG_MAPPED | V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 
 	switch (fh->map_mode) {
 	case ZORAN_MAP_MODE_RAW:
@@ -2435,14 +2435,14 @@ static int zoran_g_std(struct file *file, void *__fh, v4l2_std_id *std)
 	return 0;
 }
 
-static int zoran_s_std(struct file *file, void *__fh, v4l2_std_id *std)
+static int zoran_s_std(struct file *file, void *__fh, v4l2_std_id std)
 {
 	struct zoran_fh *fh = __fh;
 	struct zoran *zr = fh->zr;
 	int res = 0;
 
 	mutex_lock(&zr->resource_lock);
-	res = zoran_set_norm(zr, *std);
+	res = zoran_set_norm(zr, std);
 	if (res)
 		goto sstd_unlock_and_return;
 
