@@ -62,6 +62,11 @@
 
 __setup("ether=", netdev_boot_setup);
 
+/*
+skb->data指针前移
+在skb前部添加以太网头
+*/
+
 /**
  * eth_header - create the Ethernet header
  * @skb:	buffer to alter
@@ -239,6 +244,10 @@ __be16 eth_type_trans(struct sk_buff *skb, struct net_device *dev)
 }
 EXPORT_SYMBOL(eth_type_trans);
 
+/*
+获取源mac
+*/
+
 /**
  * eth_header_parse - extract hardware address from packet
  * @skb: packet to extract header from
@@ -251,6 +260,10 @@ int eth_header_parse(const struct sk_buff *skb, unsigned char *haddr)
 	return ETH_ALEN;
 }
 EXPORT_SYMBOL(eth_header_parse);
+
+/*
+将mac头缓存到@hh中
+*/
 
 /**
  * eth_header_cache - fill cache entry from neighbour
@@ -265,6 +278,7 @@ int eth_header_cache(const struct neighbour *neigh, struct hh_cache *hh, __be16 
 	struct ethhdr *eth;
 	const struct net_device *dev = neigh->dev;
 
+	/* 计算存储位置 */
 	eth = (struct ethhdr *)
 	    (((u8 *) hh->hh_data) + (HH_DATA_OFF(sizeof(*eth))));
 

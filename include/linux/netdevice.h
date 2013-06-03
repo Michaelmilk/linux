@@ -239,15 +239,21 @@ struct netdev_hw_addr_list {
 硬件头缓存元素包含输出包必须的第一跳硬件头
 */
 struct hh_cache {
-	/* MAC层的包头长度 */
+	/* MAC层的包头长度
+	   比如以太网头长度ETH_HLEN 14
+	*/
 	u16		hh_len;
 	u16		__pad;
 	seqlock_t	hh_lock;
 
 	/* cached hardware header; allow for machine alignment needs.        */
 #define HH_DATA_MOD	16
+/* 计算对齐偏移
+比如以太网头长度14，计算出从偏移2开始存储
+*/
 #define HH_DATA_OFF(__len) \
 	(HH_DATA_MOD - (((__len - 1) & (HH_DATA_MOD - 1)) + 1))
+/* 将长度@__len对齐到HH_DATA_MOD 16的倍数 */
 #define HH_DATA_ALIGN(__len) \
 	(((__len)+(HH_DATA_MOD-1))&~(HH_DATA_MOD - 1))
 	/* 用于存放硬件头 */
