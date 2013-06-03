@@ -1875,7 +1875,7 @@ static int __init inet_init(void)
 	ipfrag_init();
 
 	/* 将IPv4协议类型注册到ptype_base
-	   以便__netif_receive_skb()中可以处理IPv4报文 */
+	   以便__netif_receive_skb_core()中可以处理IPv4报文 */
 	dev_add_pack(&ip_packet_type);
 
 	rc = 0;

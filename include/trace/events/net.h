@@ -57,6 +57,7 @@ DECLARE_EVENT_CLASS(net_dev_template,
 	TP_printk("dev=%s skbaddr=%p len=%u",
 		__get_str(name), __entry->skbaddr, __entry->len)
 )
+;
 
 DEFINE_EVENT(net_dev_template, net_dev_queue,
 

@@ -568,7 +568,7 @@ struct sk_buff {
 
 	/* 接收数据包的时候，dev 和 skb_iif 都指向最初的 interface，
 	   此后，如果需要被 virtual driver 处理，那么 dev 会发生变化，而 iif 始终不变。
-	   参考函数__netif_receive_skb() */
+	   参考函数__netif_receive_skb_core() */
 	int			skb_iif;
 
 	__u32			rxhash;

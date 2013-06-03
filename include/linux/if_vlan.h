@@ -420,6 +420,9 @@ static inline __be16 vlan_get_protocol(const struct sk_buff *skb)
 	return protocol;
 }
 
+/*
+设置skb->protocol为vlan头后的协议类型
+*/
 static inline void vlan_set_encap_proto(struct sk_buff *skb,
 					struct vlan_hdr *vhdr)
 {

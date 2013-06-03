@@ -386,7 +386,7 @@ static inline struct list_head *ptype_head(const struct packet_type *pt)
 
 /*
 dev_add_pack()是链路层提供给网络层的协议注册接口
-L3协议使用该接口以使__netif_receive_skb()感知，进而选用正确的L3接收函数
+L3协议使用该接口以使__netif_receive_skb_core()感知，进而选用正确的L3接收函数
 
 dev_add_pack()是将一个网络层协议类型结构链入某一个链表， 
 当协议类型为ETH_P_ALL时，它将被链入ptype_all链表，
@@ -3535,6 +3535,7 @@ static int __netif_receive_skb_core(struct sk_buff *skb, bool pfmemalloc)
 
 	net_timestamp_check(!netdev_tstamp_prequeue, skb);
 
+	/* 在/include/trace/events/net.h中通过宏DEFINE_EVENT定义 */
 	trace_netif_receive_skb(skb);
 
 	/* if we've gotten here through NAPI, check netpoll */
