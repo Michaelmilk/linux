@@ -139,6 +139,9 @@ struct bus_type {
 
 	struct iommu_ops *iommu_ops;
 
+	/* 在bus_register的时候分配空间
+	   如pci总线初始化的时候pci_driver_init调用bus_register(&pci_bus_type)
+	*/
 	struct subsys_private *p;
 	struct lock_class_key lock_key;
 };
