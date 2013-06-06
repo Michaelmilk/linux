@@ -115,6 +115,12 @@ static inline void change_bit(int nr, volatile unsigned long *addr)
 	_atomic_spin_unlock_irqrestore(p, flags);
 }
 
+/*
+返回位图对应@nr位之前的置位情况
+1 - 之前已经置位
+0 - 之前没有置位
+*/
+
 /**
  * test_and_set_bit - Set a bit and return its old value
  * @nr: Bit to set
