@@ -36,6 +36,15 @@
 
 #define FCS_LEN 4
 
+/*
+B0 B1    | B2 B3 | B4 B7   | B8 | B9   | B10      | B11   | B12       | B13  | B14       | B15
+
+Protocol   Type    Subtype   To   From   More       Retry   Power       More   Protected   Order
+Version                      DS   DS     Fragments          Management  Data   Frame
+
+Bits: 2    2       4         1    1      1          1       1           1      1           1
+*/
+
 #define IEEE80211_FCTL_VERS		0x0003
 #define IEEE80211_FCTL_FTYPE		0x000c
 #define IEEE80211_FCTL_STYPE		0x00f0
