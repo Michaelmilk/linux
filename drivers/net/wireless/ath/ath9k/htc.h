@@ -17,6 +17,10 @@
 #ifndef HTC_H
 #define HTC_H
 
+/*
+HTC: Host Target Communications
+*/
+
 #include <linux/module.h>
 #include <linux/usb.h>
 #include <linux/firmware.h>
