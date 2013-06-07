@@ -696,7 +696,9 @@ struct ath_softc {
 	struct survey_info *cur_survey;
 	struct survey_info survey[ATH9K_NUM_CHANNELS];
 
+	/* ath9k_tasklet */
 	struct tasklet_struct intr_tq;
+	/* ath9k_beacon_tasklet */
 	struct tasklet_struct bcon_tasklet;
 	struct ath_hw *sc_ah;
 	void __iomem *mem;

@@ -345,6 +345,11 @@ static void ath_node_detach(struct ath_softc *sc, struct ieee80211_sta *sta)
 	ath_tx_node_cleanup(sc, an);
 }
 
+/*
+异常处理
+接收帧处理
+发送完成处理
+*/
 void ath9k_tasklet(unsigned long data)
 {
 	struct ath_softc *sc = (struct ath_softc *)data;

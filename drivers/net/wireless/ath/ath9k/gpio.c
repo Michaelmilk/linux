@@ -455,6 +455,11 @@ void ath9k_deinit_btcoex(struct ath_softc *sc)
 		ath_mci_cleanup(sc);
 }
 
+/*
+btcoex
+bluetooth coexist
+À¶ÑÀ¹²´æ
+*/
 int ath9k_init_btcoex(struct ath_softc *sc)
 {
 	struct ath_txq *txq;

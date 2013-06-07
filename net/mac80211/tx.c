@@ -1218,6 +1218,9 @@ static bool ieee80211_tx_frags(struct ieee80211_local *local,
 		control.sta = sta;
 
 		__skb_unlink(skb, skbs);
+		/* АэИз
+		   ath9k_ops => ath9k_tx
+		*/
 		drv_tx(local, &control, skb);
 	}
 
