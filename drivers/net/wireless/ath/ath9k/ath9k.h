@@ -230,6 +230,7 @@ struct ath_buf {
 					   an aggregate) */
 	struct ath_buf *bf_next;	/* next subframe in the aggregate */
 	struct sk_buff *bf_mpdu;	/* enclosing frame structure */
+	/* 指向结构体struct ath_desc */
 	void *bf_desc;			/* virtual addr of desc */
 	dma_addr_t bf_daddr;		/* physical addr of desc */
 	dma_addr_t bf_buf_addr;	/* physical addr of data buffer, for DMA */
@@ -312,6 +313,7 @@ struct ath_rx {
 	u32 *rxlink;
 	u32 num_pkts;
 	unsigned int rxfilter;
+	/* struct ath_buf链表 */
 	struct list_head rxbuf;
 	struct ath_descdma rxdma;
 	struct ath_rx_edma rx_edma[ATH9K_RX_QUEUE_MAX];
