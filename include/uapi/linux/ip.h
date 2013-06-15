@@ -82,6 +82,10 @@
 
 #define IPV4_BEET_PHMAXLEN 8
 
+/*
+ihl在低4个bit
+version在高4个bit
+*/
 struct iphdr {
 #if defined(__LITTLE_ENDIAN_BITFIELD)
 	__u8	ihl:4,

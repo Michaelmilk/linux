@@ -423,6 +423,12 @@ static inline void list_splice_tail_init(struct list_head *list,
 #define list_entry(ptr, type, member) \
 	container_of(ptr, type, member)
 
+/*
+返回链表的第一个节点
+@ptr	: 链表头节点，通常只是一个struct list_head结构的指针
+@type	: struct list_head所嵌入的结构体
+@member	: struct list_head在@type结构体中的名称
+*/
 /**
  * list_first_entry - get the first element from a list
  * @ptr:	the list head to take the element from.
