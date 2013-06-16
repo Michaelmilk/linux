@@ -181,13 +181,16 @@ static inline void dev_base_seq_inc(struct net *net)
 
 static inline struct hlist_head *dev_name_hash(struct net *net, const char *name)
 {
+	/* 根据接口名称计算hash值 */
 	unsigned int hash = full_name_hash(name, strnlen(name, IFNAMSIZ));
 
+	/* 取桶头节点 */
 	return &net->dev_name_head[hash_32(hash, NETDEV_HASHBITS)];
 }
 
 static inline struct hlist_head *dev_index_hash(struct net *net, int ifindex)
 {
+	/* 根据@ifindex取桶头节点 */
 	return &net->dev_index_head[ifindex & (NETDEV_HASHENTRIES - 1)];
 }
 
@@ -208,6 +211,7 @@ static inline void rps_unlock(struct softnet_data *sd)
 /* Device list insertion */
 static void list_netdevice(struct net_device *dev)
 {
+	/* 取@dev所在的命名空间 */
 	struct net *net = dev_net(dev);
 
 	ASSERT_RTNL();
@@ -215,7 +219,9 @@ static void list_netdevice(struct net_device *dev)
 	write_lock_bh(&dev_base_lock);
 	/* 新设备加入命名空间下的设备链表 */
 	list_add_tail_rcu(&dev->dev_list, &net->dev_base_head);
+	/* 根据名称链入哈希表 */
 	hlist_add_head_rcu(&dev->name_hlist, dev_name_hash(net, dev->name));
+	/* 根据索引链入哈希表 */
 	hlist_add_head_rcu(&dev->index_hlist,
 			   dev_index_hash(net, dev->ifindex));
 	write_unlock_bh(&dev_base_lock);
@@ -6296,6 +6302,7 @@ EXPORT_SYMBOL(netdev_increment_features);
 
 /*
 创建哈希表
+分配哈希表桶头节点空间
 */
 static struct hlist_head *netdev_create_hash(void)
 {

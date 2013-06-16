@@ -34,7 +34,9 @@ struct sock;
 struct netns_ipvs;
 
 
+/* 网络接口哈希表占用的bit位数 */
 #define NETDEV_HASHBITS    8
+/* 哈希表桶头节点个数，128个 */
 #define NETDEV_HASHENTRIES (1 << NETDEV_HASHBITS)
 
 struct net {
