@@ -252,6 +252,7 @@ static void unlist_netdevice(struct net_device *dev)
 
 /*
 原始通知链头节点netdev_chain
+struct raw_notifier_head netdev_chain = RAW_NOTIFIER_INIT(netdev_chain);
 */
 static RAW_NOTIFIER_HEAD(netdev_chain);
 
@@ -921,13 +922,17 @@ EXPORT_SYMBOL(dev_get_by_flags_rcu);
  */
 bool dev_valid_name(const char *name)
 {
+	/* 不可以是空名称 */
 	if (*name == '\0')
 		return false;
+	/* 缓冲区只有16个字节，名称不能超过15个字符 */
 	if (strlen(name) >= IFNAMSIZ)
 		return false;
+	/* 名称不能以"."或".."开头 */
 	if (!strcmp(name, ".") || !strcmp(name, ".."))
 		return false;
 
+	/* 名称中不能含有'/'或空格 */
 	while (*name) {
 		if (*name == '/' || isspace(*name))
 			return false;
