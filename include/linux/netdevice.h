@@ -1606,6 +1606,7 @@ struct packet_type {
 	bool			(*id_match)(struct packet_type *ptype,
 					    struct sock *sk);
 	void			*af_packet_priv;
+	/* 加入链表ptype_base或ptype_all */
 	struct list_head	list;
 };
 
