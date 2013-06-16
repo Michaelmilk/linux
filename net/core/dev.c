@@ -424,13 +424,16 @@ EXPORT_SYMBOL(dev_add_pack);
  */
 void __dev_remove_pack(struct packet_type *pt)
 {
+	/* 取头节点 */
 	struct list_head *head = ptype_head(pt);
 	struct packet_type *pt1;
 
 	spin_lock(&ptype_lock);
 
+	/* 遍历链表 */
 	list_for_each_entry(pt1, head, list) {
 		if (pt == pt1) {
+			/* 将@pt从链表中移除 */
 			list_del_rcu(&pt->list);
 			goto out;
 		}
