@@ -55,6 +55,10 @@ static __always_inline u64 hash_64(u64 val, unsigned int bits)
 	return hash >> (64 - bits);
 }
 
+/*
+计算32位的hash值
+@bits	: 返回值中的有效位个数
+*/
 static inline u32 hash_32(u32 val, unsigned int bits)
 {
 	/* On some cpus multiply is faster, on others gcc will do shifts */
@@ -73,6 +77,9 @@ static inline u32 hash32_ptr(const void *ptr)
 {
 	unsigned long val = (unsigned long)ptr;
 
+/* 在64位机上，指针占64个bit位
+将val值折叠为32位
+*/
 #if BITS_PER_LONG == 64
 	val ^= (val >> 32);
 #endif
