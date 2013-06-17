@@ -334,6 +334,9 @@ static inline int get_xps_queue(struct net_device *dev, struct sk_buff *skb)
 #endif
 }
 
+/*
+计算发送队列索引
+*/
 u16 __netdev_pick_tx(struct net_device *dev, struct sk_buff *skb)
 {
 	struct sock *sk = skb->sk;
@@ -361,21 +364,34 @@ u16 __netdev_pick_tx(struct net_device *dev, struct sk_buff *skb)
 }
 EXPORT_SYMBOL(__netdev_pick_tx);
 
+/*
+取@dev接口上该@skb的发送队列
+*/
 struct netdev_queue *netdev_pick_tx(struct net_device *dev,
 				    struct sk_buff *skb)
 {
 	int queue_index = 0;
 
+	/* 该接口有多个发送队列 */
 	if (dev->real_num_tx_queues != 1) {
+		/* 取接口的操作函数集指针 */
 		const struct net_device_ops *ops = dev->netdev_ops;
+		/* 如果有队列选择函数 */
 		if (ops->ndo_select_queue)
+			/* 则调用，选择发送队列
+			   如tile的驱动使用函数tile_net_select_queue
+			*/
 			queue_index = ops->ndo_select_queue(dev, skb);
 		else
+			/* 没有函数则通过哈希计算选择 */
 			queue_index = __netdev_pick_tx(dev, skb);
+		/* 队列索引有效性检查 */
 		queue_index = dev_cap_txqueue(dev, queue_index);
 	}
 
+	/* 在@skb->queue_mapping记录队列索引 */
 	skb_set_queue_mapping(skb, queue_index);
+	/* 返回发送队列 */
 	return netdev_get_tx_queue(dev, queue_index);
 }
 

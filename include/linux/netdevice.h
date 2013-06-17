@@ -926,8 +926,8 @@ struct net_device_ops {
 	void			(*ndo_uninit)(struct net_device *dev);
 	int			(*ndo_open)(struct net_device *dev);
 	int			(*ndo_stop)(struct net_device *dev);
-    /* 如果发送成功，ndo_start_xmit方法里回收sk_buff，返回NETDEV_TX_OK
-       如果设备暂时无法处理，比如硬件忙，则返回NETDEV_TX_BUSY
+	/* 如果发送成功，ndo_start_xmit方法里回收sk_buff，返回NETDEV_TX_OK
+	   如果设备暂时无法处理，比如硬件忙，则返回NETDEV_TX_BUSY
 	   例如igb驱动的发送函数igb_xmit_frame_adv() */
 	netdev_tx_t		(*ndo_start_xmit) (struct sk_buff *skb,
 						   struct net_device *dev);
