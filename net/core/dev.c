@@ -1476,6 +1476,7 @@ int register_netdevice_notifier(struct notifier_block *nb)
 	err = raw_notifier_chain_register(&netdev_chain, nb);
 	if (err)
 		goto unlock;
+	/* 如果还在启动阶段，则还没有接口，无需调用通知链节点的回调函数 */
 	if (dev_boot_phase)
 		goto unlock;
 	/* 遍历现有的net命名空间 */
