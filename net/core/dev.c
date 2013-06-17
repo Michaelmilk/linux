@@ -2176,15 +2176,21 @@ EXPORT_SYMBOL(__netif_schedule);
 */
 void dev_kfree_skb_irq(struct sk_buff *skb)
 {
+	/* 引用计数原子减1，如果计数减到0了，则释放 */
 	if (atomic_dec_and_test(&skb->users)) {
 		struct softnet_data *sd;
 		unsigned long flags;
 
+		/* 关中断 */
 		local_irq_save(flags);
+		/* 取本cpu的网络数据结构 */
 		sd = &__get_cpu_var(softnet_data);
+		/* 将该@skb链入完成队列 */
 		skb->next = sd->completion_queue;
 		sd->completion_queue = skb;
+		/* 触发软中断 */
 		raise_softirq_irqoff(NET_TX_SOFTIRQ);
+		/* 开中断 */
 		local_irq_restore(flags);
 	}
 }
