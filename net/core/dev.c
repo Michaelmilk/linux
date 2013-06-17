@@ -2696,6 +2696,7 @@ static void qdisc_pkt_len_init(struct sk_buff *skb)
 {
 	const struct skb_shared_info *shinfo = skb_shinfo(skb);
 
+	/* 在cb[]中记录长度 */
 	qdisc_skb_cb(skb)->pkt_len = skb->len;
 
 	/* To get more precise estimation of bytes sent on wire,
@@ -2738,14 +2739,20 @@ static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
 	 * This permits __QDISC_STATE_RUNNING owner to get the lock more often
 	 * and dequeue packets faster.
 	 */
+	/* heuristic: 启发式
+	   contend: 竞争
+	*/
 	contended = qdisc_is_running(q);
 	if (unlikely(contended))
 		spin_lock(&q->busylock);
 
 	spin_lock(root_lock);
+	/* 队列规则无效 */
 	if (unlikely(test_bit(__QDISC_STATE_DEACTIVATED, &q->state))) {
+		/* 释放@skb */
 		kfree_skb(skb);
 		rc = NET_XMIT_DROP;
+	/* 可绕过队列规则 */
 	} else if ((q->flags & TCQ_F_CAN_BYPASS) && !qdisc_qlen(q) &&
 		   qdisc_run_begin(q)) {
 		/*
@@ -2769,6 +2776,9 @@ static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
 
 		rc = NET_XMIT_SUCCESS;
 	} else {
+	/* 调用入队函数
+	   如pfifo_enqueue htb_enqueue cbq_enqueue tbf_enqueue
+	*/
 		skb_dst_force(skb);
 		rc = q->enqueue(skb, q) & NET_XMIT_MASK;
 		if (qdisc_run_begin(q)) {
@@ -2890,13 +2900,16 @@ int dev_queue_xmit(struct sk_buff *skb)
 
 	skb_update_prio(skb);
 
+	/* 取接口发送队列 */
 	txq = netdev_pick_tx(dev, skb);
+	/* 取队列规则 */
 	q = rcu_dereference_bh(txq->qdisc);
 
 #ifdef CONFIG_NET_CLS_ACT
 	skb->tc_verd = SET_TC_AT(skb->tc_verd, AT_EGRESS);
 #endif
 	trace_net_dev_queue(skb);
+	/* 该队列规则有入队函数 */
 	if (q->enqueue) {
 		rc = __dev_xmit_skb(skb, q, dev, txq);
 		goto out;

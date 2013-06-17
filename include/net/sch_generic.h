@@ -43,6 +43,9 @@ struct qdisc_size_table {
 };
 
 struct Qdisc {
+	/* 入队函数
+	   如pfifo_enqueue htb_enqueue cbq_enqueue tbf_enqueue
+	*/
 	int 			(*enqueue)(struct sk_buff *skb, struct Qdisc *dev);
 	struct sk_buff *	(*dequeue)(struct Qdisc *dev);
 	unsigned int		flags;

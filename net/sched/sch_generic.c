@@ -119,10 +119,13 @@ int sch_direct_xmit(struct sk_buff *skb, struct Qdisc *q,
 	/* And release qdisc */
 	spin_unlock(root_lock);
 
+	/* 锁定发送队列 */
 	HARD_TX_LOCK(dev, txq, smp_processor_id());
 	if (!netif_xmit_frozen_or_stopped(txq))
+		/* 发送数据 */
 		ret = dev_hard_start_xmit(skb, dev, txq);
 
+	/* 发送队列解锁 */
 	HARD_TX_UNLOCK(dev, txq);
 
 	spin_lock(root_lock);
@@ -181,6 +184,7 @@ static inline int qdisc_restart(struct Qdisc *q)
 	WARN_ON_ONCE(skb_dst_is_noref(skb));
 	root_lock = qdisc_lock(q);
 	dev = qdisc_dev(q);
+	/* 取发送队列 */
 	txq = netdev_get_tx_queue(dev, skb_get_queue_mapping(skb));
 
 	return sch_direct_xmit(skb, q, dev, txq, root_lock);

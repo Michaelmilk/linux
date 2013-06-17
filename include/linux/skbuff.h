@@ -156,7 +156,9 @@ struct sk_buff_head {
 	struct sk_buff	*next;
 	struct sk_buff	*prev;
 
+	/* 链表长度，skb的个数 */
 	__u32		qlen;
+	/* 该链表互斥锁 */
 	spinlock_t	lock;
 };
 
