@@ -2570,9 +2570,12 @@ EXPORT_SYMBOL(netif_skb_features);
 static inline int skb_needs_linearize(struct sk_buff *skb,
 				      netdev_features_t features)
 {
+	/* skb是非线性化的 */
 	return skb_is_nonlinear(skb) &&
+			/* 有分片链表却不支持分片 */
 			((skb_has_frag_list(skb) &&
 				!(features & NETIF_F_FRAGLIST)) ||
+			/* 或有页数据却不支持分散聚合 */
 			(skb_shinfo(skb)->nr_frags &&
 				!(features & NETIF_F_SG)));
 }
