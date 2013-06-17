@@ -2196,6 +2196,10 @@ void dev_kfree_skb_irq(struct sk_buff *skb)
 }
 EXPORT_SYMBOL(dev_kfree_skb_irq);
 
+/*
+释放@skb
+在硬中断上下文或非硬中断上下文都可调用
+*/
 void dev_kfree_skb_any(struct sk_buff *skb)
 {
 	if (in_irq() || irqs_disabled())
