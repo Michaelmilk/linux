@@ -2143,6 +2143,10 @@ int netif_get_num_default_rss_queues(void)
 }
 EXPORT_SYMBOL(netif_get_num_default_rss_queues);
 
+/*
+将@q链入next_sched队列
+并触发NET_TX_SOFTIRQ软中断
+*/
 static inline void __netif_reschedule(struct Qdisc *q)
 {
 	struct softnet_data *sd;
@@ -2150,16 +2154,22 @@ static inline void __netif_reschedule(struct Qdisc *q)
 
 	local_irq_save(flags);
 	sd = &__get_cpu_var(softnet_data);
+	/* 将该@q节点的next_sched置为NULL */
 	q->next_sched = NULL;
+	/* 将@q链入next_sched */
 	*sd->output_queue_tailp = q;
+	/* 二级指针记录next_sched字段，以便操作链入新的节点 */
 	sd->output_queue_tailp = &q->next_sched;
+	/* 触发软中断 */
 	raise_softirq_irqoff(NET_TX_SOFTIRQ);
 	local_irq_restore(flags);
 }
 
 void __netif_schedule(struct Qdisc *q)
 {
+	/* 如未置位 */
 	if (!test_and_set_bit(__QDISC_STATE_SCHED, &q->state))
+		/* 加入链表，触发软中断 */
 		__netif_reschedule(q);
 }
 EXPORT_SYMBOL(__netif_schedule);
@@ -2587,6 +2597,7 @@ int dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev,
 	int rc = NETDEV_TX_OK;
 	unsigned int skb_len;
 
+	/* 该@skb为链表中最后一个节点 */
 	if (likely(!skb->next)) {
 		netdev_features_t features;
 
@@ -2599,8 +2610,11 @@ int dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev,
 
 		features = netif_skb_features(skb);
 
+		/* 该@skb带vlan */
 		if (vlan_tx_tag_present(skb) &&
+			/* 硬件不支持为报文添加vlan头 */
 		    !vlan_hw_offload_capable(features, skb->vlan_proto)) {
+		    	/* 则为报文添加vlan头 */
 			skb = __vlan_put_tag(skb, skb->vlan_proto,
 					     vlan_tx_tag_get(skb));
 			if (unlikely(!skb))
@@ -2622,7 +2636,9 @@ int dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev,
 			if (skb->next)
 				goto gso;
 		} else {
+			/* 需要线性化 */
 			if (skb_needs_linearize(skb, features) &&
+				/* 则将该@skb线性化 */
 			    __skb_linearize(skb))
 				goto out_kfree_skb;
 
@@ -2647,7 +2663,9 @@ int dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev,
 			dev_queue_xmit_nit(skb, dev);
 
 		skb_len = skb->len;
-		/* 调用驱动程序的ndo_start_xmit完成最后的发送工作 */
+		/* 调用驱动程序的ndo_start_xmit完成最后的发送工作
+		   如e1000_xmit_frame
+		*/
 		rc = ops->ndo_start_xmit(skb, dev);
 		trace_net_dev_xmit(skb, rc, dev, skb_len);
 		if (rc == NETDEV_TX_OK)
@@ -2656,6 +2674,7 @@ int dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev,
 	}
 
 gso:
+	/* 循环发送 */
 	do {
 		struct sk_buff *nskb = skb->next;
 
@@ -2780,6 +2799,7 @@ static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
 	   如pfifo_enqueue htb_enqueue cbq_enqueue tbf_enqueue
 	*/
 		skb_dst_force(skb);
+		/* @skb入队 */
 		rc = q->enqueue(skb, q) & NET_XMIT_MASK;
 		if (qdisc_run_begin(q)) {
 			if (unlikely(contended)) {

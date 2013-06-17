@@ -29,9 +29,12 @@ static int bfifo_enqueue(struct sk_buff *skb, struct Qdisc *sch)
 
 static int pfifo_enqueue(struct sk_buff *skb, struct Qdisc *sch)
 {
+	/* 未达到队列规则的上限 */
 	if (likely(skb_queue_len(&sch->q) < sch->limit))
+		/* 则@skb入队 */
 		return qdisc_enqueue_tail(skb, sch);
 
+	/* 否则丢弃该@skb */
 	return qdisc_reshape_fail(skb, sch);
 }
 

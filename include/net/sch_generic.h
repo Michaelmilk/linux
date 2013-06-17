@@ -102,14 +102,17 @@ static inline bool qdisc_is_running(const struct Qdisc *qdisc)
 
 static inline bool qdisc_run_begin(struct Qdisc *qdisc)
 {
+	/* 已经有运行标记 */
 	if (qdisc_is_running(qdisc))
 		return false;
+	/* 置运行标记位 */
 	qdisc->__state |= __QDISC___STATE_RUNNING;
 	return true;
 }
 
 static inline void qdisc_run_end(struct Qdisc *qdisc)
 {
+	/* 去掉运行标记位 */
 	qdisc->__state &= ~__QDISC___STATE_RUNNING;
 }
 
@@ -498,6 +501,9 @@ static inline int __qdisc_enqueue_tail(struct sk_buff *skb, struct Qdisc *sch,
 	return NET_XMIT_SUCCESS;
 }
 
+/*
+把@skb链入队列规则@sch的skb链表
+*/
 static inline int qdisc_enqueue_tail(struct sk_buff *skb, struct Qdisc *sch)
 {
 	return __qdisc_enqueue_tail(skb, sch, &sch->q);
@@ -516,6 +522,9 @@ static inline struct sk_buff *__qdisc_dequeue_head(struct Qdisc *sch,
 	return skb;
 }
 
+/*
+从队列规则@sch的链表最前面取出一个skb
+*/
 static inline struct sk_buff *qdisc_dequeue_head(struct Qdisc *sch)
 {
 	return __qdisc_dequeue_head(sch, &sch->q);

@@ -110,6 +110,9 @@ static inline int handle_dev_cpu_collision(struct sk_buff *skb,
  *				0  - queue is empty or throttled.
  *				>0 - queue is not empty.
  */
+/*
+队列规则直接发送
+*/
 int sch_direct_xmit(struct sk_buff *skb, struct Qdisc *q,
 		    struct net_device *dev, struct netdev_queue *txq,
 		    spinlock_t *root_lock)
@@ -170,6 +173,11 @@ int sch_direct_xmit(struct sk_buff *skb, struct Qdisc *q,
  *				>0 - queue is not empty.
  *
  */
+/*
+返回值
+0  - 队列空或窒息
+>0 - 队列非空
+*/
 static inline int qdisc_restart(struct Qdisc *q)
 {
 	struct netdev_queue *txq;
@@ -200,6 +208,9 @@ void __qdisc_run(struct Qdisc *q)
 		 * 1. we've exceeded packet quota
 		 * 2. another process needs the CPU;
 		 */
+		/* 配额用完
+		   或需要进行调度
+		*/
 		if (--quota <= 0 || need_resched()) {
 			__netif_schedule(q);
 			break;

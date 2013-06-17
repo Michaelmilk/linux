@@ -1154,7 +1154,9 @@ static inline struct sk_buff *skb_peek(const struct sk_buff_head *list_)
 {
 	struct sk_buff *skb = list_->next;
 
+	/* 如果skb为头节点本身 */
 	if (skb == (struct sk_buff *)list_)
+		/* 则链表中无数据，返回skb置为NULL */
 		skb = NULL;
 	return skb;
 }
@@ -1256,6 +1258,9 @@ static inline void skb_queue_head_init_class(struct sk_buff_head *list,
  *	can only be called with interrupts disabled.
  */
 extern void        skb_insert(struct sk_buff *old, struct sk_buff *newsk, struct sk_buff_head *list);
+/*
+将@newsk链入@prev和@next之间
+*/
 static inline void __skb_insert(struct sk_buff *newsk,
 				struct sk_buff *prev, struct sk_buff *next,
 				struct sk_buff_head *list)
@@ -1409,9 +1414,13 @@ static inline void __skb_queue_head(struct sk_buff_head *list,
  *	A buffer cannot be placed on two lists at the same time.
  */
 extern void skb_queue_tail(struct sk_buff_head *list, struct sk_buff *newsk);
+/*
+将@newsk链入@list的最后
+*/
 static inline void __skb_queue_tail(struct sk_buff_head *list,
 				   struct sk_buff *newsk)
 {
+	/* 链入头节点的前面，即成为链表的尾部 */
 	__skb_queue_before(list, (struct sk_buff *)list, newsk);
 }
 
@@ -1442,6 +1451,10 @@ static inline void __skb_unlink(struct sk_buff *skb, struct sk_buff_head *list)
  *	returned or %NULL if the list is empty.
  */
 extern struct sk_buff *skb_dequeue(struct sk_buff_head *list);
+/*
+从链表@list最前面取出一个skb
+没有skb的话则返回NULL
+*/
 static inline struct sk_buff *__skb_dequeue(struct sk_buff_head *list)
 {
 	struct sk_buff *skb = skb_peek(list);
