@@ -1572,6 +1572,12 @@ unlock:
 }
 EXPORT_SYMBOL(unregister_netdevice_notifier);
 
+/*
+调用注册到netdev_chain链中节点的回调函数
+@val	: NETDEV_UP等值
+@dev	: 网络接口
+*/
+
 /**
  *	call_netdevice_notifiers - call all network notifier blocks
  *      @val: value passed unmodified to notifier function
