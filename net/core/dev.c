@@ -1547,16 +1547,22 @@ int unregister_netdevice_notifier(struct notifier_block *nb)
 	int err;
 
 	rtnl_lock();
+	/* 将@nb从netdev_chain链表中移除 */
 	err = raw_notifier_chain_unregister(&netdev_chain, nb);
 	if (err)
 		goto unlock;
 
+	/* 遍历现有的网络命名空间 */
 	for_each_net(net) {
+		/* 遍历命名空间下的接口 */
 		for_each_netdev(net, dev) {
+			/* 如果接口处于IFF_UP状态 */
 			if (dev->flags & IFF_UP) {
+				/* 则调用回调函数，让该通知链的回调函数执行DOWN状态处理 */
 				nb->notifier_call(nb, NETDEV_GOING_DOWN, dev);
 				nb->notifier_call(nb, NETDEV_DOWN, dev);
 			}
+			/* 让接口从通知链中解注册 */
 			nb->notifier_call(nb, NETDEV_UNREGISTER, dev);
 		}
 	}
