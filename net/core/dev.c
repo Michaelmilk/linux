@@ -2840,6 +2840,13 @@ int dev_loopback_xmit(struct sk_buff *skb)
 }
 EXPORT_SYMBOL(dev_loopback_xmit);
 
+/*
+发送一个skb
+
+失败的时候返回一个负的错误码
+也可能返回一个正值，如NET_XMIT_DROP
+*/
+
 /**
  *	dev_queue_xmit - transmit a buffer
  *	@skb: buffer to transmit
@@ -2867,11 +2874,13 @@ EXPORT_SYMBOL(dev_loopback_xmit);
  */
 int dev_queue_xmit(struct sk_buff *skb)
 {
+	/* 取发送接口 */
 	struct net_device *dev = skb->dev;
 	struct netdev_queue *txq;
 	struct Qdisc *q;
 	int rc = -ENOMEM;
 
+	/* 设置mac_header字段 */
 	skb_reset_mac_header(skb);
 
 	/* Disable soft irqs for various locks below. Also
