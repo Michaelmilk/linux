@@ -1864,7 +1864,10 @@ poll_list则是有数据包等待处理的napi_struct结构队列。
 struct softnet_data {
 	/* 网络设备发送队列的队列头，用于发送数据 */
 	struct Qdisc		*output_queue;
-	/* 使用二级指针操作队列规则的next_sched字段组成链表 */
+	/* 使用二级指针操作队列规则的next_sched字段组成链表
+	   net_dev_init中初始化为output_queue
+	   __netif_reschedule中操作next_sched字段
+	*/
 	struct Qdisc		**output_queue_tailp;
 	/* POLL napi_struct队列头
 	   napi_struct的队列。其中的设备接收到了报文，需要被处理

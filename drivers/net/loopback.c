@@ -203,11 +203,14 @@ static __net_init int loopback_net_init(struct net *net)
 	int err;
 
 	err = -ENOMEM;
+	/* 创建回环接口 */
 	dev = alloc_netdev(0, "lo", loopback_setup);
 	if (!dev)
 		goto out;
 
+	/* 设置命名空间 */
 	dev_net_set(dev, net);
+	/* 向内核注册接口 */
 	err = register_netdev(dev);
 	if (err)
 		goto out_free_netdev;

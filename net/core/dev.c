@@ -6669,6 +6669,7 @@ static int __init net_dev_init(void)
 	 * is the first device that appears and the last network device
 	 * that disappears.
 	 */
+	/* 为各个网络命名空间建立lo接口 */
 	if (register_pernet_device(&loopback_net_ops))
 		goto out;
 
