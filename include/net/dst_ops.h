@@ -34,6 +34,7 @@ struct dst_ops {
 						struct sk_buff *skb,
 						const void *daddr);
 
+	/* »º´æ½á¹¹Îªstruct rtable */
 	struct kmem_cache	*kmem_cachep;
 
 	struct percpu_counter	pcpuc_entries ____cacheline_aligned_in_smp;
