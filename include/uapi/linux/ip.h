@@ -21,9 +21,13 @@
 
 #define IPTOS_TOS_MASK		0x1E
 #define IPTOS_TOS(tos)		((tos)&IPTOS_TOS_MASK)
+/* 最小时延 */
 #define	IPTOS_LOWDELAY		0x10
+/* 最大吞吐量 */
 #define	IPTOS_THROUGHPUT	0x08
+/* 最高可靠性 */
 #define	IPTOS_RELIABILITY	0x04
+/* 最少开销 */
 #define	IPTOS_MINCOST		0x02
 
 #define IPTOS_PREC_MASK		0xE0
@@ -87,6 +91,10 @@ ihl在低4个bit
 version在高4个bit
 */
 struct iphdr {
+	/* 首部长度，4字节单位
+	   如值为5，则ip头长度为5*4=20字节
+	   最大为15，即ip头最长60字节
+	*/
 #if defined(__LITTLE_ENDIAN_BITFIELD)
 	__u8	ihl:4,
 		version:4;
@@ -96,12 +104,27 @@ struct iphdr {
 #else
 #error	"Please fix <asm/byteorder.h>"
 #endif
+	/* 服务类型，如IPTOS_LOWDELAY
+	   4个bit中只能有一个置位，全0为一般服务
+	*/
 	__u8	tos;
+	/* 总长度字段，包含该头部和ip负载，以字节为单位
+	   最大值65535字节
+	*/
 	__be16	tot_len;
+	/* 唯一标识一个ip报文 */
 	__be16	id;
+	/* 分片偏移，均为8字节的倍数
+	   除最后一个分片外，其他分片的长度都是8的倍数
+	*/
 	__be16	frag_off;
+	/* time to live */
 	__u8	ttl;
+	/* 传输层协议
+	   如IPPROTO_TCP IPPROTO_UDP
+	*/
 	__u8	protocol;
+	/* ip首部校验和 */
 	__sum16	check;
 	__be32	saddr;
 	__be32	daddr;

@@ -84,6 +84,7 @@ int sysctl_ip_default_ttl __read_mostly = IPDEFTTL;
 EXPORT_SYMBOL(sysctl_ip_default_ttl);
 
 /* Generate a checksum for an outgoing IP datagram. */
+/* 计算ip头中的校验和 */
 void ip_send_check(struct iphdr *iph)
 {
 	iph->check = 0;
@@ -465,7 +466,7 @@ static void ip_copy_metadata(struct sk_buff *to, struct sk_buff *from)
 /*
 @skb长度比设备的mtu大，则进行分片发送
 
-@putput : br_dev_queue_push_xmit() ip_finish_output2()
+@output : br_dev_queue_push_xmit() ip_finish_output2()
 */
 int ip_fragment(struct sk_buff *skb, int (*output)(struct sk_buff *))
 {
@@ -487,12 +488,16 @@ int ip_fragment(struct sk_buff *skb, int (*output)(struct sk_buff *))
 
 	iph = ip_hdr(skb);
 
+	/* 已经是分片报文，但是不可以再次分片 */
 	if (unlikely(((iph->frag_off & htons(IP_DF)) && !skb->local_df) ||
+		/* 或分片的最大长度超过了mtu */
 		     (IPCB(skb)->frag_max_size &&
 		      IPCB(skb)->frag_max_size > dst_mtu(&rt->dst)))) {
+		      /* 分片失败统计 */
 		IP_INC_STATS(dev_net(dev), IPSTATS_MIB_FRAGFAILS);
 		icmp_send(skb, ICMP_DEST_UNREACH, ICMP_FRAG_NEEDED,
 			  htonl(ip_skb_dst_mtu(skb)));
+		/* 释放@skb */
 		kfree_skb(skb);
 		return -EMSGSIZE;
 	}
