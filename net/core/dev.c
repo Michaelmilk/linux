@@ -3026,6 +3026,9 @@ static inline void ____napi_schedule(struct softnet_data *sd,
 	__raise_softirq_irqoff(NET_RX_SOFTIRQ);
 }
 
+/*
+rps: receive packet steering 接收报文转向
+*/
 #ifdef CONFIG_RPS
 
 /* One global table that all flow-based protocols share. */

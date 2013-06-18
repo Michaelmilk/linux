@@ -304,11 +304,14 @@ static int __net_init dev_proc_net_init(struct net *net)
 {
 	int rc = -ENOMEM;
 
+	/* /proc/net/dev文件 */
 	if (!proc_create("dev", S_IRUGO, net->proc_net, &dev_seq_fops))
 		goto out;
+	/* /proc/net/softnet_stat文件 */
 	if (!proc_create("softnet_stat", S_IRUGO, net->proc_net,
 			 &softnet_seq_fops))
 		goto out_dev;
+	/* /proc/net/ptype文件 */
 	if (!proc_create("ptype", S_IRUGO, net->proc_net, &ptype_seq_fops))
 		goto out_softnet;
 
@@ -387,6 +390,7 @@ static const struct file_operations dev_mc_seq_fops = {
 
 static int __net_init dev_mc_net_init(struct net *net)
 {
+	/* /proc/net/dev_mcast文件 */
 	if (!proc_create("dev_mcast", 0, net->proc_net, &dev_mc_seq_fops))
 		return -ENOMEM;
 	return 0;
@@ -402,8 +406,14 @@ static struct pernet_operations __net_initdata dev_mc_net_ops = {
 	.exit = dev_mc_net_exit,
 };
 
+/*
+在各个网络命名下建立proc文件
+*/
 int __init dev_proc_init(void)
 {
+	/* 在网络命名空间中注册dev_proc_ops
+	   在每个命名空间下调用dev_proc_net_init
+	*/
 	int ret = register_pernet_subsys(&dev_proc_ops);
 	if (!ret)
 		return register_pernet_subsys(&dev_mc_net_ops);
