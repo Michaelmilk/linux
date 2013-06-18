@@ -235,23 +235,35 @@ struct ucred {
    Added those for 1003.1g not all are supported yet
  */
  
+/* 接收或发送带外数据 */
 #define MSG_OOB		1
 /* 指示接收数据后，在接收队列中保留原数据，不将其删除，随后的读操作还可以接收到相同的数据 */
 #define MSG_PEEK	2
+/* 无须路由查找，目的地址位于本地子网 */
 #define MSG_DONTROUTE	4
+/* synonym: 同义词 */
 #define MSG_TRYHARD     4       /* Synonym for MSG_DONTROUTE for DECnet */
+/* 指明由于缓冲区空间不足，一些控制数据已被抛弃 */
 #define MSG_CTRUNC	8
+/* 使用这个标识，实际上并不会进行真正的数据传递，而是进行路径MTU的探测 */
 #define MSG_PROBE	0x10	/* Do not send. Only probe path f.e. for MTU */
+/* 只返回包的真实长度，并截断返回长度的数据 */
 #define MSG_TRUNC	0x20
+/* 非阻塞接收或发送，如果接收缓冲区中有数据，则接收数据并返回，没有数据也返回，而不进行等待 */
 #define MSG_DONTWAIT	0x40	/* Nonblocking io		 */
 #define MSG_EOR         0x80	/* End of record */
+/* 必须一直等待，直到接收到的数据填满用户空间的缓冲区 */
 #define MSG_WAITALL	0x100	/* Wait for a full request */
 #define MSG_FIN         0x200
 #define MSG_SYN		0x400
+/* 标识网关有效，只用于SOCK_DGRAM和SOCK_RAW类型的套接口 */
 #define MSG_CONFIRM	0x800	/* Confirm path validity */
 #define MSG_RST		0x1000
+/* 指示除了来自套接字错误队列的错误外，不接收其他数据 */
 #define MSG_ERRQUEUE	0x2000	/* Fetch message from error queue */
+/* 当另一端终止连接时，请求在基于流的错误套接字上不要发生SIGPIPE信号 */
 #define MSG_NOSIGNAL	0x4000	/* Do not generate SIGPIPE */
+/* 后续还有数据待发送 */
 #define MSG_MORE	0x8000	/* Sender will send more */
 #define MSG_WAITFORONE	0x10000	/* recvmmsg(): block until 1+ packets avail */
 #define MSG_SENDPAGE_NOTLAST 0x20000 /* sendpage() internal : not the last page */
