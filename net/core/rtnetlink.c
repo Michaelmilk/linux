@@ -108,6 +108,7 @@ static struct rtnl_link *rtnl_msg_handlers[RTNL_FAMILY_MAX + 1];
 
 static inline int rtm_msgindex(int msgtype)
 {
+	/* 转换为数组下标 */
 	int msgindex = msgtype - RTM_BASE;
 
 	/*
@@ -193,8 +194,10 @@ int __rtnl_register(int protocol, int msgtype,
 	BUG_ON(protocol < 0 || protocol > RTNL_FAMILY_MAX);
 	msgindex = rtm_msgindex(msgtype);
 
+	/* 协议@protocol对应的操作函数数组头 */
 	tab = rtnl_msg_handlers[protocol];
 	if (tab == NULL) {
+		/* 分配函数指针数组的空间 */
 		tab = kcalloc(RTM_NR_MSGTYPES, sizeof(*tab), GFP_KERNEL);
 		if (tab == NULL)
 			return -ENOBUFS;
@@ -202,6 +205,7 @@ int __rtnl_register(int protocol, int msgtype,
 		rtnl_msg_handlers[protocol] = tab;
 	}
 
+	/* 在对应的数组下标中记录@msgtype的操作函数 */
 	if (doit)
 		tab[msgindex].doit = doit;
 
