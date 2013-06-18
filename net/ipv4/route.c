@@ -1616,19 +1616,25 @@ static int ip_route_input_slow(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 	   by fib_lookup.
 	 */
 
+	/* 源ip地址是组播地址或255.255.255.255 */
 	if (ipv4_is_multicast(saddr) || ipv4_is_lbcast(saddr))
 		goto martian_source;
 
 	res.fi = NULL;
+	/* 目的ip地址是255.255.255.255
+	   或源ip和目的ip均为0.0.0.0
+	*/
 	if (ipv4_is_lbcast(daddr) || (saddr == 0 && daddr == 0))
 		goto brd_input;
 
 	/* Accept zero addresses only to limited broadcast;
 	 * I even do not know to fix it or not. Waiting for complains :-)
 	 */
+	/* 源ip地址是0.x.x.x */
 	if (ipv4_is_zeronet(saddr))
 		goto martian_source;
 
+	/* 目的ip地址是0.x.x.x */
 	if (ipv4_is_zeronet(daddr))
 		goto martian_destination;
 
@@ -1642,6 +1648,8 @@ static int ip_route_input_slow(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 		if (!IN_DEV_NET_ROUTE_LOCALNET(in_dev, net))
 			goto martian_source;
 	}
+
+	/* 到这里，源ip地址和目的ip地址为正常的单播地址 */
 
 	/*
 	 *	Now we are ready to route packet.
