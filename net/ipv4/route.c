@@ -382,17 +382,20 @@ static int __net_init ip_rt_do_proc_init(struct net *net)
 {
 	struct proc_dir_entry *pde;
 
+	/* /proc/net/rt_cache文件 */
 	pde = proc_create("rt_cache", S_IRUGO, net->proc_net,
 			  &rt_cache_seq_fops);
 	if (!pde)
 		goto err1;
 
+	/* /proc/net/stat/rt_cache文件 */
 	pde = proc_create("rt_cache", S_IRUGO,
 			  net->proc_net_stat, &rt_cpu_seq_fops);
 	if (!pde)
 		goto err2;
 
 #ifdef CONFIG_IP_ROUTE_CLASSID
+	/* /proc/net/rt_acct文件 */
 	pde = proc_create("rt_acct", 0, net->proc_net, &rt_acct_proc_fops);
 	if (!pde)
 		goto err3;
@@ -2709,6 +2712,7 @@ int __init ip_rt_init(void)
 	devinet_init();
 	ip_fib_init();
 
+	/* 创建proc文件 */
 	if (ip_rt_proc_init())
 		pr_err("Unable to create route proc files\n");
 #ifdef CONFIG_XFRM
