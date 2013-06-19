@@ -85,6 +85,8 @@ static inline int netlink_is_kernel(struct sock *sk)
 	return nlk_sk(sk)->flags & NETLINK_KERNEL_SOCKET;
 }
 
+/* 在netlink_proto_init中分配数组空间
+*/
 struct netlink_table *nl_table;
 EXPORT_SYMBOL_GPL(nl_table);
 
