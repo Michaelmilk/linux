@@ -1126,27 +1126,40 @@ static struct inet_protosw inetsw_array[] =
 
 /*
 将第4层协议注册给IPv4的套接字
+
+通过@p->type加入inetsw[]数组对应下标的链表中
 */
 void inet_register_protosw(struct inet_protosw *p)
 {
 	struct list_head *lh;
 	struct inet_protosw *answer;
+	/* 第4层协议，如IPPROTO_TCP IPPROTO_UDP */
 	int protocol = p->protocol;
 	struct list_head *last_perm;
 
+	/* 控制对inetsw[]的并发 */
 	spin_lock_bh(&inetsw_lock);
 
+	/* 数组inetsw[SOCK_MAX]最大SOCK_MAX个项 */
 	if (p->type >= SOCK_MAX)
 		goto out_illegal;
 
 	/* If we are trying to override a permanent protocol, bail. */
 	answer = NULL;
+	/* 链表中最后一个含有INET_PROTOSW_PERMANENT标志的节点 */
 	last_perm = &inetsw[p->type];
+	/* 遍历该头节点下的链表
+	   如果新注册的参数@p，其type和protocol与链表中某项一致
+	   而该项有INET_PROTOSW_PERMANENT标志，则非法
+	*/
 	list_for_each(lh, &inetsw[p->type]) {
+		/* 当前节点对应的struct inet_protosw结构 */
 		answer = list_entry(lh, struct inet_protosw, list);
 
 		/* Check only the non-wild match. */
+		/* 如inetsw_array[]中的SOCK_STREAM和SOCK_DGRAM含有该标志 */
 		if (INET_PROTOSW_PERMANENT & answer->flags) {
+			/* 协议也一致 */
 			if (protocol == answer->protocol)
 				break;
 			last_perm = lh;
@@ -1154,6 +1167,7 @@ void inet_register_protosw(struct inet_protosw *p)
 
 		answer = NULL;
 	}
+	/* answer未置空 */
 	if (answer)
 		goto out_permanent;
 
@@ -1163,6 +1177,7 @@ void inet_register_protosw(struct inet_protosw *p)
 	 * non-permanent entry.  This means that when we remove this entry, the
 	 * system automatically returns to the old behavior.
 	 */
+	/* 新节点@p加在last_perm后面 */
 	list_add_rcu(&p->list, last_perm);
 out:
 	spin_unlock_bh(&inetsw_lock);
