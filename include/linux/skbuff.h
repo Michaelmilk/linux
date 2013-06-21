@@ -2549,10 +2549,17 @@ static inline int skb_cow_head(struct sk_buff *skb, unsigned int headroom)
 @len    : skb的新长度，尾部填0
 
 返回0，表示成功
+
+调用完该函数后，仅是保证@skb->data后面有足够的长度@len空间
+@skb->len本身并还没有改变
+如果要@skb->len和@skb->tail变化
+则需要调用skb_put函数
+例如skb_put(skb, ETH_ZLEN - skb->len)
 */
 static inline int skb_padto(struct sk_buff *skb, unsigned int len)
 {
 	unsigned int size = skb->len;
+	/* 长度足够，无需填充 */
 	if (likely(size >= len))
 		return 0;
 	return skb_pad(skb, len - size);

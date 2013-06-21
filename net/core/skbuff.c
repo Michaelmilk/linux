@@ -1332,8 +1332,8 @@ int skb_pad(struct sk_buff *skb, int pad)
 		return 0;
 	}
 
-    /* clone的，或tailroom空间不足则需要重新分配线性区buffer
-       加上了data_len，以便下面进行线性化时pskb_expand_head中节省再次分配空间 */
+	/* clone的，或tailroom空间不足则需要重新分配线性区buffer
+	   加上了data_len，以便下面进行线性化时pskb_expand_head中节省再次分配空间 */
 	ntail = skb->data_len + pad - (skb->end - skb->tail);
 	if (likely(skb_cloned(skb) || ntail > 0)) {
 		err = pskb_expand_head(skb, 0, ntail, GFP_ATOMIC);
