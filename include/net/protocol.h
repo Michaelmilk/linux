@@ -101,6 +101,7 @@ struct inet_protosw {
 /*
 传输层协议数组
 每一项指向一个传输层协议实例，如tcp_protocol
+在inet_init()中使用inet_add_protocol()注册
 */
 extern const struct net_protocol __rcu *inet_protos[MAX_INET_PROTOS];
 extern const struct net_offload __rcu *inet_offloads[MAX_INET_PROTOS];
