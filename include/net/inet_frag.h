@@ -71,16 +71,23 @@ struct inet_frags {
 	 */
 	rwlock_t		lock ____cacheline_aligned_in_smp;
 	int			secret_interval;
+	/* inet_frags_init中设置回调函数inet_frag_secret_rebuild */
 	struct timer_list	secret_timer;
 	u32			rnd;
 	int			qsize;
 
+	/* ipfrag_init中初始化ip4_frags */
+	/* ip4_hashfn */
 	unsigned int		(*hashfn)(struct inet_frag_queue *);
+	/* ip4_frag_match */
 	bool			(*match)(struct inet_frag_queue *q, void *arg);
+	/* ip4_frag_init */
 	void			(*constructor)(struct inet_frag_queue *q,
 						void *arg);
+	/* ip4_frag_free */
 	void			(*destructor)(struct inet_frag_queue *);
 	void			(*skb_free)(struct sk_buff *);
+	/* ip_expire */
 	void			(*frag_expire)(unsigned long data);
 };
 
