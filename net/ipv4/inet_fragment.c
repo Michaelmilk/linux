@@ -208,6 +208,11 @@ void inet_frag_destroy(struct inet_frag_queue *q, struct inet_frags *f,
 }
 EXPORT_SYMBOL(inet_frag_destroy);
 
+/*
+
+force	: true  - 超过low_thresh清理
+	  false - 超过high_thresh才清理
+*/
 int inet_frag_evictor(struct netns_frags *nf, struct inet_frags *f, bool force)
 {
 	struct inet_frag_queue *q;
@@ -227,6 +232,7 @@ int inet_frag_evictor(struct netns_frags *nf, struct inet_frags *f, bool force)
 			break;
 		}
 
+		/* 链表第一个节点，即最老的节点 */
 		q = list_first_entry(&nf->lru_list,
 				struct inet_frag_queue, lru_list);
 		atomic_inc(&q->refcnt);
@@ -240,7 +246,9 @@ int inet_frag_evictor(struct netns_frags *nf, struct inet_frags *f, bool force)
 			inet_frag_kill(q, f);
 		spin_unlock(&q->lock);
 
+		/* 减1后引用为0 */
 		if (atomic_dec_and_test(&q->refcnt))
+			/* 释放inet_frag_queue */
 			inet_frag_destroy(q, f, &work);
 		evicted++;
 	}

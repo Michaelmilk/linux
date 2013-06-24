@@ -163,6 +163,7 @@ static int raw_v4_input(struct sk_buff *skb, const struct iphdr *iph, int hash)
 	struct net *net;
 
 	read_lock(&raw_v4_hashinfo.lock);
+	/* 哈希桶头 */
 	head = &raw_v4_hashinfo.ht[hash];
 	if (hlist_empty(head))
 		goto out;
@@ -190,12 +191,17 @@ out:
 	return delivered;
 }
 
+/*
+
+@protocol	: IPPROTO_TCP IPPROTO_UDP
+*/
 int raw_local_deliver(struct sk_buff *skb, int protocol)
 {
 	int hash;
 	struct sock *raw_sk;
 
 	hash = protocol & (RAW_HTABLE_SIZE - 1);
+	/* 取第一个节点 */
 	raw_sk = sk_head(&raw_v4_hashinfo.ht[hash]);
 
 	/* If there maybe a raw socket we must check - if not we

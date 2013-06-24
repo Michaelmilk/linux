@@ -11,6 +11,7 @@ struct netns_frags {
 	/* The percpu_counter "mem" need to be cacheline aligned.
 	 *  mem.count must not share cacheline with other writers
 	 */
+	/* 分片报文及管理结构占用的内存统计 */
 	struct percpu_counter   mem ____cacheline_aligned_in_smp;
 
 	/* sysctls */

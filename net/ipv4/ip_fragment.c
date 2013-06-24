@@ -198,6 +198,9 @@ static void ipq_kill(struct ipq *ipq)
 /* Memory limiting on fragments.  Evictor trashes the oldest
  * fragment queue until we are back under the threshold.
  */
+/* evictor: 驱逐者
+将分片内存消耗控制在high_thresh以下
+*/
 static void ip_evictor(struct net *net)
 {
 	int evicted;
