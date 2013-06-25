@@ -123,6 +123,11 @@
 /* The inetsw table contains everything that inet_create needs to
  * build a new socket.
  */
+/* 由函数inet_register_protosw注册进该链表
+链表节点为struct inet_protosw
+如inetsw_array[]数组中的项
+udplite4_protosw
+*/
 static struct list_head inetsw[SOCK_MAX];
 static DEFINE_SPINLOCK(inetsw_lock);
 
@@ -428,6 +433,7 @@ lookup_protocol:
 
 	sk_refcnt_debug_inc(sk);
 
+	/* 上面创建SOCK_RAW时会记录协议号 IPPROTO_TCP IPPROTO_UDP */
 	if (inet->inet_num) {
 		/* It assumes that any protocol which allows
 		 * the user to assign a number at socket
@@ -436,11 +442,19 @@ lookup_protocol:
 		 */
 		inet->inet_sport = htons(inet->inet_num);
 		/* Add to protocol hash chains. */
+		/* tcp_prot	=> inet_hash
+		   udp_prot	=> udp_lib_hash
+		   raw_prot	=> raw_hash_sk
+		   ping_prot	=> ping_v4_hash
+		*/
 		sk->sk_prot->hash(sk);
 	}
 
 	/* 在上面sk_alloc()分配sock结构实例后，sk->sk_prot初始化为answer_prot
 	   例如tcp_prot，则调用tcp_v4_init_sock()函数
+	   udp_prot	=> NULL
+	   raw_prot	=> raw_init
+	   ping_prot	=> ping_init_sock
 	*/
 	if (sk->sk_prot->init) {
 		err = sk->sk_prot->init(sk);

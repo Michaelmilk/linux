@@ -2159,6 +2159,7 @@ static inline void pskb_trim_unique(struct sk_buff *skb, unsigned int len)
 	BUG_ON(err);
 }
 
+/*  π∏√@skbÕ—¿Îsock */
 /**
  *	skb_orphan - orphan a buffer
  *	@skb: buffer to orphan

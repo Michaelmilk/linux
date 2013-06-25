@@ -120,7 +120,12 @@ struct socket {
 	/* 指向协议相关的sock结构实例
 	   例如在inet_create() => sk_alloc()后 => sock_init_data()中赋值 */
 	struct sock		*sk;
-	/* 函数操作表 */
+	/* 函数操作表
+	   如inetsw_array[]数组中的
+	   inet_stream_ops
+	   inet_dgram_ops
+	   inet_sockraw_ops
+	*/
 	const struct proto_ops	*ops;
 };
 

@@ -438,7 +438,9 @@ EXPORT_SYMBOL_GPL(__inet_hash_nolisten);
 */
 static void __inet_hash(struct sock *sk)
 {
-	/* 根据@sk取哈希表 */
+	/* 根据@sk取哈希表
+	   tcp_prot	=> tcp_hashinfo
+	*/
 	struct inet_hashinfo *hashinfo = sk->sk_prot->h.hashinfo;
 	struct inet_listen_hashbucket *ilb;
 

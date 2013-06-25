@@ -79,18 +79,25 @@
 #include <linux/netfilter_ipv4.h>
 #include <linux/compat.h>
 
+/*
+__sock_create => inet_create => raw_hash_sk
+将新创建的sock根据协议类型加入哈希表
+*/
 static struct raw_hashinfo raw_v4_hashinfo = {
 	.lock = __RW_LOCK_UNLOCKED(raw_v4_hashinfo.lock),
 };
 
 void raw_hash_sk(struct sock *sk)
 {
+	/* raw_prot	=> raw_v4_hashinfo */
 	struct raw_hashinfo *h = sk->sk_prot->h.raw_hash;
 	struct hlist_head *head;
 
+	/* 根据协议取哈希桶头 IPPROTO_TCP IPPROTO_UDP */
 	head = &h->ht[inet_sk(sk)->inet_num & (RAW_HTABLE_SIZE - 1)];
 
 	write_lock_bh(&h->lock);
+	/* @sk加入桶下的链表 */
 	sk_add_node(sk, head);
 	sock_prot_inuse_add(sock_net(sk), sk->sk_prot, 1);
 	write_unlock_bh(&h->lock);
@@ -111,12 +118,24 @@ EXPORT_SYMBOL_GPL(raw_unhash_sk);
 static struct sock *__raw_v4_lookup(struct net *net, struct sock *sk,
 		unsigned short num, __be32 raddr, __be32 laddr, int dif)
 {
+	/* 该函数找到一个sock即返回了
+	   所以再次调用的时候从sk_next(sk)开始
+	   这样才遍历完桶下的整个链表
+	*/
 	sk_for_each_from(sk) {
 		struct inet_sock *inet = inet_sk(sk);
 
+		/* 网络命名空间相同
+		   协议号相同
+		   如果绑定了的话，则判断是否与绑定的一致
+		   如果未绑定，则全接收
+		*/
 		if (net_eq(sock_net(sk), net) && inet->inet_num == num	&&
+			/* 绑定了目的地址 并且 与收到报文的源地址相同 */
 		    !(inet->inet_daddr && inet->inet_daddr != raddr) 	&&
+			/* 绑定了源地址 并且 与收到报文的目的地址相同 */
 		    !(inet->inet_rcv_saddr && inet->inet_rcv_saddr != laddr) &&
+			/* 绑定了接口 并且 与收到报文的接口相同 */
 		    !(sk->sk_bound_dev_if && sk->sk_bound_dev_if != dif))
 			goto found; /* gotcha */
 	}
@@ -211,7 +230,7 @@ int raw_local_deliver(struct sk_buff *skb, int protocol)
 	/* If there maybe a raw socket we must check - if not we
 	 * don't care less
 	 */
-	/* 此桶下非空
+	/* 此桶下非空，即创建了对应@protocol的raw socket
 
 	*/
 	if (raw_sk && !raw_v4_input(skb, ip_hdr(skb), hash))
@@ -329,6 +348,9 @@ int raw_rcv(struct sock *sk, struct sk_buff *skb)
 	}
 	nf_reset(skb);
 
+	/* 在ip_local_deliver_finish开始的时候，pull了一个IP头
+	   raw socket是带有IP头的，这里再push下
+	*/
 	skb_push(skb, skb->data - skb_network_header(skb));
 
 	raw_rcv_skb(sk, skb);

@@ -432,6 +432,7 @@ struct sock {
 	void			(*sk_error_report)(struct sock *sk);
 	int			(*sk_backlog_rcv)(struct sock *sk,
 						  struct sk_buff *skb);
+	/* inet_create => inet_sock_destruct */
 	void                    (*sk_destruct)(struct sock *sk);
 };
 
@@ -2055,6 +2056,7 @@ static inline void skb_set_owner_w(struct sk_buff *skb, struct sock *sk)
 static inline void skb_set_owner_r(struct sk_buff *skb, struct sock *sk)
 {
 	skb_orphan(skb);
+	/* ¼ÇÂ¼ËùÊôµÄsock */
 	skb->sk = sk;
 	skb->destructor = sock_rfree;
 	atomic_add(skb->truesize, &sk->sk_rmem_alloc);

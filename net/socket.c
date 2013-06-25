@@ -1370,7 +1370,10 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 #endif
 
 	rcu_read_lock();
-	/* 取对应的协议族操作函数，例如inet_family_ops */
+	/* 取对应的协议族操作函数，由sock_register()注册进net_families[]
+	   例如 inet_family_ops inet6_family_ops
+	   netlink_family_ops packet_family_ops unix_family_ops
+	*/
 	pf = rcu_dereference(net_families[family]);
 	err = -EAFNOSUPPORT;
 	if (!pf)
