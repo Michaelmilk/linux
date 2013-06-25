@@ -1668,6 +1668,10 @@ static inline int udp4_csum_init(struct sk_buff *skb, struct udphdr *uh,
  *	All we need to do is get the socket, and then do a checksum.
  */
 
+/*
+
+@proto	: IPPROTO_UDP IPPROTO_UDPLITE
+*/
 int __udp4_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
 		   int proto)
 {
@@ -1689,11 +1693,15 @@ int __udp4_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
 	saddr = ip_hdr(skb)->saddr;
 	daddr = ip_hdr(skb)->daddr;
 
+	/* skb数据长度不够udp头部中的长度 */
 	if (ulen > skb->len)
 		goto short_packet;
 
 	if (proto == IPPROTO_UDP) {
 		/* UDP validates ulen. */
+		/* 1. 不够udphdr长度则丢弃
+		   2. 够udphdr长度则截断为ulen，截断出错则丢弃
+		*/
 		if (ulen < sizeof(*uh) || pskb_trim_rcsum(skb, ulen))
 			goto short_packet;
 		uh = udp_hdr(skb);

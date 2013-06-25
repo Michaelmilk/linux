@@ -1124,7 +1124,7 @@ int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
 	if (skb_shared(skb))
 		BUG();
 
-    /* 按照cpu的L1 cache线对齐 */
+	/* 按照cpu的L1 cache线对齐 */
 	size = SKB_DATA_ALIGN(size);
 
 	if (skb_pfmemalloc(skb))
@@ -1161,19 +1161,20 @@ int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
 		if (skb_has_frag_list(skb))
 			skb_clone_fraglist(skb);
 
-	    /* 上面为paged data和frag_list增加了引用
-           故这里主要是释放原有的线性区buffer */
+		/* 上面为paged data和frag_list增加了引用
+		   故这里主要是释放原有的线性区buffer */
 		skb_release_data(skb);
 	} else {
 		skb_free_head(skb);
 	}
 
-    /* 这里求偏移的方式有点不好理解
-       skb->head是原数据区起始位置
-       在skb_release_data()里kfree(skb->head)时并没有将skb->head置为NULL
-       clone的skb也许并不会有释放动作
-       而新分配的data指针可能与原数据区相差很远
-       假定两个buffer紧挨着，画图示意下 */
+	/* 这里求偏移的方式有点不好理解
+	   skb->head是原数据区起始位置
+	   在skb_release_data()里kfree(skb->head)时并没有将skb->head置为NULL
+	   clone的skb也许并不会有释放动作
+	   而新分配的data指针可能与原数据区相差很远
+	   假定两个buffer紧挨着，画图示意下
+	*/
 	off = (data + nhead) - skb->head;
 
 	skb->head     = data;

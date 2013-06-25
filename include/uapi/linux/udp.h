@@ -20,9 +20,13 @@
 #include <linux/types.h>
 
 struct udphdr {
+	/* 源端口号 */
 	__be16	source;
+	/* 目的端口号 */
 	__be16	dest;
+	/* udp头部和udp负载数据长度之和 */
 	__be16	len;
+	/* udp头部和udp负载数据的校验和 */
 	__sum16	check;
 };
 
