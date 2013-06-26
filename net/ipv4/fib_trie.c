@@ -102,21 +102,27 @@ struct rt_trie_node {
 };
 
 struct leaf {
+	/* 前2个字段与结构struct rt_trie_node一致 */
 	unsigned long parent;
+	/* 主机序目的IP */
 	t_key key;
+	/* struct leaf_info链表 */
 	struct hlist_head list;
 	struct rcu_head rcu;
 };
 
 struct leaf_info {
+	/* 链入struct leaf.list */
 	struct hlist_node hlist;
 	int plen;
 	u32 mask_plen; /* ntohl(inet_make_mask(plen)) */
+	/* struct fib_alias链表 */
 	struct list_head falh;
 	struct rcu_head rcu;
 };
 
 struct tnode {
+	/* 前2个字段与结构struct rt_trie_node一致 */
 	unsigned long parent;
 	t_key key;
 	unsigned char pos;		/* 2log(KEYLENGTH) bits needed */
@@ -151,6 +157,9 @@ struct trie_stat {
 	unsigned int nodesizes[MAX_STAT_DEPTH];
 };
 
+/*
+trie: 特里结构，单词查找树
+*/
 struct trie {
 	struct rt_trie_node __rcu *trie;
 #ifdef CONFIG_IP_FIB_TRIE_STATS
@@ -1358,6 +1367,9 @@ static int check_leaf(struct fib_table *tb, struct trie *t, struct leaf *l,
 				continue;
 			if (fi->fib_dead)
 				continue;
+			/* RT_SCOPE_UNIVERSE
+			   判断路由范围
+			*/
 			if (fa->fa_info->fib_scope < flp->flowi4_scope)
 				continue;
 			fib_alias_accessed(fa);
@@ -1381,6 +1393,7 @@ static int check_leaf(struct fib_table *tb, struct trie *t, struct leaf *l,
 #ifdef CONFIG_IP_FIB_TRIE_STATS
 				t->stats.semantic_match_passed++;
 #endif
+				/* 保存查询结果 */
 				res->prefixlen = li->plen;
 				res->nh_sel = nhsel;
 				res->type = fa->fa_type;
@@ -1388,8 +1401,10 @@ static int check_leaf(struct fib_table *tb, struct trie *t, struct leaf *l,
 				res->fi = fi;
 				res->table = tb;
 				res->fa_head = &li->falh;
+				/* 若未置FIB_LOOKUP_NOREF标记，则增加引用计数 */
 				if (!(fib_flags & FIB_LOOKUP_NOREF))
 					atomic_inc(&fi->fib_clntref);
+				/* 找到返回0 */
 				return 0;
 			}
 		}
@@ -1402,6 +1417,9 @@ static int check_leaf(struct fib_table *tb, struct trie *t, struct leaf *l,
 	return 1;
 }
 
+/*
+找到则返回0，未找到返回1
+*/
 int fib_table_lookup(struct fib_table *tb, const struct flowi4 *flp,
 		     struct fib_result *res, int fib_flags)
 {
@@ -1411,6 +1429,7 @@ int fib_table_lookup(struct fib_table *tb, const struct flowi4 *flp,
 	struct tnode *pn;
 	unsigned int pos, bits;
 	t_key key = ntohl(flp->daddr);
+	/* chop off: 砍掉 */
 	unsigned int chopped_off;
 	t_key cindex = 0;
 	unsigned int current_prefix_length = KEYLENGTH;

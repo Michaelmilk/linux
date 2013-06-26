@@ -50,10 +50,15 @@ struct ipv4_devconf {
 	DECLARE_BITMAP(state, IPV4_DEVCONF_MAX);
 };
 
+/*
+参考inetdev_event() => inetdev_init()
+由通知链在inetdev_event()中调用inetdev_init()为接口进行空间分配
+*/
 struct in_device {
 	struct net_device	*dev;
 	atomic_t		refcnt;
 	int			dead;
+	/* 接口IP地址链表 */
 	struct in_ifaddr	*ifa_list;	/* IP ifaddr chain		*/
 	struct ip_mc_list __rcu	*mc_list;	/* IP multicast filter chain    */
 	int			mc_count;	/* Number of installed mcasts	*/
@@ -153,6 +158,9 @@ static inline void ipv4_devconf_setall(struct in_device *in_dev)
 #define IN_DEV_ARP_IGNORE(in_dev)	IN_DEV_MAXCONF((in_dev), ARP_IGNORE)
 #define IN_DEV_ARP_NOTIFY(in_dev)	IN_DEV_MAXCONF((in_dev), ARP_NOTIFY)
 
+/*
+接口IP地址相关信息
+*/
 struct in_ifaddr {
 	struct hlist_node	hash;
 	struct in_ifaddr	*ifa_next;

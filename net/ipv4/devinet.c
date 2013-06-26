@@ -1270,6 +1270,9 @@ EXPORT_SYMBOL(inet_confirm_addr);
  *	Device notifier
  */
 
+/*
+注册节点@nb到通知链inetaddr_chain
+*/
 int register_inetaddr_notifier(struct notifier_block *nb)
 {
 	return blocking_notifier_chain_register(&inetaddr_chain, nb);

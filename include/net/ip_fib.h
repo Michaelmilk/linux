@@ -24,10 +24,13 @@
 #include <linux/percpu.h>
 
 struct fib_config {
+	/* 地址长度，例如32 */
 	u8			fc_dst_len;
 	u8			fc_tos;
 	u8			fc_protocol;
+	/* RT_SCOPE_HOST RT_SCOPE_LINK */
 	u8			fc_scope;
+	/* RTN_LOCAL RTN_BROADCAST RTN_UNICAST */
 	u8			fc_type;
 	/* 3 bytes unused */
 	u32			fc_table;
@@ -66,6 +69,9 @@ struct fnhe_hash_bucket {
 #define FNHE_HASH_SIZE		2048
 #define FNHE_RECLAIM_DEPTH	5
 
+/*
+nh: next hop
+*/
 struct fib_nh {
 	struct net_device	*nh_dev;
 	struct hlist_node	nh_hash;
@@ -115,6 +121,7 @@ struct fib_info {
 	int			fib_power;
 #endif
 	struct rcu_head		rcu;
+	/* next hop */
 	struct fib_nh		fib_nh[0];
 #define fib_dev		fib_nh[0].nh_dev
 };
@@ -136,6 +143,7 @@ struct fib_result {
 	u32		tclassid;
 	struct fib_info *fi;
 	struct fib_table *table;
+	/* 指向struct leaf_info.falh */
 	struct list_head *fa_head;
 };
 
@@ -160,6 +168,13 @@ struct fib_result_nl {
 #define FIB_RES_NH(res)		((res).fi->fib_nh[0])
 #endif /* CONFIG_IP_ROUTE_MULTIPATH */
 
+/*
+宏CONFIG_IP_MULTIPLE_TABLES表示路由策略，
+当定义了该宏,也即意味着内核配置了“路由策略”。
+产生的最大的不同就是内核可以使用多达256张FIB。
+其实，这256张FIB在内核中的表示是一个全局数组
+参考ip_fib_net_init
+*/
 #ifdef CONFIG_IP_MULTIPLE_TABLES
 #define FIB_TABLE_HASHSZ 256
 #else
@@ -208,6 +223,10 @@ extern void fib_free_table(struct fib_table *tb);
 
 #ifndef CONFIG_IP_MULTIPLE_TABLES
 
+/*
+未定义CONFIG_IP_MULTIPLE_TABLES的时候
+FIB_TABLE_HASHSZ为2
+*/
 #define TABLE_LOCAL_INDEX	0
 #define TABLE_MAIN_INDEX	1
 
@@ -215,9 +234,11 @@ static inline struct fib_table *fib_get_table(struct net *net, u32 id)
 {
 	struct hlist_head *ptr;
 
+	/* 根据@id取哈希桶头 */
 	ptr = id == RT_TABLE_LOCAL ?
 		&net->ipv4.fib_table_hash[TABLE_LOCAL_INDEX] :
 		&net->ipv4.fib_table_hash[TABLE_MAIN_INDEX];
+	/* 根据哈希节点tb_hlist取其容器结构fib_table */
 	return hlist_entry(ptr->first, struct fib_table, tb_hlist);
 }
 
@@ -226,6 +247,13 @@ static inline struct fib_table *fib_new_table(struct net *net, u32 id)
 	return fib_get_table(net, id);
 }
 
+/*
+根据@flp信息查询
+
+@net	:
+@flp	: 流信息，源IP、目的IP等
+@res	: 保存查询结果返回
+*/
 static inline int fib_lookup(struct net *net, const struct flowi4 *flp,
 			     struct fib_result *res)
 {

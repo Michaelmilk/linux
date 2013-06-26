@@ -248,11 +248,16 @@ enum {
 */
 
 enum rt_scope_t {
+	/* 任意地址路由 */
 	RT_SCOPE_UNIVERSE=0,
 /* User defined values  */
+	/* 用户自定义 */
 	RT_SCOPE_SITE=200,
+	/* 本地直连的路由 */
 	RT_SCOPE_LINK=253,
+	/* 主机路由，本地接口上的IP地址 */
 	RT_SCOPE_HOST=254,
+	/* 不存在的路由 */
 	RT_SCOPE_NOWHERE=255
 };
 

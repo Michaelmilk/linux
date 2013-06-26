@@ -683,6 +683,7 @@ static inline unsigned int fib_laddr_hashfn(__be32 val)
 		((__force u32)val >> 14)) & mask;
 }
 
+/* 分配哈希桶头节点空间 */
 static struct hlist_head *fib_info_hash_alloc(int bytes)
 {
 	if (bytes <= PAGE_SIZE)
@@ -704,6 +705,13 @@ static void fib_info_hash_free(struct hlist_head *hash, int bytes)
 		free_pages((unsigned long) hash, get_order(bytes));
 }
 
+/*
+将struct fib_info节点从老的哈希表中移到新的哈希表中
+
+@new_info_hash	:
+@new_laddrhash	:
+@new_size	: 桶的个数
+*/
 static void fib_info_hash_move(struct hlist_head *new_info_hash,
 			       struct hlist_head *new_laddrhash,
 			       unsigned int new_size)
@@ -717,19 +725,26 @@ static void fib_info_hash_move(struct hlist_head *new_info_hash,
 	old_laddrhash = fib_info_laddrhash;
 	fib_info_hash_size = new_size;
 
+	/* 遍历哈希表 */
 	for (i = 0; i < old_size; i++) {
+		/* 取桶头 */
 		struct hlist_head *head = &fib_info_hash[i];
 		struct hlist_node *n;
 		struct fib_info *fi;
 
+		/* 遍历桶下的链表 */
 		hlist_for_each_entry_safe(fi, n, head, fib_hash) {
 			struct hlist_head *dest;
 			unsigned int new_hash;
 
+			/* 从原来的哈希表中移出 */
 			hlist_del(&fi->fib_hash);
 
+			/* 计算哈希值 */
 			new_hash = fib_info_hashfn(fi);
+			/* 在新哈希表中的桶头节点 */
 			dest = &new_info_hash[new_hash];
+			/* 链入新的哈希表 */
 			hlist_add_head(&fi->fib_hash, dest);
 		}
 	}
@@ -755,6 +770,7 @@ static void fib_info_hash_move(struct hlist_head *new_info_hash,
 
 	spin_unlock_bh(&fib_info_lock);
 
+	/* 释放老的哈希表桶头节点 */
 	bytes = old_size * sizeof(struct hlist_head *);
 	fib_info_hash_free(old_info_hash, bytes);
 	fib_info_hash_free(old_laddrhash, bytes);
@@ -770,6 +786,10 @@ __be32 fib_info_update_nh_saddr(struct net *net, struct fib_nh *nh)
 	return nh->nh_saddr;
 }
 
+/*
+根据@cfg创建新的struct fib_info节点，若有相同则使用旧的节点
+并链入哈希表fib_info_hash和fib_info_laddrhash
+*/
 struct fib_info *fib_create_info(struct fib_config *cfg)
 {
 	int err;
@@ -794,7 +814,9 @@ struct fib_info *fib_create_info(struct fib_config *cfg)
 #endif
 
 	err = -ENOBUFS;
+	/* 节点个数已经达到桶的个数，则扩大桶的个数 */
 	if (fib_info_cnt >= fib_info_hash_size) {
+		/* 桶的个数加倍 */
 		unsigned int new_size = fib_info_hash_size << 1;
 		struct hlist_head *new_info_hash;
 		struct hlist_head *new_laddrhash;
@@ -802,6 +824,7 @@ struct fib_info *fib_create_info(struct fib_config *cfg)
 
 		if (!new_size)
 			new_size = 16;
+		/* 桶头节点空间 */
 		bytes = new_size * sizeof(struct hlist_head *);
 		new_info_hash = fib_info_hash_alloc(bytes);
 		new_laddrhash = fib_info_hash_alloc(bytes);
@@ -815,6 +838,7 @@ struct fib_info *fib_create_info(struct fib_config *cfg)
 			goto failure;
 	}
 
+	/* 分配新节点空间 */
 	fi = kzalloc(sizeof(*fi)+nhs*sizeof(struct fib_nh), GFP_KERNEL);
 	if (fi == NULL)
 		goto failure;
@@ -947,6 +971,7 @@ struct fib_info *fib_create_info(struct fib_config *cfg)
 	} endfor_nexthops(fi)
 
 link_it:
+	/* 查找表中是否有相同节点 */
 	ofi = fib_find_info(fi);
 	if (ofi) {
 		fi->fib_dead = 1;
@@ -958,6 +983,7 @@ link_it:
 	fi->fib_treeref++;
 	atomic_inc(&fi->fib_clntref);
 	spin_lock_bh(&fib_info_lock);
+	/* 新节点链入哈希表 */
 	hlist_add_head(&fi->fib_hash,
 		       &fib_info_hash[fib_info_hashfn(fi)]);
 	if (fi->fib_prefsrc) {

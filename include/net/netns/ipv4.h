@@ -37,7 +37,7 @@ struct netns_ipv4 {
 #ifdef CONFIG_IP_ROUTE_CLASSID
 	int			fib_num_tclassid_users;
 #endif
-	/* 指向分配的哈希表桶头节点空间 */
+	/* 指向分配的哈希表桶头节点空间，在ip_fib_net_init中分配空间 */
 	struct hlist_head	*fib_table_hash;
 	struct sock		*fibnl;
 

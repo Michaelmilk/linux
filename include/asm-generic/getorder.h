@@ -32,6 +32,9 @@ int __get_order(unsigned long size)
 	return order;
 }
 
+/*
+计算2的幂次值
+*/
 /**
  * get_order - Determine the allocation order of a memory size
  * @size: The size for which to get the order

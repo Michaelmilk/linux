@@ -494,7 +494,9 @@ static inline int dst_output(struct sk_buff *skb)
 */
 static inline int dst_input(struct sk_buff *skb)
 {
-	/* 可能是ip_local_deliver()或ip_forward() */
+	/* 可能是ip_local_deliver()或ip_forward()
+	   或ip_error()
+	*/
 	return skb_dst(skb)->input(skb);
 }
 

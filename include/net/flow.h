@@ -49,6 +49,10 @@ union flowi_uli {
 	} mht;
 };
 
+/*
+一条流的信息
+包含报文的源IP、目的IP、入接口等
+*/
 struct flowi4 {
 	struct flowi_common	__fl_common;
 #define flowi4_oif		__fl_common.flowic_oif

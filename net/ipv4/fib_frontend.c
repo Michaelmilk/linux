@@ -696,6 +696,18 @@ out:
  * to fib engine. It is legal, because all events occur
  * only when netlink is already locked.
  */
+
+/*
+fib_magic(RTM_NEWROUTE, RTN_LOCAL, addr, 32, prim);
+fib_magic(RTM_NEWROUTE, RTN_BROADCAST, prefix, 32, prim);
+fib_magic(RTM_DELROUTE, RTN_LOCAL, ifa->ifa_local, 32, prim);
+fib_magic(RTM_DELROUTE, RTN_BROADCAST, brd, 32, prim);
+fib_magic(RTM_NEWROUTE, dev->flags & IFF_LOOPBACK ? RTN_LOCAL : RTN_UNICAST,
+			prefix, ifa->ifa_prefixlen, prim);
+
+@cmd	: RTM_NEWROUTE RTM_DELROUTE
+@type	: RTN_LOCAL RTN_BROADCAST RTN_UNICAST
+*/
 static void fib_magic(int cmd, int type, __be32 dst, int dst_len, struct in_ifaddr *ifa)
 {
 	struct net *net = dev_net(ifa->ifa_dev->dev);
