@@ -73,6 +73,7 @@
 #define IFF_DONT_BRIDGE 0x800		/* disallow bridging this ether dev */
 #define IFF_DISABLE_NETPOLL	0x1000	/* disable netpoll at run-time */
 #define IFF_MACVLAN_PORT	0x2000	/* device used as macvlan port */
+/* 标记该接口为网桥下的接口 */
 #define IFF_BRIDGE_PORT	0x4000		/* device used as bridge port */
 #define IFF_OVS_DATAPATH	0x8000	/* device used as Open vSwitch
 					 * datapath port */

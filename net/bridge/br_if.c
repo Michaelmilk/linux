@@ -321,7 +321,7 @@ netdev_features_t br_features_recompute(struct net_bridge *br,
 
 /* called with RTNL */
 /*
-@br		: 描述网桥的结构实例
+@br	: 描述网桥的结构实例
 @dev	: 待加入网桥的从属设备接口
 */
 int br_add_if(struct net_bridge *br, struct net_device *dev)

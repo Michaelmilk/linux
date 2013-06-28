@@ -733,6 +733,7 @@ static unsigned int br_nf_pre_routing(unsigned int hook, struct sk_buff *skb,
 		return br_nf_pre_routing_ipv6(hook, skb, in, out, okfn);
 	}
 
+	/* 是否处理iptables规则 */
 	if (!brnf_call_iptables && !br->nf_call_iptables)
 		return NF_ACCEPT;
 
@@ -760,7 +761,7 @@ static unsigned int br_nf_pre_routing(unsigned int hook, struct sk_buff *skb,
 	/* ip_sabotage_in() NF_IP_PRI_FIRST
 	   ipv4_conntrack_defrag() NF_IP_PRI_CONNTRACK_DEFRAG
 	   ipv4_conntrack_in() NF_IP_PRI_CONNTRACK
-	   nf_nat_in() NF_IP_PRI_NAT_DST */
+	   nf_nat_ipv4_in() NF_IP_PRI_NAT_DST */
 	NF_HOOK(NFPROTO_IPV4, NF_INET_PRE_ROUTING, skb, skb->dev, NULL,
 		br_nf_pre_routing_finish);
 
