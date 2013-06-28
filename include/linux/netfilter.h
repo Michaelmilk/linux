@@ -51,15 +51,22 @@ typedef unsigned int nf_hookfn(unsigned int hooknum,
 
 /* 钩子结构 */
 struct nf_hook_ops {
-	/* 组成链表 */
+	/* 组成链表
+	   根据@pf和@hooknum链入全局数组nf_hooks[NFPROTO_NUMPROTO][NF_MAX_HOOKS]
+	*/
 	struct list_head list;
 
 	/* User fills in from here down. */
 	/* 钩子处理函数 */
 	nf_hookfn *hook;
 	struct module *owner;
+	/* NF协议 NFPROTO_IPV4 NFPROTO_BRIDGE ... */
 	u_int8_t pf;
-	/* hook号，5个hook点 */
+	/* hook号，5个hook点
+	   网桥的	NF_BR_PRE_ROUTING	NF_BR_LOCAL_IN		...
+	   ARP的	NF_ARP_IN		NF_ARP_OUT		...
+	   IP层的	NF_INET_PRE_ROUTING	NF_INET_LOCAL_IN	...
+	*/
 	unsigned int hooknum;
 	/* Hooks are ordered in ascending priority. */
 	/* 优先级，数值越小的越先执行 */

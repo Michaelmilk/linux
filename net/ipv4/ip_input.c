@@ -525,7 +525,7 @@ int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt, 
 	/* ip_sabotage_in() NF_IP_PRI_FIRST
 	   ipv4_conntrack_defrag() NF_IP_PRI_CONNTRACK_DEFRAG
 	   ipv4_conntrack_in() NF_IP_PRI_CONNTRACK
-	   nf_nat_in() NF_IP_PRI_NAT_DST */
+	   nf_nat_ipv4_in() NF_IP_PRI_NAT_DST */
 	return NF_HOOK(NFPROTO_IPV4, NF_INET_PRE_ROUTING, skb, dev, NULL,
 		       ip_rcv_finish);
 
