@@ -69,6 +69,7 @@ static unsigned int ipv4_conntrack_defrag(unsigned int hooknum,
 	struct sock *sk = skb->sk;
 	struct inet_sock *inet = inet_sk(skb->sk);
 
+	/* 判断在NF_INET_LOCAL_OUT出去的时候是否组分片 */
 	if (sk && (sk->sk_family == PF_INET) &&
 	    inet->nodefrag)
 		return NF_ACCEPT;

@@ -741,6 +741,7 @@ out_fail:
 /* Process an incoming IP datagram fragment. */
 /*
 处理一个IP分片报文
+分片都接收到后，会进行重组，所有数据会组合在最后这个@skb中
 */
 int ip_defrag(struct sk_buff *skb, u32 user)
 {
