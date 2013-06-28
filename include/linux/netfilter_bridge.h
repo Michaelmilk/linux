@@ -17,6 +17,7 @@ enum nf_br_hook_priorities {
 
 #ifdef CONFIG_BRIDGE_NETFILTER
 
+/* 标记修改了skb->pkt_type字段的值 PACKET_OTHERHOST <-> PACKET_HOST */
 #define BRNF_PKT_TYPE			0x01
 #define BRNF_BRIDGED_DNAT		0x02
 #define BRNF_BRIDGED			0x04
