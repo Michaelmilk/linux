@@ -926,6 +926,12 @@ resolve_normal_ct(struct net *net, struct nf_conn *tmpl,
 	return ct;
 }
 
+/*
+@net	:
+@pf	: PF_INET PF_INET6
+@hooknum	:
+@skb	:
+*/
 unsigned int
 nf_conntrack_in(struct net *net, u_int8_t pf, unsigned int hooknum,
 		struct sk_buff *skb)
