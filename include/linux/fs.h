@@ -880,7 +880,9 @@ struct file {
 	void			*f_security;
 #endif
 	/* needed for tty driver, and maybe others */
-	/* 一些驱动程序使用 */
+	/* 一些驱动程序使用
+	   如sock_alloc_file()中，private_data指向struct socket
+	*/
 	void			*private_data;
 
 #ifdef CONFIG_EPOLL
