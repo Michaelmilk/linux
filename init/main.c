@@ -626,7 +626,6 @@ asmlinkage void __init start_kernel(void)
 	if (WARN(!irqs_disabled(), "Interrupts were enabled *very* early, fixing it\n"))
 		local_irq_disable();
 	idr_init_cache();
-	perf_event_init();
 	/* 初始化RCU(Read-Copy Update)机制 */
 	rcu_init();
 	tick_nohz_init();
@@ -647,6 +646,7 @@ asmlinkage void __init start_kernel(void)
 	timekeeping_init();
 	/* 系统时钟相关初始化 */
 	time_init();
+	perf_event_init();
 	/* oprofile系统性能分析模块的初始化 */
 	profile_init();
 	call_function_init();
