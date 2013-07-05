@@ -35,9 +35,10 @@ LC_COLLATE=C
 LC_NUMERIC=C
 export LC_COLLATE LC_NUMERIC
 
-    # collate : 校对
-    # LC_COLLATE : 比较和排序习惯
-    # LC_NUMERIC : 数字
+        # 取消LC_ALL的导出，以免覆盖了LC_*的设置值
+        # collate : 校对
+        # LC_COLLATE : 比较和排序习惯
+        # LC_NUMERIC : 非货币的数字显示格式
 
 # We are using a recursive build, so we need to do a little thinking
 # to get the ordering right.
@@ -55,29 +56,38 @@ export LC_COLLATE LC_NUMERIC
 # descending is started. They are now explicitly listed as the
 # prepare rule.
 
+        # 使用递归编译，所以要考虑编译顺序
+        # 子Makefile应该只修改其所在目录的文件
+        # 如果依赖另一个目录中的文件，则先在那个目录下执行子make
+        # 以保证那个目录最新
+        #
+        # 需要修改的文件有全局影响时，这些文件已经被分离出来
+        # 并在递归编译前先进行处理
+        # 这些文件被明确的列在prepare rule规则中
+
 # To put more focus on warnings, be less verbose as default
 # Use 'make V=1' to see the full commands
 
-	# 函数origin并不操作变量的值，只是告诉这个变量是哪里来的。
-	# 语法是： $(origin <variable>;)
-	# origin函数的返回值有：
-	# “undefined”从来没有定义过、
-	# “default”是一个默认的定义、
-	# “environment”是一个环境变量、
-	# “file”这个变量被定义在Makefile中、
-	# “command line”这个变量是被命令行定义的、
-	# “override”是被override指示符重新定义的、
-	# “automatic”是一个命令运行中的自动化变量
+        # 函数origin并不操作变量的值，只是告诉这个变量是哪里来的。
+        # 语法是： $(origin <variable>;)
+        # origin函数的返回值有：
+        # “undefined”从来没有定义过、
+        # “default”是一个默认的定义、
+        # “environment”是一个环境变量、
+        # “file”这个变量被定义在Makefile中、
+        # “command line”这个变量是被命令行定义的、
+        # “override”是被override指示符重新定义的、
+        # “automatic”是一个命令运行中的自动化变量
 
-	# KBUILD_VERBOSE的值根据在命令行中是否定义了变量V，
-	# 当没有定义时，默认为V＝0，输出为short version；
-	# 可以用make V=1 来输出编译时全部的命令。
+        # KBUILD_VERBOSE的值根据在命令行中是否定义了变量V，
+        # 当没有定义时，默认为V＝0，输出为short version；
+        # 可以用make V=1 来输出编译时全部的命令。
 
 ifeq ("$(origin V)", "command line")
   KBUILD_VERBOSE = $(V)
 endif
 
-	# 命令行没有定义变量V，则变量KBUILD_VERBOSE默认值为0
+        # 命令行没有定义变量V，则变量KBUILD_VERBOSE默认值为0
 
 ifndef KBUILD_VERBOSE
   KBUILD_VERBOSE = 0
@@ -93,6 +103,10 @@ endif
 # See the file "Documentation/sparse.txt" for more details, including
 # where to get the "sparse" utility.
 
+        # 命令行中定义了C变量，则使用其值
+        # make C=1只检查需要重编译的文件
+        # make C=2检查所有的源文件
+
 ifeq ("$(origin C)", "command line")
   KBUILD_CHECKSRC = $(C)
 endif
@@ -104,23 +118,23 @@ endif
 # Old syntax make ... SUBDIRS=$PWD is still supported
 # Setting the environment variable KBUILD_EXTMOD take precedence
 
-	# 使用?=为KBUILD_EXTMOD，如果KBUILD_EXTMOD已经有值的话，则不会将SUBDIRS的值赋给它
-	# 所以环境变量KBUILD_EXTMOD中设置的值优先级高于SUBDIRS
+        # 使用?=为KBUILD_EXTMOD，如果KBUILD_EXTMOD已经有值的话，则不会将SUBDIRS的值赋给它
+        # 所以环境变量KBUILD_EXTMOD中设置的值优先级高于SUBDIRS
 
 ifdef SUBDIRS
   KBUILD_EXTMOD ?= $(SUBDIRS)
 endif
 
-	# KBUILD_EXTMOD用于编译外部模块时指定模块代码所在目录绝对路径
-	# 参考Documentation/kbuild/kbuild.txt
-	# 编译外部模块时，其命令中通常使用M=`pwd`取模块代码所在目录
+        # KBUILD_EXTMOD用于编译外部模块时指定模块代码所在目录绝对路径
+        # 参考Documentation/kbuild/kbuild.txt
+        # 编译外部模块时，其命令中通常使用M=`pwd`取模块代码所在目录
 
 ifeq ("$(origin M)", "command line")
   KBUILD_EXTMOD := $(M)
 endif
 
-	# 内核编译的时候可以将输出文件保存到另外的目录
-	# 使用O=或者设置环境变量KBUILD_OUTPUT
+        # 内核编译的时候可以将输出文件保存到另外的目录
+        # 使用O=或者设置环境变量KBUILD_OUTPUT
 
 # kbuild supports saving output files in a separate directory.
 # To locate output files in a separate directory two syntaxes are supported.
@@ -138,29 +152,29 @@ endif
 # variable.
 
 
-	# KBUILD_SRC会在使用了KBUILD_OUTPUT时，由sub-make目标的命令中赋值
-	# 这样在进入KBUILD_OUTPUT目录中使用-f参数再次使用本Makefile时便跳过下面一段了
-	# 暂不考虑命令行中主动为KBUILD_SRC赋值的情况
+        # KBUILD_SRC会在使用了KBUILD_OUTPUT时，由sub-make目标的命令中赋值
+        # 这样在进入KBUILD_OUTPUT目录中使用-f参数再次使用本Makefile时便跳过下面一段了
+        # 暂不考虑命令行中主动为KBUILD_SRC赋值的情况
 
 # KBUILD_SRC is set on invocation of make in OBJ directory
 # KBUILD_SRC is not intended to be used by the regular user (for now)
 ifeq ($(KBUILD_SRC),)
 
-	# 如果KBUILD_SRC为空的话，说明是在内核源码目录下使用make
-	# 或者是使用外部目录时第一次进入
+        # 如果KBUILD_SRC为空的话，说明是在内核源码目录下使用make
+        # 或者是使用外部目录时第一次进入
 
 # OK, Make called in directory where kernel src resides
 # Do we want to locate output files in a separate directory?
 
-	# 如果命令行使用了O=指定输出目录的话
-	# 使用KBUILD_OUTPUT变量记录下目标目录
-	# 因此O=会覆盖环境变量KBUILD_OUTPUT，O=的优先级高于环境变量
+        # 如果命令行使用了O=指定输出目录的话
+        # 使用KBUILD_OUTPUT变量记录下目标目录
+        # 因此O=会覆盖环境变量KBUILD_OUTPUT，O=的优先级高于环境变量
 
 ifeq ("$(origin O)", "command line")
   KBUILD_OUTPUT := $(O)
 endif
 
-	# 如果命令行使用了W=则使能gcc的扩展检查
+        # 如果命令行使用了W=则使能gcc的扩展检查
 
 ifeq ("$(origin W)", "command line")
   export KBUILD_ENABLE_EXTRA_GCC_CHECKS := $(W)
@@ -170,65 +184,65 @@ endif
 PHONY := _all
 _all:
 
-    # 定义两个Makefile伪目标，命令为空，以避免隐式规则检查
-    # 分号";"前的依赖为空，紧跟在分号";"后的第一条命令为空，没有以tab开头的其他命令
+        # 定义两个Makefile伪目标，命令为空，以避免隐式规则检查
+        # 分号";"前的依赖为空，紧跟在分号";"后的第一条命令为空，没有以tab开头的其他命令
 
 # Cancel implicit rules on top Makefile
 $(CURDIR)/Makefile Makefile: ;
 
-	# GNU make把CURDIR设为当前工作目录，即当前内核源码目录，因为KBUILD_SRC为空
+        # GNU make把CURDIR设为当前工作目录，即当前内核源码目录，因为KBUILD_SRC为空
 
 ifneq ($(KBUILD_OUTPUT),)
 
-	# 如果命令行使用了O=或设置了环境变量KBUILD_OUTPUT
+        # 如果命令行使用了O=或设置了环境变量KBUILD_OUTPUT
 
 # Invoke a second make in the output directory, passing relevant variables
 # check that the output directory actually exists
 
-	# 记录输出目录
+        # 记录输出目录
 
 saved-output := $(KBUILD_OUTPUT)
 
-	# 函数shell是make与外部环境的通讯工具，它用于命令的扩展。
-	# shell函数起着调用shell命令（cd $(KBUILD_OUTPUT) && /bin/pwd）和返回命令输出结果的参数的作用。
-	# Make仅仅处理返回结果，再返回结果替换调用点之前，make将每一个换行符或者一对回车/换行符处理为单个空格；
-	# 如果返回结果最后是换行符（和回车符），make将把它们去掉。
-	# 通过shell命令cd切换目录，如果成功则执行pwd，将新的目录赋给KBUILD_OUTPUT
-	# 如果cd不成功则KBUILD_OUTPUT为空
+        # 函数shell是make与外部环境的通讯工具，它用于命令的扩展。
+        # shell函数起着调用shell命令（cd $(KBUILD_OUTPUT) && /bin/pwd）和返回命令输出结果的参数的作用。
+        # Make仅仅处理返回结果，再返回结果替换调用点之前，make将每一个换行符或者一对回车/换行符处理为单个空格；
+        # 如果返回结果最后是换行符（和回车符），make将把它们去掉。
+        # 通过shell命令cd切换目录，如果成功则执行pwd，将新的目录赋给KBUILD_OUTPUT
+        # 如果cd不成功则KBUILD_OUTPUT为空
 
 KBUILD_OUTPUT := $(shell cd $(KBUILD_OUTPUT) && /bin/pwd)
 
-	# 判断KBUILD_OUTPUT是否为空，即判断先前的输出目录是否存在
-	# 不存在则打印错误信息，退出make
+        # 判断KBUILD_OUTPUT是否为空，即判断先前的输出目录是否存在
+        # 不存在则打印错误信息，退出make
 
 $(if $(KBUILD_OUTPUT),, \
      $(error output directory "$(saved-output)" does not exist))
 
-	# 函数if对在函数上下文中扩展条件提供了支持（相对于GNU make makefile文件中的条件语句，例如ifeq指令。）
-	# if函数的语法是：$(if <condition>,<then-part>) 或是 $(if <condition>,<then-part>,<else-part>)。
-	# 如果条件$(KBUILD_OUTPUT)为真（非空字符串），
-	# 那么两个逗号之间的空字符（注意连续两个逗号的作用）将会是整个函数的返回值，
-	# 如果$(KBUILD_OUTPUT)为假（空字符串），
-	# 那么$(error output directory "$(saved-output)" does not exist）会是整个函数的返回值，
-	# 此时如果<else-part>没有被定义，那么，整个函数返回空字串。
-	#
-	# 函数error的语法是：$(error <text ...>;)
-	# 函数error的功能是：产生一个致命的错误，output directory "$(saved-output)" does not exist是错误信息。
-	# 注意，error函数不会在一被使用就会产生错误信息，
-	# 所以如果你把其定义在某个变量中，并在后续的脚本中使用这个变量，那么也是可以的。
-	#
-	# 命令“$(if $(KBUILD_OUTPUT),, \”中最后的“\”的作用是：紧接在“\”下面的“哪一行”的命令是“\”所在行的命令的延续。
-	# 如果要让前一个命令的参数等应用与下一个命令，那么这两个命令应该写在同一行，
-	# 如果一行写不下两个命令，可以在第一行末尾添上符号"\"，然后在下一行接着写。
-	# 如果是几个命令写在同一行，那么后面的命令是在前面命令的基础上执行。
-	# 如 cd /   ls 这两个命令写在同一行，那么ls显示的是根目录/下的文件和文件夹。
+        # 函数if对在函数上下文中扩展条件提供了支持（相对于GNU make makefile文件中的条件语句，例如ifeq指令。）
+        # if函数的语法是：$(if <condition>,<then-part>) 或是 $(if <condition>,<then-part>,<else-part>)。
+        # 如果条件$(KBUILD_OUTPUT)为真（非空字符串），
+        # 那么两个逗号之间的空字符（注意连续两个逗号的作用）将会是整个函数的返回值，
+        # 如果$(KBUILD_OUTPUT)为假（空字符串），
+        # 那么$(error output directory "$(saved-output)" does not exist）会是整个函数的返回值，
+        # 此时如果<else-part>没有被定义，那么，整个函数返回空字串。
+        #
+        # 函数error的语法是：$(error <text ...>;)
+        # 函数error的功能是：产生一个致命的错误，output directory "$(saved-output)" does not exist是错误信息。
+        # 注意，error函数不会在一被使用就会产生错误信息，
+        # 所以如果你把其定义在某个变量中，并在后续的脚本中使用这个变量，那么也是可以的。
+        #
+        # 命令“$(if $(KBUILD_OUTPUT),, \”中最后的“\”的作用是：紧接在“\”下面的“哪一行”的命令是“\”所在行的命令的延续。
+        # 如果要让前一个命令的参数等应用与下一个命令，那么这两个命令应该写在同一行，
+        # 如果一行写不下两个命令，可以在第一行末尾添上符号"\"，然后在下一行接着写。
+        # 如果是几个命令写在同一行，那么后面的命令是在前面命令的基础上执行。
+        # 如 cd /   ls 这两个命令写在同一行，那么ls显示的是根目录/下的文件和文件夹。
 
 PHONY += $(MAKECMDGOALS) sub-make
 
-	# make在执行时设置一个特殊变量“MAKECMDGOALS”，
-	# 此变量记录了命令行参数指定的终极目标列表，
-	# 没有通过参数指定终极目标时此变量为空。
-	# 注意：此变量仅用在特殊的场合（比如判断），在Makeifle中不要对它进行重新定义！
+        # make在执行时设置一个特殊变量“MAKECMDGOALS”，
+        # 此变量记录了命令行参数指定的终极目标列表，
+        # 没有通过参数指定终极目标时此变量为空。
+        # 注意：此变量仅用在特殊的场合（比如判断），在Makeifle中不要对它进行重新定义！
 
 $(filter-out _all sub-make $(CURDIR)/Makefile, $(MAKECMDGOALS)) _all: sub-make
 	@:
@@ -288,10 +302,10 @@ ifeq ($(skip-makefile),)
 # but instead _all depend on modules
 PHONY += all
 
-	# 默认目标_all
-	# 在下面的include $(srctree)/arch/$(SRCARCH)/Makefile时
-	# all目标即对应架构下的Makefile中的all目标
-	# 当编译外部模块时，则目标为modules
+        # 默认目标_all
+        # 在下面的include $(srctree)/arch/$(SRCARCH)/Makefile时
+        # all目标即对应架构下的Makefile中的all目标
+        # 当编译外部模块时，则目标为modules
 
 ifeq ($(KBUILD_EXTMOD),)
 _all: all
@@ -1136,7 +1150,7 @@ PHONY += $(vmlinux-dirs)
 $(vmlinux-dirs): prepare scripts
 	$(Q)$(MAKE) $(build)=$@
 
-# Store (new) KERNELRELASE string in include/config/kernel.release
+# Store (new) KERNELRELEASE string in include/config/kernel.release
 include/config/kernel.release: include/config/auto.conf FORCE
 	$(Q)rm -f $@
 	$(Q)echo "$(KERNELVERSION)$$($(CONFIG_SHELL) $(srctree)/scripts/setlocalversion $(srctree))" > $@
@@ -1775,17 +1789,17 @@ endif	# skip-makefile
 PHONY += FORCE
 FORCE:
 
-# 当规则没有依赖关系也没有命令，而且其目标不是存在的文件名，
-# make认为此规则运行时这个目标总是被更新。
-# 这意味着如果规则依赖于此目标，其命令总是被执行。
-# 使用习惯名称FORCE即是这样的一种规则，以让依赖FORCE的规则中的命令总是被执行
+        # 当规则没有依赖关系也没有命令，而且其目标不是存在的文件名，
+        # make认为此规则运行时这个目标总是被更新。
+        # 这意味着如果规则依赖于此目标，其命令总是被执行。
+        # 使用习惯名称FORCE即是这样的一种规则，以让依赖FORCE的规则中的命令总是被执行
 
 # Declare the contents of the .PHONY variable as phony.  We keep that
 # information in a variable so we can use it in if_changed and friends.
 .PHONY: $(PHONY)
 
-# phony : 假的
-#
-# .PHONY的作用是告诉make这个target不是真正的文件，只是一个虚拟的target
-# 当已知虚拟目标文件并非由其他文件生成的实际文件，make便会跳过隐含规则搜索
-# 这样虚拟目标对应的命令便总是会被执行
+        # phony : 假的
+        #
+        # .PHONY的作用是告诉make这个target不是真正的文件，只是一个虚拟的target
+        # 当已知虚拟目标文件并非由其他文件生成的实际文件，make便会跳过隐含规则搜索
+        # 这样虚拟目标对应的命令便总是会被执行
