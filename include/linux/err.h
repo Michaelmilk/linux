@@ -39,7 +39,7 @@ static inline void * __must_check ERR_PTR(long error)
 /*
 将一个指针转换为long数值
 */
-static inline long __must_check PTR_ERR(const void *ptr)
+static inline long __must_check PTR_ERR(__force const void *ptr)
 {
 	return (long) ptr;
 }
@@ -47,7 +47,7 @@ static inline long __must_check PTR_ERR(const void *ptr)
 /*
 指针的值是一个错误码
 */
-static inline long __must_check IS_ERR(const void *ptr)
+static inline long __must_check IS_ERR(__force const void *ptr)
 {
 	return IS_ERR_VALUE((unsigned long)ptr);
 }
@@ -56,7 +56,7 @@ static inline long __must_check IS_ERR(const void *ptr)
 是一个空指针
 或者是一个错误码
 */
-static inline long __must_check IS_ERR_OR_NULL(const void *ptr)
+static inline long __must_check IS_ERR_OR_NULL(__force const void *ptr)
 {
 	return !ptr || IS_ERR_VALUE((unsigned long)ptr);
 }
@@ -72,7 +72,7 @@ static inline long __must_check IS_ERR_OR_NULL(const void *ptr)
  * Explicitly cast an error-valued pointer to another pointer type in such a
  * way as to make it clear that's what's going on.
  */
-static inline void * __must_check ERR_CAST(const void *ptr)
+static inline void * __must_check ERR_CAST(__force const void *ptr)
 {
 	/* cast away the const */
 	return (void *) ptr;
@@ -82,7 +82,7 @@ static inline void * __must_check ERR_CAST(const void *ptr)
 如果是错误码指针的话，转换为错误码返回
 正常指针则返回0
 */
-static inline int __must_check PTR_RET(const void *ptr)
+static inline int __must_check PTR_RET(__force const void *ptr)
 {
 	if (IS_ERR(ptr))
 		return PTR_ERR(ptr);

@@ -82,6 +82,7 @@ struct pid_namespace init_pid_ns = {
 		[ 0 ... PIDMAP_ENTRIES-1] = { ATOMIC_INIT(BITS_PER_PAGE), NULL }
 	},
 	.last_pid = 0,
+	.nr_hashed = PIDNS_HASH_ADDING,
 	.level = 0,
 	.child_reaper = &init_task,
 	.user_ns = &init_user_ns,
@@ -428,17 +429,12 @@ EXPORT_SYMBOL_GPL(find_vpid);
 /*
 建立@task与@pid的相互联系
 */
-void attach_pid(struct task_struct *task, enum pid_type type,
-		struct pid *pid)
+void attach_pid(struct task_struct *task, enum pid_type type)
 {
-	struct pid_link *link;
-
 	/* 进程@task内嵌的pid_link */
-	link = &task->pids[type];
-	/* pid_link的pid字段指针记录进程对应的pid实例 */
-	link->pid = pid;
+	struct pid_link *link = &task->pids[type];
 	/* 通过pid_link的node字段链入pid的哈希表 */
-	hlist_add_head_rcu(&link->node, &pid->tasks[type]);
+	hlist_add_head_rcu(&link->node, &link->pid->tasks[type]);
 }
 
 static void __change_pid(struct task_struct *task, enum pid_type type,
@@ -470,7 +466,7 @@ void change_pid(struct task_struct *task, enum pid_type type,
 		struct pid *pid)
 {
 	__change_pid(task, type, pid);
-	attach_pid(task, type, pid);
+	attach_pid(task, type);
 }
 
 /* transfer_pid is an optimization of attach_pid(new), detach_pid(old) */
@@ -664,7 +660,6 @@ void __init pidmap_init(void)
 	/* Reserve PID 0. We never call free_pidmap(0) */
 	set_bit(0, init_pid_ns.pidmap[0].page);
 	atomic_dec(&init_pid_ns.pidmap[0].nr_free);
-	init_pid_ns.nr_hashed = PIDNS_HASH_ADDING;
 
 	init_pid_ns.pid_cachep = KMEM_CACHE(pid,
 			SLAB_HWCACHE_ALIGN | SLAB_PANIC);

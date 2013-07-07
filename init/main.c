@@ -74,6 +74,7 @@
 #include <linux/ptrace.h>
 #include <linux/blkdev.h>
 #include <linux/elevator.h>
+#include <linux/sched_clock.h>
 
 #include <asm/io.h>
 #include <asm/bugs.h>
@@ -646,6 +647,7 @@ asmlinkage void __init start_kernel(void)
 	timekeeping_init();
 	/* 系统时钟相关初始化 */
 	time_init();
+	sched_clock_postinit();
 	perf_event_init();
 	/* oprofile系统性能分析模块的初始化 */
 	profile_init();
@@ -759,8 +761,6 @@ static void __init do_ctors(void)
 bool initcall_debug;
 core_param(initcall_debug, initcall_debug, bool, 0644);
 
-static char msgbuf[64];
-
 static int __init_or_module do_one_initcall_debug(initcall_t fn)
 {
 	ktime_t calltime, delta, rettime;
@@ -783,6 +783,7 @@ int __init_or_module do_one_initcall(initcall_t fn)
 {
 	int count = preempt_count();
 	int ret;
+	char msgbuf[64];
 
 	if (initcall_debug)
 		ret = do_one_initcall_debug(fn);

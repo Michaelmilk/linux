@@ -601,10 +601,16 @@ static bool dmi_matches(const struct dmi_system_id *dmi)
 		/* 提前结束遍历 */
 		if (s == DMI_NONE)
 			break;
-		if (dmi_ident[s]
-			/* 已提取的系统dmi信息中含有参数@dmi的子串 */
-		    && strstr(dmi_ident[s], dmi->matches[i].substr))
-			continue;
+		if (dmi_ident[s]) {
+			if (!dmi->matches[i].exact_match &&
+				/* 已提取的系统dmi信息中含有参数@dmi的子串 */
+			    strstr(dmi_ident[s], dmi->matches[i].substr))
+				continue;
+			else if (dmi->matches[i].exact_match &&
+				 !strcmp(dmi_ident[s], dmi->matches[i].substr))
+				continue;
+		}
+
 		/* No match */
 		return false;
 	}

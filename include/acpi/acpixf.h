@@ -50,7 +50,7 @@ ACPICA: ACPI Component Architecture
 
 /* Current ACPICA subsystem version in YYYYMMDD format */
 
-#define ACPI_CA_VERSION                 0x20130328
+#define ACPI_CA_VERSION                 0x20130517
 
 #include <acpi/acconfig.h>
 #include <acpi/actypes.h>
@@ -84,6 +84,7 @@ extern bool acpi_gbl_enable_aml_debug_object;
 extern u8 acpi_gbl_copy_dsdt_locally;
 extern u8 acpi_gbl_truncate_io_addresses;
 extern u8 acpi_gbl_disable_auto_repair;
+extern u8 acpi_gbl_disable_ssdt_table_load;
 
 /*
  * Hardware-reduced prototypes. All interfaces that use these macros will
