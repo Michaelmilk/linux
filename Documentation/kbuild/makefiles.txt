@@ -64,8 +64,18 @@ The Makefiles have five parts:
 	scripts/Makefile.*	common rules etc. for all kbuild Makefiles.
 	kbuild Makefiles	there are about 500 of these.
 
+Makefile包含5个部分：
+
+1. 顶层Makefile。
+2. 配置文件.config。
+3. 对应架构的arch/$(ARCH)/Makefile。
+4. 对所有Makefile的通用规则scripts/Makefile.*。
+5. 各个子目录下的Makefile。
+
 The top Makefile reads the .config file, which comes from the kernel
 configuration process.
+
+顶层Makefile读取通过配置生成的.config文件。
 
 The top Makefile is responsible for building two major products: vmlinux
 (the resident kernel image) and modules (any module files).
@@ -76,14 +86,22 @@ configuration. The top Makefile textually includes an arch Makefile
 with the name arch/$(ARCH)/Makefile. The arch Makefile supplies
 architecture-specific information to the top Makefile.
 
+顶层Makefile主要负责生成2个文件：vmlinux（常驻内存的内核镜像文件）和其他模块。
+递归进入源码树的各个子目录进行编译。
+顶层Makefile原文包含对应架构的arch/$(ARCH)/Makefile。
+
 Each subdirectory has a kbuild Makefile which carries out the commands
 passed down from above. The kbuild Makefile uses information from the
 .config file to construct various file lists used by kbuild to build
 any built-in or modular targets.
 
+每个子目录都有一个Makefile来执行上层传递下来的命令。
+Makefile使用.config中的信息构建编译内建或模块目标的文件列表。
+
 scripts/Makefile.* contains all the definitions/rules etc. that
 are used to build the kernel based on the kbuild makefiles.
 
+scripts/Makefile.*包含所有内核构建使用的定义和规则。
 
 === 2 Who does what
 
@@ -119,6 +137,8 @@ The preferred name for the kbuild files are 'Makefile' but 'Kbuild' can
 be used and if both a 'Makefile' and a 'Kbuild' file exists, then the 'Kbuild'
 file will be used.
 
+尽量使用文件名称"Makefile"，"Kbuild"名称文件存在的时候则使用"Kbuild"文件。
+
 Section 3.1 "Goal definitions" is a quick intro, further chapters provide
 more details, with real examples.
 
@@ -152,19 +172,28 @@ more details, with real examples.
 	in the $(obj-y) lists.  These lists depend on the kernel
 	configuration.
 
+	使用obj-y为vmlinux指定目标文件。
+
 	Kbuild compiles all the $(obj-y) files.  It then calls
 	"$(LD) -r" to merge these files into one built-in.o file.
 	built-in.o is later linked into vmlinux by the parent Makefile.
 
+	使用"$(LD) -r"将目标文件合并为built-in.o。
+	这些built-in.o最终由顶层Makefile链接成vmlinux。
+
 	The order of files in $(obj-y) is significant.  Duplicates in
 	the lists are allowed: the first instance will be linked into
 	built-in.o and succeeding instances will be ignored.
+
+	$(obj-y)文件列表的顺序很重要。
 
 	Link order is significant, because certain functions
 	(module_init() / __initcall) will be called during boot in the
 	order they appear. So keep in mind that changing the link
 	order may e.g. change the order in which your SCSI
 	controllers are detected, and thus your disks are renumbered.
+
+	链接顺序很重要。
 
 	Example:
 		#drivers/isdn/i4l/Makefile
@@ -177,6 +206,8 @@ more details, with real examples.
 
 	$(obj-m) specify object files which are built as loadable
 	kernel modules.
+
+	使用obj-m为可加载模块指定目标文件。
 
 	A module may be built from one source file or several source
 	files. In the case of one source file, the kbuild makefile
@@ -193,6 +224,8 @@ more details, with real examples.
 	kbuild needs to know which object files you want to build your
 	module from, so you have to tell it by setting a $(<module_name>-y)
 	variable.
+
+	模块由多个源文件编译的时候，使用$(<module_name>-y)为模块指定其需要的目标文件。
 
 	Example:
 		#drivers/isdn/i4l/Makefile
@@ -242,6 +275,8 @@ more details, with real examples.
 	be accessible anyway.
 	For consistency, objects listed in lib-m will be included in lib.a.
 
+	使用lib-y，lib-m指定的目标文件会被包含在lib.a中。
+
 	Note that the same kbuild makefile may list files to be built-in
 	and to be part of a library. Therefore the same directory
 	may contain both a built-in.o and a lib.a file.
@@ -257,6 +292,8 @@ more details, with real examples.
 
 	Use of lib-y is normally restricted to lib/ and arch/*/lib.
 
+	lib-y通常限制在lib/和arch/*/lib目录下。
+
 --- 3.6 Descending down in directories
 
 	A Makefile is only responsible for building objects in its own
@@ -265,9 +302,14 @@ more details, with real examples.
 	invoke make recursively in subdirectories, provided you let it know of
 	them.
 
+	一个Makefile文件只负责为其所在的目录编译目标文件。
+	构建系统会递归进入子目录调用make。
+
 	To do so, obj-y and obj-m are used.
 	ext2 lives in a separate directory, and the Makefile present in fs/
 	tells kbuild to descend down using the following assignment.
+
+	使用斜杠"/"结尾的目标来指定需要递归进入的目录。
 
 	Example:
 		#fs/Makefile
@@ -293,6 +335,10 @@ more details, with real examples.
 	Note: Flags with the same behaviour were previously named:
 	EXTRA_CFLAGS, EXTRA_AFLAGS and EXTRA_LDFLAGS.
 	They are still supported but their usage is deprecated.
+
+	ccflags-y, asflags-y and ldflags-y这3个标志只对其所在的Makefile有效。
+	EXTRA_CFLAGS, EXTRA_AFLAGS and EXTRA_LDFLAGS
+	有同样的功能，仍然支持不过已经弃用。
 
 	ccflags-y specifies options for compiling with $(CC).
 
@@ -324,6 +370,9 @@ more details, with real examples.
 	Options specified using subdir-* are added to the commandline before
 	the options specified using the non-subdir variants.
 
+	subdir-ccflags-y, subdir-asflags-y
+	这2个标志对其所在目录及子目录的Makefile有效。
+
 	Example:
 		subdir-ccflags-y := -Werror
 
@@ -331,6 +380,8 @@ more details, with real examples.
 
 	CFLAGS_$@ and AFLAGS_$@ only apply to commands in current
 	kbuild makefile.
+
+	CFLAGS_$@, AFLAGS_$@只对当前的Makefile有效。
 
 	$(CFLAGS_$@) specifies per-file options for $(CC).  The $@
 	part has a literal value which specifies the file that it is for.
@@ -371,6 +422,8 @@ more details, with real examples.
 	Another example are the architecture-specific Makefiles which
 	need special rules to prepare boot images etc.
 
+	特殊规则为依赖文件和目标文件提供相对目录。
+
 	Special rules are written as normal Make rules.
 	Kbuild is not executing in the directory where the Makefile is
 	located, so all special rules shall provide a relative
@@ -383,10 +436,14 @@ more details, with real examples.
 	where the Makefile is located. Always use $(src) when
 	referring to files located in the src tree.
 
+	$(src)路径用于引用的文件。
+
     $(obj)
 	$(obj) is a relative path which points to the directory
 	where the target is saved. Always use $(obj) when
 	referring to generated files.
+
+	$(obj)路径用于生成的文件。
 
 	Example:
 		#drivers/scsi/Makefile
@@ -407,6 +464,8 @@ more details, with real examples.
 	To support this kbuild define $(kecho) which will echo out the
 	text following $(kecho) to stdout except if "make -s" is used.
 
+	$(kecho)用于在执行"make -s"的时候可以输出信息。
+
 	Example:
 		#arch/blackfin/boot/Makefile
 		$(obj)/vmImage: $(obj)/vmlinux.gz
@@ -421,6 +480,9 @@ more details, with real examples.
 	kbuild provide basic support to check for valid options for $(CC).
 	$(CC) is usually the gcc compiler, but other alternatives are
 	available.
+
+	不同版本的编译器支持不同的特性和选项。
+	对可用的选项进行一些基本的检查。
 
     as-option
 	as-option is used to check if $(CC) -- when used to compile
@@ -602,13 +664,19 @@ Kbuild supports building executables on the host for use during the
 compilation stage.
 Two steps are required in order to use a host executable.
 
+构建一些主机程序用于内核镜像的生成。
+
 The first step is to tell kbuild that a host program exists. This is
 done utilising the variable hostprogs-y.
+
+使用变量hostprogs-y指定需要的主机程序。
 
 The second step is to add an explicit dependency to the executable.
 This can be done in two ways. Either add the dependency in a rule,
 or utilise the variable $(always).
 Both possibilities are described in the following.
+
+使用明确的依赖。在规则中加入依赖或使用变量$(always)。
 
 --- 4.1 Simple Host Program
 
@@ -632,6 +700,8 @@ Both possibilities are described in the following.
 	$(<executable>-objs) lists all objects used to link the final
 	executable.
 
+	使用$(<executable>-objs)列出生成该主机程序需要的目标文件。
+
 	Example:
 		#scripts/lxdialog/Makefile
 		hostprogs-y   := lxdialog
@@ -652,6 +722,8 @@ Both possibilities are described in the following.
 	In the following example the libkconfig.so shared library is used
 	to link the executable conf.
 
+	共享文件使用-objs列出其依赖的目标文件。
+
 	Example:
 		#scripts/kconfig/Makefile
 		hostprogs-y     := conf
@@ -670,6 +742,9 @@ Both possibilities are described in the following.
 	kbuild offers support for host programs written in C++. This was
 	introduced solely to support kconfig, and is not recommended
 	for general use.
+
+	仅限于kconfig。
+	使用$(qconf-cxxobjs)指定其依赖目标。
 
 	Example:
 		#scripts/kconfig/Makefile
@@ -696,6 +771,9 @@ Both possibilities are described in the following.
 	To set flags that will take effect for all host programs created
 	in that Makefile, use the variable HOST_EXTRACFLAGS.
 
+	使用$(HOSTCFLAGS)为$(HOSTCC)传递选项。
+	使用变量HOST_EXTRACFLAGS为该Makefile中生成的主机程序设置标志。
+
 	Example:
 		#scripts/lxdialog/Makefile
 		HOST_EXTRACFLAGS += -I/usr/include/ncurses
@@ -709,6 +787,8 @@ Both possibilities are described in the following.
 
 	It is also possible to specify additional options to the linker.
 
+	使用变量HOSTLOADLIBES为链接器指定额外选项。
+
 	Example:
 		#scripts/kconfig/Makefile
 		HOSTLOADLIBES_qconf := -L$(QTDIR)/lib
@@ -721,6 +801,8 @@ Both possibilities are described in the following.
 	Kbuild will only build host-programs when they are referenced
 	as a prerequisite.
 	This is possible in two ways:
+
+	(1) 在规则的先决条件中列出。
 
 	(1) List the prerequisite explicitly in a special rule.
 
@@ -738,6 +820,8 @@ Both possibilities are described in the following.
 	When there is no suitable special rule, and the host program
 	shall be built when a makefile is entered, the $(always)
 	variable shall be used.
+
+	(2) 使用$(always)
 
 	Example:
 		#scripts/lxdialog/Makefile
@@ -773,6 +857,8 @@ generated by kbuild are deleted all over the kernel src tree when
 
 Additional files can be specified in kbuild makefiles by use of $(clean-files).
 
+clean-files 删除文件
+
 	Example:
 		#drivers/pci/Makefile
 		clean-files := devlist.h classlist.h
@@ -780,6 +866,8 @@ Additional files can be specified in kbuild makefiles by use of $(clean-files).
 When executing "make clean", the two files "devlist.h classlist.h" will
 be deleted. Kbuild will assume files to be in same relative directory as the
 Makefile except if an absolute path is specified (path starting with '/').
+
+clean-dirs 删除目录及子目录
 
 To delete a directory hierarchy use:
 
@@ -794,6 +882,8 @@ Makefile if no absolute path is specified (path does not start with '/').
 To exclude certain files from make clean, use the $(no-clean-files) variable.
 This is only a special case used in the top level Kbuild file:
 
+no-clean-files 排除
+
 	Example:
 		#Kbuild
 		no-clean-files := $(bounds-file) $(offsets-file)
@@ -801,6 +891,8 @@ This is only a special case used in the top level Kbuild file:
 Usually kbuild descends down in subdirectories due to "obj-* := dir/",
 but in the architecture makefiles where the kbuild infrastructure
 is not sufficient this sometimes needs to be explicit.
+
+subdir- 进入子目录删除
 
 	Example:
 		#arch/x86/boot/Makefile
@@ -828,6 +920,8 @@ is not operational at that point.
 Note 2: All directories listed in core-y, libs-y, drivers-y and net-y will
 be visited during "make clean".
 
+"make clean"会进入core-y, libs-y, drivers-y and net-y目录。
+
 === 6 Architecture Makefiles
 
 The top level Makefile sets up the environment and does the preparation,
@@ -837,6 +931,9 @@ arch/$(ARCH)/Makefile contains what is required to set up kbuild
 for said architecture.
 To do so, arch/$(ARCH)/Makefile sets up a number of variables and defines
 a few targets.
+
+在进入下层目录前，顶层的Makefile设置环境变量和一些准备工作。
+顶层目录包含通用部分，arch/$(ARCH)/Makefile包含架构相关部分。
 
 When kbuild executes, the following steps are followed (roughly):
 1) Configuration of the kernel => produce .config
@@ -856,13 +953,25 @@ When kbuild executes, the following steps are followed (roughly):
    - This includes building boot records
    - Preparing initrd images and the like
 
+内核生成步骤：
+1) 配置内核生成.config。
+2) 保存内核版本到include/linux/version.h。
+3)
+4) 更新先决条件。
+5) 递归进入子目录编译。
+6) 链接生成vmlinux，链接在最前的目标文件由head-y列出。
+7) 架构相关部分生成最终的引导镜像。
 
 --- 6.1 Set variables to tweak the build to the architecture
 
     LDFLAGS		Generic $(LD) options
 
+	通用的链接选项。
+
 	Flags used for all invocations of the linker.
 	Often specifying the emulation is sufficient.
+
+	供所有对链接器调用的时候使用。
 
 	Example:
 		#arch/s390/Makefile
@@ -872,11 +981,15 @@ When kbuild executes, the following steps are followed (roughly):
 
     LDFLAGS_MODULE	Options for $(LD) when linking modules
 
+	链接模块的时候使用的选项。
+
 	LDFLAGS_MODULE is used to set specific flags for $(LD) when
 	linking the .ko files used for modules.
 	Default is "-r", for relocatable output.
 
     LDFLAGS_vmlinux	Options for $(LD) when linking vmlinux
+
+	链接vmlinux的时候使用的选项。
 
 	LDFLAGS_vmlinux is used to specify additional flags to pass to
 	the linker when linking the final vmlinux image.
@@ -887,6 +1000,8 @@ When kbuild executes, the following steps are followed (roughly):
 		LDFLAGS_vmlinux := -e stext
 
     OBJCOPYFLAGS	objcopy flags
+
+	供objcopy的时候使用的标志。
 
 	When $(call if_changed,objcopy) is used to translate a .o file,
 	the flags specified in OBJCOPYFLAGS will be used.
@@ -906,6 +1021,8 @@ When kbuild executes, the following steps are followed (roughly):
 
     KBUILD_AFLAGS		$(AS) assembler flags
 
+	汇编标志。
+
 	Default value - see top level Makefile
 	Append or modify as required per architecture.
 
@@ -914,6 +1031,8 @@ When kbuild executes, the following steps are followed (roughly):
 		KBUILD_AFLAGS += -m64 -mcpu=ultrasparc
 
     KBUILD_CFLAGS		$(CC) compiler flags
+
+	编译器使用的标志。
 
 	Default value - see top level Makefile
 	Append or modify as required per architecture.
@@ -945,10 +1064,14 @@ When kbuild executes, the following steps are followed (roughly):
 
     KBUILD_AFLAGS_KERNEL	$(AS) options specific for built-in
 
+	供built-in使用的汇编标志。
+
 	$(KBUILD_AFLAGS_KERNEL) contains extra C compiler flags used to compile
 	resident kernel code.
 
     KBUILD_AFLAGS_MODULE   Options for $(AS) when building modules
+
+	构建模块的时候使用的汇编选项。
 
 	$(KBUILD_AFLAGS_MODULE) is used to add arch specific options that
 	are used for $(AS).
@@ -956,10 +1079,14 @@ When kbuild executes, the following steps are followed (roughly):
 
     KBUILD_CFLAGS_KERNEL	$(CC) options specific for built-in
 
+	供built-in使用的编译选项。
+
 	$(KBUILD_CFLAGS_KERNEL) contains extra C compiler flags used to compile
 	resident kernel code.
 
     KBUILD_CFLAGS_MODULE   Options for $(CC) when building modules
+
+	构建模块的时候编译器使用的选项。
 
 	$(KBUILD_CFLAGS_MODULE) is used to add arch specific options that
 	are used for $(CC).
@@ -967,11 +1094,15 @@ When kbuild executes, the following steps are followed (roughly):
 
     KBUILD_LDFLAGS_MODULE   Options for $(LD) when linking modules
 
+	链接模块的时候使用的选项。
+
 	$(KBUILD_LDFLAGS_MODULE) is used to add arch specific options
 	used when linking modules. This is often a linker script.
 	From commandline LDFLAGS_MODULE shall be used (see kbuild.txt).
 
     KBUILD_ARFLAGS   Options for $(AR) when creating archives
+
+	打包的时候使用的选项。
 
 	$(KBUILD_ARFLAGS) set by the top level Makefile to "D" (deterministic
 	mode) if this option is supported by $(AR).
@@ -1012,6 +1143,9 @@ When kbuild executes, the following steps are followed (roughly):
 	corresponding arch-specific section for modules; the module-building
 	machinery is all architecture-independent.
 
+	架构相关的Makefile与顶层Makefile一起定义用于生成vmlinux的变量。
+	模块的生成与架构无关。
+
 
     head-y, init-y, core-y, libs-y, drivers-y, net-y
 
@@ -1020,12 +1154,22 @@ When kbuild executes, the following steps are followed (roughly):
 	The rest list directories where a built-in.o object file can be
 	located.
 
+	$(head-y)列出在vmlinux最先链接的目标。
+	$(libs-y)列出会含有lib.a的目录。
+	余下的目录会生成built-in.o目标文件。
+
 	$(init-y) objects will be located after $(head-y).
 	Then the rest follows in this order:
 	$(core-y), $(libs-y), $(drivers-y) and $(net-y).
 
+	$(init-y)目标链接在$(head-y)后面。
+	余下的以此顺序链接$(core-y), $(libs-y), $(drivers-y) and $(net-y)。
+
 	The top level Makefile defines values for all generic directories,
 	and arch/$(ARCH)/Makefile only adds architecture-specific directories.
+
+	顶层Makefile为通用目录定义值。
+	arch/$(ARCH)/Makefile添加架构相关目录。
 
 	Example:
 		#arch/sparc64/Makefile
@@ -1041,8 +1185,12 @@ When kbuild executes, the following steps are followed (roughly):
 	somewhere. This includes various kinds of installation commands.
 	The actual goals are not standardized across architectures.
 
+	架构相关Makefile的目标是压缩vmlinux，与引导代码一起打包，把最终文件复制到某个地方。
+
 	It is common to locate any additional processing in a boot/
 	directory below arch/$(ARCH)/.
+
+	通用的做法是将额外的处理放在arch/$(ARCH)/boot目录。
 
 	Kbuild does not provide any smart way to support building a
 	target specified in boot/. Therefore arch/$(ARCH)/Makefile shall
@@ -1092,6 +1240,8 @@ When kbuild executes, the following steps are followed (roughly):
 	extra-y specify additional targets created in the current
 	directory, in addition to any targets specified by obj-*.
 
+	extra-y指定除obj-*之外，其目录外的额外目标。
+
 	Listing all targets in extra-y is required for two purposes:
 	1) Enable kbuild to check changes in command lines
 	   - When $(call if_changed,xxx) is used
@@ -1104,6 +1254,7 @@ When kbuild executes, the following steps are followed (roughly):
 	In this example, extra-y is used to list object files that
 	shall be built, but shall not be linked as part of built-in.o.
 
+	但不会被链接进built-in.o文件。
 
 --- 6.7 Commands useful for building a boot image
 
@@ -1245,6 +1396,9 @@ When kbuild executes, the following steps are followed (roughly):
 	located in the same directory.
 	kbuild knows .lds files and includes a rule *lds.S -> *lds.
 
+	生成vmlinux镜像的时候，使用链接脚本arch/$(ARCH)/kernel/vmlinux.lds。
+	该脚本由同目录下的vmlinux.lds.S预处理生成。
+
 	Example:
 		#arch/x86/kernel/Makefile
 		always := vmlinux.lds
@@ -1275,6 +1429,8 @@ When kbuild executes, the following steps are followed (roughly):
 	to list the file in the Kbuild file.
 	See "7.4 generic-y" for further info on syntax etc.
 
+	include/asm-generic包含架构共享的头文件。
+
 === 7 Kbuild syntax for exported headers
 
 The kernel include a set of headers that is exported to userspace.
@@ -1285,6 +1441,8 @@ The pre-processing does:
 - drop include of compiler.h
 - drop all sections that are kernel internal (guarded by ifdef __KERNEL__)
 
+内核包含导出到用户空间的头文件。
+
 Each relevant directory contains a file name "Kbuild" which specifies the
 headers to be exported.
 See subsequent chapter for the syntax of the Kbuild file.
@@ -1292,6 +1450,8 @@ See subsequent chapter for the syntax of the Kbuild file.
 	--- 7.1 header-y
 
 	header-y specify header files to be exported.
+
+	header-y列举要导出的头文件。
 
 		Example:
 			#include/linux/Kbuild
@@ -1313,6 +1473,8 @@ See subsequent chapter for the syntax of the Kbuild file.
 	Generated files are special as they need to be looked
 	up in another directory when doing 'make O=...' builds.
 
+	genhdr-y列举生成的文件中需要导出的文件。
+
 		Example:
 			#include/linux/Kbuild
 			genhdr-y += version.h
@@ -1323,6 +1485,8 @@ See subsequent chapter for the syntax of the Kbuild file.
 	exported to a different directory destination-y is used.
 	destination-y specify the destination directory for all exported
 	headers in the file where it is present.
+
+	指定导出的目的目录。
 
 		Example:
 			#arch/xtensa/platforms/s6105/include/platform/Kbuild
@@ -1363,6 +1527,9 @@ See subsequent chapter for the syntax of the Kbuild file.
 The top Makefile exports the following variables:
 
     VERSION, PATCHLEVEL, SUBLEVEL, EXTRAVERSION
+
+顶层Makefile导出以下变量：
+	VERSION, PATCHLEVEL, SUBLEVEL, EXTRAVERSION
 
 	These variables define the current kernel version.  A few arch
 	Makefiles actually use these values directly; they should use
@@ -1427,6 +1594,8 @@ The kernel Makefiles are designed to be run with GNU Make.  The Makefiles
 use only the documented features of GNU Make, but they do use many
 GNU extensions.
 
+内核Makefile使用GNU Make。
+
 GNU Make supports elementary list-processing functions.  The kernel
 Makefiles use a novel style of list building and manipulation with few
 "if" statements.
@@ -1437,8 +1606,15 @@ into the left-hand side.  "=" is like a formula definition; it stores the
 right-hand side in an unevaluated form and then evaluates this form each
 time the left-hand side is used.
 
+GNU Make有两种赋值运算符，":="和"="。
+":="右侧立即展开，并将真正的字符串保存在左侧。
+"="像公式定义，在左侧使用的时候才展开。
+
 There are some cases where "=" is appropriate.  Usually, though, ":="
 is the right choice.
+
+有时候使用"="合适。
+不过通常":="是正确的选择。
 
 === 10 Credits
 
