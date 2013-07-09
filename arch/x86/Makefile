@@ -1,5 +1,8 @@
 # Unified Makefile for i386 and x86_64
 
+# 使用uname -m返回机器的硬件名称，如x86_64，i686
+# 根据机器架构设置默认配置文件
+
 # select defconfig based on actual architecture
 ifeq ($(ARCH),x86)
   ifeq ($(shell uname -m),x86_64)

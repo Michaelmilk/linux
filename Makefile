@@ -353,12 +353,12 @@ SUBARCH := $(shell uname -m | sed -e s/i.86/x86/ -e s/x86_64/x86/ \
 				  -e s/ppc.*/powerpc/ -e s/mips.*/mips/ \
 				  -e s/sh[234].*/sh/ -e s/aarch64.*/arm64/ )
 
-	# 为变量SUBARCH追加调用shell执行sed后的返回值。
-	# sed 是一种在线编辑器，它一次处理一行内容。
-	# Sed主要用来自动编辑一个或多个文件；简化对文件的反复操作；编写转换程序等。
-	# sed -e参数表明只在命令行上执行该命令
-	# s为替换字符串操作，即匹配前一项的都统一使用后一项的名称
-	# 如 SUBARCH := i386
+        # 为变量SUBARCH追加调用shell执行sed后的返回值。
+        # sed 是一种在线编辑器，它一次处理一行内容。
+        # Sed主要用来自动编辑一个或多个文件；简化对文件的反复操作；编写转换程序等。
+        # sed -e参数表明只在命令行上执行该命令
+        # s为替换字符串操作，即匹配前一项的都统一使用后一项的名称
+        # 如 SUBARCH := x86
 
 # Cross compiling and selecting different set of gcc/bin-utils
 # ---------------------------------------------------------------------------
@@ -370,9 +370,9 @@ SUBARCH := $(shell uname -m | sed -e s/i.86/x86/ -e s/x86_64/x86/ \
 # Another way is to have ARCH set in the environment.
 # The default ARCH is the host where make is executed.
 
-	# 交叉编译的时候，则需要使用ARCH变量设置目标机架构
-	# 可以在命令行使用ARCH=或设置环境变量
-	# ARCH的默认值会被设置为编译主机
+        # 交叉编译的时候，则需要使用ARCH变量设置目标机架构
+        # 可以在命令行使用ARCH=或设置环境变量
+        # ARCH的默认值会被设置为编译主机
 
 # CROSS_COMPILE specify the prefix used for all executables used
 # during compilation. Only gcc and related bin-utils executables
@@ -397,21 +397,21 @@ SUBARCH := $(shell uname -m | sed -e s/i.86/x86/ -e s/x86_64/x86/ \
 
 ARCH		?= $(SUBARCH)
 
-	# 如果命令行或环境变量没有指定CROSS_COMPILE的话，则由配置文件决定
+        # 如果命令行或环境变量没有指定CROSS_COMPILE的话，则由配置文件决定
 
 CROSS_COMPILE	?= $(CONFIG_CROSS_COMPILE:"%"=%)
 
 # Architecture as present in compile.h
 
-	# Universal TimeSharing System 通用分时系统
+        # Universal TimeSharing System 通用分时系统
 
 UTS_MACHINE 	:= $(ARCH)
 
-	# 内核源码对应的架构目录名称
+        # 内核源码对应的架构目录名称
 
 SRCARCH 	:= $(ARCH)
 
-	# i386和x86代码统一在一个目录下了
+        # i386和x86代码统一在一个目录下了
 
 # Additional ARCH settings for x86
 ifeq ($(ARCH),i386)

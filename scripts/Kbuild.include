@@ -1,7 +1,7 @@
 ####
 # kbuild: Generic definitions
 
-	#定义一些有用的变量和命令等
+        #定义一些有用的变量和命令等
 
 # Convenient variables
 comma   := ,
@@ -9,25 +9,36 @@ squote  := '
 empty   :=
 space   := $(empty) $(empty)
 
-	# dir取目录，notdir取最后的文件名称
-	# 效果就是在文件名称前加个.变成隐藏文件
+        # dir取目录，notdir取最后的文件名称
+        # 效果就是在文件名称前加个.变成隐藏文件
 
 ###
 # Name of target with a '.' as filename prefix. foo/bar.o => foo/.bar.o
 dot-target = $(dir $@).$(notdir $@)
+
+        # 把依赖文件名称中的逗号替换为下划线
 
 ###
 # The temporary file to save gcc -MD generated dependencies must not
 # contain a comma
 depfile = $(subst $(comma),_,$(dot-target).d)
 
+        # 去掉目录和扩展名
+        # basename 取前缀
+        # notdir 取文件名
+        # $@ 所有目标
+
 ###
 # filename of target with directory and extension stripped
 basetarget = $(basename $(notdir $@))
 
+        # $< 第一个依赖
+
 ###
 # filename of first prerequisite with directory and extension stripped
 baseprereq = $(basename $(notdir $<))
+
+        # 对echo中的单引号进行转义
 
 ###
 # Escape single quote for use in echo statements
@@ -55,6 +66,14 @@ kecho := $($(quiet)kecho)
 # - If they are equal no change, and no timestamp update
 # - stdin is piped in from the first prerequisite ($<) so one has
 #   to specify a valid file as first prerequisite (often the kbuild file)
+
+        # set -e 之后的代码，一旦出现返回值非0，则立即退出
+        # 打印'  CHK     目标文件'提示信息
+        # 创建目录
+        # 
+        # -r 文件存在且可读，为真
+        # cmp 按字节比较两个文件 -s 安静模式，不输出信息
+
 define filechk
 	$(Q)set -e;				\
 	$(kecho) '  CHK     $@';		\
