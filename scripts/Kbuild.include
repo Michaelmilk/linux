@@ -73,6 +73,12 @@ kecho := $($(quiet)kecho)
         # 
         # -r 文件存在且可读，为真
         # cmp 按字节比较两个文件 -s 安静模式，不输出信息
+        #
+        # 例如:
+        # filechk_version.h
+        #   include/generated/uapi/linux/version.h.tmp
+        # filechk_utsrelease.h
+        #   include/generated/utsrelease.h.tmp
 
 define filechk
 	$(Q)set -e;				\
@@ -95,12 +101,34 @@ endef
 # Usage: CROSS_COMPILE := $(call cc-cross-prefix, m68k-linux-gnu- m68k-linux-)
 # Return first prefix where a prefix$(CC) is found in PATH.
 # If no $(CC) found in PATH with listed prefixes return nothing
+
+        # 查找存在的prefix$(CC)交叉编译程序
+        # 返回存在的那个交叉编译程序的前缀
+        #
+        # $(word <n>,<text>) 取字符串第一个单词，从1开始
+        # $(foreach <var>,<list>,<text>) 
+        #   把参数<list>中的单词逐一取出放到参数<var>指定的变量中，
+        #   然后再执行<text>所包含的表达式。每一次<text>会返回一个字符串，
+        #   <text>所返回的每个字符串会以空格分隔，最后循环结束时，
+        #   <text>所返回的每个字符串组成的整个字符串(以空格分隔)将会是foreac函数的返回值。
+        # $(strip <string>) 去空格函数，去掉<string>字串中开头和结尾的空字符。
+        # which 返回程序的完成路径
+
 cc-cross-prefix =  \
 	$(word 1, $(foreach c,$(1),                                   \
 		$(shell set -e;                                       \
 		if (which $(strip $(c))$(CC)) > /dev/null 2>&1 ; then \
 			echo $(c);                                    \
 		fi)))
+
+        # $(if <condition>,<then-part>)或$(if <condition>,<then-part>,<else-part>)
+        # 而if函数的返回值是，如果<condition>为真（非空字符串），
+        # 那个<then-part>会是整 个函数的返回值，
+        # 如果<condition>为假（空字符串），那么<else-part>会是整个函数的返回值，
+        # 此时如果<else-part>没有被定义，那么，整个函数返回空字串。 
+        # 所以，<then-part>和<else-part>只会有一个被计算。 
+        #
+        # $(firstword <text>) 取字符串<text>中的第一个单词。
 
 # output directory for tests below
 TMPOUT := $(if $(KBUILD_EXTMOD),$(firstword $(KBUILD_EXTMOD))/)
@@ -109,6 +137,10 @@ TMPOUT := $(if $(KBUILD_EXTMOD),$(firstword $(KBUILD_EXTMOD))/)
 # Usage: option = $(call try-run, $(CC)...-o "$$TMP",option-ok,otherwise)
 # Exit code chooses option. "$$TMP" is can be used as temporary file and
 # is automatically cleaned up.
+
+        # 尝试执行call try-run的第一个参数命令
+        # 根据$(1)的执行结果，返回$(2)或$(3)
+
 try-run = $(shell set -e;		\
 	TMP="$(TMPOUT).$$$$.tmp";	\
 	TMPO="$(TMPOUT).$$$$.o";	\
@@ -121,11 +153,24 @@ try-run = $(shell set -e;		\
 # as-option
 # Usage: cflags-y += $(call as-option,-Wa$(comma)-isa=foo,)
 
+        # $(call <expression>,<parm1>,<pram2>,<parm3>...)
+        # 当make执行整个函数时，<expression>参数中的变量，
+        # 如$(1)，$(2)，$(3)等，会被参数<parm1>，<parm2>，<parm3>依次取代。
+        # 而<expression>的返回值就是call函数的返回值。
+        #
+        # gcc 选项 -c 编译或汇编源文件，但是不链接
+        # gcc 选项 -x language 明确指明随后输入文件使用的语言
+        # 例如: c c++ assembler
+        #
+        # 使用选项$(1)进行汇编，选项ok的话返回该选项$(1)，否则返回$(2)
+
 as-option = $(call try-run,\
 	$(CC) $(KBUILD_CFLAGS) $(1) -c -x assembler /dev/null -o "$$TMP",$(1),$(2))
 
 # as-instr
 # Usage: cflags-y += $(call as-instr,instr,option1,option2)
+
+        # as-instr检测汇编器是否报告一个特殊指令并输出选项1或选项2。
 
 as-instr = $(call try-run,\
 	printf "%b\n" "$(1)" | $(CC) $(KBUILD_AFLAGS) -c -x assembler -o "$$TMP" -,$(2),$(3))
@@ -133,44 +178,77 @@ as-instr = $(call try-run,\
 # cc-option
 # Usage: cflags-y += $(call cc-option,-march=winchip-c6,-march=i586)
 
+        # cc-option用来检测$(CC)是否支持一个给定式的选项。支持则返回该选项$(1)。
+
 cc-option = $(call try-run,\
 	$(CC) $(KBUILD_CPPFLAGS) $(KBUILD_CFLAGS) $(1) -c -x c /dev/null -o "$$TMP",$(1),$(2))
 
 # cc-option-yn
 # Usage: flag := $(call cc-option-yn,-march=winchip-c6)
+
+        # 返回y或n
+
 cc-option-yn = $(call try-run,\
 	$(CC) $(KBUILD_CPPFLAGS) $(KBUILD_CFLAGS) $(1) -c -x c /dev/null -o "$$TMP",y,n)
 
 # cc-option-align
 # Prefix align with either -falign or -malign
+
+        # $(subst <from>,<to>,<text>) 字符串替换函数
+        # 把字串<text>中的<from>字符串替换成<to>。
+        # 返回-falign或-malign
+
 cc-option-align = $(subst -functions=0,,\
 	$(call cc-option,-falign-functions=0,-malign-functions=0))
 
 # cc-disable-warning
 # Usage: cflags-y += $(call cc-disable-warning,unused-but-set-variable)
+
+        # 使用-W检查警告选项是否支持
+        # 支持的话则返回-Wno-去掉该警告选项
+
 cc-disable-warning = $(call try-run,\
 	$(CC) $(KBUILD_CPPFLAGS) $(KBUILD_CFLAGS) -W$(strip $(1)) -c -x c /dev/null -o "$$TMP",-Wno-$(strip $(1)))
 
 # cc-version
 # Usage gcc-ver := $(call cc-version)
+
+        # gcc版本号，如:0407
+
 cc-version = $(shell $(CONFIG_SHELL) $(srctree)/scripts/gcc-version.sh $(CC))
 
 # cc-fullversion
 # Usage gcc-ver := $(call cc-fullversion)
+
+        # 完整的gcc版本号，带补丁等级，如:040702
+
 cc-fullversion = $(shell $(CONFIG_SHELL) \
 	$(srctree)/scripts/gcc-version.sh -p $(CC))
 
 # cc-ifversion
 # Usage:  EXTRA_CFLAGS += $(call cc-ifversion, -lt, 0402, -O1)
+
+        # 如果gcc版本号满足判断条件，则输出$(3)
+        # 例如:$(call cc-ifversion, -lt, 0402, -O1)
+        # 如果gcc版本号小于0402，则输出-O1
+
 cc-ifversion = $(shell [ $(call cc-version, $(CC)) $(1) $(2) ] && echo $(3))
 
 # cc-ldoption
 # Usage: ldflags += $(call cc-ldoption, -Wl$(comma)--hash-style=both)
+
+        # 判断是否支持该ld链接选项
+        # 支持则返回该选项
+
 cc-ldoption = $(call try-run,\
 	$(CC) $(1) -nostdlib -x c /dev/null -o "$$TMP",$(1),$(2))
 
 # ld-option
 # Usage: LDFLAGS += $(call ld-option, -X)
+
+        # 判断是否支持该ld链接选项
+        # 支持则返回该选项
+
 ld-option = $(call try-run,\
 	$(CC) -x c /dev/null -c -o "$$TMPO" ; $(LD) $(1) "$$TMPO" -o "$$TMP",$(1),$(2))
 
