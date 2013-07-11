@@ -2,17 +2,19 @@
 # Building
 # ==========================================================================
 
-	# 使用变量obj来指示当前编译的目录
-	# obj会被加在目录下所有文件的前面，来组成相对目录树根的一个完整路径文件名称
-	# 例如: 编译文件系统时使用make -f scripts/Makefile.build obj=fs
-	#       首先编译fs/%.c
+        # 使用变量obj来指示当前编译的目录
+        # obj会被加在目录下所有文件的前面，来组成相对目录树根的一个完整路径文件名称
+        # 例如: 编译文件系统时使用make -f scripts/Makefile.build obj=fs
+        #       首先编译fs/%.c
 
 src := $(obj)
 
-	# 默认的目标
+        # 默认的目标
 
 PHONY := __build
 __build:
+
+        # 初始化相关变量
 
 # Init all relevant variables used in kbuild files so
 # 1) they have correct type
@@ -39,31 +41,55 @@ subdir-ccflags-y :=
 
 # Read auto.conf if it exists, otherwise ignore
 
-	# 包含由.config生成的配置信息
+        # 包含由.config生成的配置信息
+        # 主要是一些CONFIG_变量的值
+        # -include “-”的意思是告诉make，忽略此操作的错误。make继续执行。
+        # 例如:
+        # CONFIG_RING_BUFFER=y
+        # CONFIG_HAVE_ARCH_SECCOMP_FILTER=y
+        # CONFIG_SCSI_DMA=y
+        # CONFIG_TCP_MD5SIG=y
 
 -include include/config/auto.conf
 
 	# 包含一些有用的变量和命令等
+        # include 文件必须存在
 
 include scripts/Kbuild.include
+
+        # 保存$(CFLAGS)的值，便于下面对其是否变化进行检查。
 
 # For backward compatibility check that these variables do not change
 save-cflags := $(CFLAGS)
 
 # The filename Kbuild has precedence over Makefile
 
-	# 当前编译目录的完整绝对目录路径
+        # 当前编译目录的完整绝对目录路径
+        # 如果是/开头的绝对路径，则直接使用
+        # 否则加上$(srctree)/成为绝对路径
 
 kbuild-dir := $(if $(filter /%,$(src)),$(src),$(srctree)/$(src))
 
-	# 当前编译目录下的Makefile绝对路径
+        # 当前编译目录下的Makefile绝对路径
+        # 如果存在Kbuild则使用Kbuild
+        # 否则使用Makefile
 
 kbuild-file := $(if $(wildcard $(kbuild-dir)/Kbuild),$(kbuild-dir)/Kbuild,$(kbuild-dir)/Makefile)
 
-	# 包含当前编译目录的Makefile
-	# 此类Makfile内根据.config生成的内容为编译的目标变量赋值
+        # 包含当前编译目录的Makefile
+        # 此类Makfile内根据.config生成的内容为编译的目标变量赋值
+        # 即上面包含的include/config/auto.conf中一些CONFIG_变量控制当前目录中Makefile的obj-$(CONFIG_PROC_FS)等
+        # 例如fs目录下的Makefile
+        # obj-y := open.o read_write.o file_table.o super.o ...
+        # obj-$(CONFIG_PROC_FS) += proc_namespace.o
 
 include $(kbuild-file)
+
+        # KBUILD_NOPEDANTIC为空
+        # 命令行中没有使用make KBUILD_NOPEDANTIC=1或未设置环境变量KBUILD_NOPEDANTIC
+        # 则对$(CFLAGS)进行检查
+        # 即不要在子Makefile或模块的Makefile中直接修改$(CFLAGS)变量
+        # 而应该使用ccflags-y增加标志选项
 
 # If the save-* variables changed error out
 ifeq ($(KBUILD_NOPEDANTIC),)
@@ -81,6 +107,9 @@ endif
 #
 # $(call cc-option, -W...) handles gcc -W.. options which
 # are not supported by all versions of the compiler
+
+        # 编译的时候命令行使用了make W=...
+
 ifdef KBUILD_ENABLE_EXTRA_GCC_CHECKS
 warning-  := $(empty)
 
@@ -120,12 +149,16 @@ ifeq ("$(strip $(warning))","")
         $(error W=$(KBUILD_ENABLE_EXTRA_GCC_CHECKS) is unknown)
 endif
 
+        # 加上额外的警告检查
+
 KBUILD_CFLAGS += $(warning)
 endif
 
-	# 包含Makefile.lib文件，用来提取要编译的子目录文件，常用的命令等
+        # 包含Makefile.lib文件，用来提取要编译的子目录文件，常用的命令等
 
 include scripts/Makefile.lib
+
+        # 现在使用hostprogs-y指定需要的主机程序
 
 ifdef host-progs
 ifneq ($(hostprogs-y),$(host-progs))
@@ -138,6 +171,9 @@ endif
 ifneq ($(hostprogs-y)$(hostprogs-m),)
 include scripts/Makefile.host
 endif
+
+        # 使用了外部目录，则创建目标目录。
+        # 使用了":="赋值，其表达式是立即执行的。
 
 ifneq ($(KBUILD_SRC),)
 # Create output directory if not already present
@@ -154,12 +190,15 @@ endif
 
 # ===========================================================================
 
+        # 有lib库目标文件
+
 ifneq ($(strip $(lib-y) $(lib-m) $(lib-n) $(lib-)),)
 lib-target := $(obj)/lib.a
 endif
 
-	# 使用make的strip函数去掉空字符
-	# 即如果该目录下有需要处理的目标时，为builtin-target赋值
+        # 使用make的strip函数去掉空字符
+        # 即如果该目录下有需要处理的目标时，为builtin-target赋值
+        # 这些目标会链接为built-in.o文件
 
 ifneq ($(strip $(obj-y) $(obj-m) $(obj-n) $(obj-) $(subdir-m) $(lib-target)),)
 builtin-target := $(obj)/built-in.o
@@ -169,8 +208,8 @@ modorder-target := $(obj)/modules.order
 
 # We keep a list of all modules in $(MODVERDIR)
 
-	# 先解决顶层目录obj的目标built-in.o
-	# subdir-ym在上面包含的Makefile.lib中赋值，处理子目录中的目标
+        # 先解决顶层目录obj的目标built-in.o
+        # subdir-ym在上面包含的Makefile.lib中赋值，处理子目录中的目标
 
 __build: $(if $(KBUILD_BUILTIN),$(builtin-target) $(lib-target) $(extra-y)) \
 	 $(if $(KBUILD_MODULES),$(obj-m) $(modorder-target)) \
@@ -179,8 +218,8 @@ __build: $(if $(KBUILD_BUILTIN),$(builtin-target) $(lib-target) $(extra-y)) \
 
 # Linus' kernel sanity checking tool
 
-    # 命令行中使用了C=1或C=2参数
-    # 顶层Makefile中会将KBUILD_CHECKSRC赋为对应的值
+        # 命令行中使用了C=1或C=2参数
+        # 顶层Makefile中会将KBUILD_CHECKSRC赋为对应的值
 
 ifneq ($(KBUILD_CHECKSRC),0)
   ifeq ($(KBUILD_CHECKSRC),2)
@@ -197,7 +236,7 @@ ifdef CONFIG_DEBUG_SECTION_MISMATCH
   cmd_secanalysis = ; scripts/mod/modpost $@
 endif
 
-    # 编译.c的一些规则
+        # 编译.c的一些规则
 
 # Compile C sources (.c)
 # ---------------------------------------------------------------------------
@@ -268,6 +307,9 @@ $(obj)/%.symtypes : $(src)/%.c FORCE
 quiet_cmd_cc_o_c = CC $(quiet_modtag)  $@
 
 ifndef CONFIG_MODVERSIONS
+
+        # 从第一个依赖$<编译出目标文件$@
+
 cmd_cc_o_c = $(CC) $(c_flags) -c -o $@ $<
 
 else
@@ -359,7 +401,7 @@ quiet_cmd_cc_lst_c = MKLST   $@
 $(obj)/%.lst: $(src)/%.c FORCE
 	$(call if_changed_dep,cc_lst_c)
 
-    # 编译.S的一些规则
+        # 编译.S的一些规则
 
 # Compile assembler sources (.S)
 # ---------------------------------------------------------------------------
@@ -389,6 +431,8 @@ targets += $(extra-y) $(MAKECMDGOALS) $(always)
 quiet_cmd_cpp_lds_S = LDS     $@
       cmd_cpp_lds_S = $(CPP) $(cpp_flags) -P -C -U$(ARCH) \
 	                     -D__ASSEMBLY__ -DLINKER_SCRIPT -o $@ $<
+
+        # 生成链接脚本
 
 $(obj)/%.lds: $(src)/%.lds.S FORCE
 	$(call if_changed_dep,cpp_lds_S)

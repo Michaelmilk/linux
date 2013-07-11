@@ -1,4 +1,7 @@
 # Backward compatibility
+
+        # 兼容旧的设置标志的方式
+
 asflags-y  += $(EXTRA_AFLAGS)
 ccflags-y  += $(EXTRA_CFLAGS)
 cppflags-y += $(EXTRA_CPPFLAGS)
