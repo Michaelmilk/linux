@@ -106,12 +106,15 @@ endef
         # 返回存在的那个交叉编译程序的前缀
         #
         # $(word <n>,<text>) 取字符串第一个单词，从1开始
+        #
         # $(foreach <var>,<list>,<text>) 
         #   把参数<list>中的单词逐一取出放到参数<var>指定的变量中，
         #   然后再执行<text>所包含的表达式。每一次<text>会返回一个字符串，
         #   <text>所返回的每个字符串会以空格分隔，最后循环结束时，
         #   <text>所返回的每个字符串组成的整个字符串(以空格分隔)将会是foreac函数的返回值。
+        #
         # $(strip <string>) 去空格函数，去掉<string>字串中开头和结尾的空字符。
+        #
         # which 返回程序的完成路径
 
 cc-cross-prefix =  \
@@ -206,6 +209,7 @@ cc-option-align = $(subst -functions=0,,\
 
         # 使用-W检查警告选项是否支持
         # 支持的话则返回-Wno-去掉该警告选项
+        # $$TMP为try-run中定义的变量
 
 cc-disable-warning = $(call try-run,\
 	$(CC) $(KBUILD_CPPFLAGS) $(KBUILD_CFLAGS) -W$(strip $(1)) -c -x c /dev/null -o "$$TMP",-Wno-$(strip $(1)))
@@ -239,6 +243,7 @@ cc-ifversion = $(shell [ $(call cc-version, $(CC)) $(1) $(2) ] && echo $(3))
 
         # 判断是否支持该ld链接选项
         # 支持则返回该选项
+        # $$TMP为try-run中定义的变量
 
 cc-ldoption = $(call try-run,\
 	$(CC) $(1) -nostdlib -x c /dev/null -o "$$TMP",$(1),$(2))
@@ -248,6 +253,7 @@ cc-ldoption = $(call try-run,\
 
         # 判断是否支持该ld链接选项
         # 支持则返回该选项
+        # $$TMP，$$TMP0为try-run中定义的变量
 
 ld-option = $(call try-run,\
 	$(CC) -x c /dev/null -c -o "$$TMPO" ; $(LD) $(1) "$$TMPO" -o "$$TMP",$(1),$(2))
@@ -255,6 +261,10 @@ ld-option = $(call try-run,\
 # ar-option
 # Usage: KBUILD_ARFLAGS := $(call ar-option,D)
 # Important: no spaces around options
+
+        # 判断$(AR)程序是否支持选项
+        # 支持则返回该$(1)选项
+
 ar-option = $(call try-run, $(AR) rc$(1) "$$TMP",$(1),$(2))
 
 ######
@@ -263,24 +273,58 @@ ar-option = $(call try-run, $(AR) rc$(1) "$$TMP",$(1),$(2))
 # Shorthand for $(Q)$(MAKE) -f scripts/Makefile.build obj=
 # Usage:
 # $(Q)$(MAKE) $(build)=dir
+
+        # $(Q)$(MAKE) -f scripts/Makefile.build obj=
+        # 的简写
+        # 即使用scripts/Makefile.build作为Makefile
+        # 使用obj指定目录
+        # 如果KBUILD_SRC不为空，则使用外部的那个srctree目录
+
 build := -f $(if $(KBUILD_SRC),$(srctree)/)scripts/Makefile.build obj
 
 ###
 # Shorthand for $(Q)$(MAKE) -f scripts/Makefile.modbuiltin obj=
 # Usage:
 # $(Q)$(MAKE) $(modbuiltin)=dir
+
+        # 模块编译的简写
+
 modbuiltin := -f $(if $(KBUILD_SRC),$(srctree)/)scripts/Makefile.modbuiltin obj
 
 # Prefix -I with $(srctree) if it is not an absolute path.
 # skip if -I has no parameter
+
+        # $(patsubst <pattern>,<replacement>,<text>) 模式字符串替换函数
+        # 查找<text>中的单词（单词以“空格”、“Tab”或“回车”“换行”分隔）是否符合模式<pattern>，
+        # 如果匹配的话，则以<replacement>替换。
+        # 这里，<pattern>可以包括通配符“%”，表示任意长度的字串。
+        # 如果<replacement>中也包含“%”，那么，<replacement>中的这个“%”将是<pattern>中的那个“%”所代表的字串。
+        # （可以用“\”来转义，以“\%”来表示真实含义的“%”字符）。
+        # 函数返回被替换过后的字符串。
+        #
+        # $(filter-out <pattern...>,<text>) 反过滤函数
+        # 以<pattern>模式过滤<text>字符串中的单词，去除符合模式<pattern>的单词。可以有多个模式。
+        # 返回不符合模式<pattern>的字串。
+        #
+        # 如果-I后有参数的话，且路径不是绝对路径的话
+        # 则增加-I后参数的路径修改为$(srctree)绝对路径
+
 addtree = $(if $(patsubst -I%,%,$(1)), \
 $(if $(filter-out -I/%,$(1)),$(patsubst -I%,-I$(srctree)/%,$(1))) $(1))
 
 # Find all -I options and call addtree
+
+        # 为$($(1))中的每一项执行表达式
+        # 如果含有-I选项的话，则调用addtree
+
 flags = $(foreach o,$($(1)),$(if $(filter -I%,$(o)),$(call addtree,$(o)),$(o)))
 
 # echo command.
 # Short version is used, if $(quiet) equals `quiet_', otherwise full one.
+
+        # 例如:$(call echo-cmd,checksrc)
+        # 如果有quiet_cmd_checksrc，则打印短的信息CHECK   $<
+
 echo-cmd = $(if $($(quiet)cmd_$(1)),\
 	echo '  $(call escsq,$($(quiet)cmd_$(1)))$(echo-why)';)
 
@@ -291,6 +335,10 @@ echo-cmd = $(if $($(quiet)cmd_$(1)),\
 cmd = @$(echo-cmd) $(cmd_$(1))
 
 # Add $(obj)/ for paths that are not absolute
+
+        # 如果$(1)中有的不是绝对路径的话
+        # 则在前面加上$(obj)/改为绝对路径
+
 objectify = $(foreach o,$(1),$(if $(filter /%,$(o)),$(o),$(obj)/$(o)))
 
 ###
@@ -318,6 +366,15 @@ make-cmd = $(subst \\,\\\\,$(subst \#,\\\#,$(subst $$,$$$$,$(call escsq,$(cmd_$(
 
 # Find any prerequisites that is newer than target or that does not exist.
 # PHONY targets skipped in both cases.
+
+        # $? 代表依赖文件列表中被改变过的所有文件。
+        # $^ 代表所有通过目录搜索得到的依赖文件的完整路径名(目录 + 一般文件名)列表。
+        #
+        # 在Makefile规则中，通配符会被自动展开。但在变量的定义和函数引用时，通配符将失效。
+        # 这种情况下如果需要通配符有效，就需要使用函数“wildcard”，
+        # 它的用法是：$(wildcard PATTERN...) 。
+        # 在Makefile中，它被展开为已经存在的、使用空格分开的、匹配此模式的所有文件列表。
+
 any-prereq = $(filter-out $(PHONY),$?) $(filter-out $(PHONY) $(wildcard $^),$^)
 
 # Execute command if command has changed or prerequisite(s) are updated.
