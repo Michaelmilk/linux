@@ -243,26 +243,31 @@ PHONY += $(MAKECMDGOALS) sub-make
         # 此变量记录了命令行参数指定的终极目标列表，
         # 没有通过参数指定终极目标时此变量为空。
         # 注意：此变量仅用在特殊的场合（比如判断），在Makeifle中不要对它进行重新定义！
+        #
+        # 规则的命令是一个冒号命令”:”，冒号(:)命令是bash的内建命令，通常把它看作true命令。
+        # bash的help解释（help :）为：No effect; the command does nothing. 
+        # A zero exit code is returned.（没有效果，该命令是空操作，退出状态总是0）。
+        #
+        # 这里主要是指明依赖，保证所有目标都依赖sub-make。
+        # 以便使用KBUILD_OUTPUT时，sub-make的规则命令被最先执行。
+        # 该规则的命令":"是所有内核编译完成最后被执行的。编译结束。
 
 $(filter-out _all sub-make $(CURDIR)/Makefile, $(MAKECMDGOALS)) _all: sub-make
 	@:
 
-	# 反过滤函数——filter-out，语法是：$(filter-out <pattern...>;,<text>;)
-	# 函数filter-out的功能是：去掉$(MAKECMDGOALS）中符合规则_all的所有字符串后，剩下的作为返回值。
-	# 函数filter-out调用与伪目标_all在同一行。
-	# 伪目标_all下面的以tab开头的三行是命令，因为每行最后都有"\"，
-	# 所以这三行命令应该是写在同一行的，即后面的命令要受到处于它之前的那些命令的影响。
-	#
-	# $(if $(KBUILD_VERBOSE:1=),@) 含义是如果$(KBUILD_VERBOSE:1=) 不为空，则等于$@ 
-	# 自动化变量"$@"表示规则中的目标文件集，在模式规则中，如果有多个目标，那么，"$@"就是匹配于目标中模式定义的集合。
-	# 自动化变量还有"$<"、"$%"、"$<"等。
-	#
-	# 宏变量$（MAKE）的值为make命令和参数（参数可省）。 
-	#
-	# 执行命令KBUILD_SRC=$(CURDIR)的结果是把变量CURDIR的值赋给变量KBUILD_SRC。
-	# CURDIR这个变量是Makefile提供的,代表了make当前的工作路径。
+        # 反过滤函数——filter-out，语法是：$(filter-out <pattern...>;,<text>;)
+        # 函数filter-out的功能是：去掉$(MAKECMDGOALS）中符合规则_all的所有字符串后，剩下的作为返回值。
+        # 函数filter-out调用与伪目标_all在同一行。
+        # 伪目标_all下面的以tab开头的三行是命令，因为每行最后都有"\"，
+        # 所以这三行命令应该是写在同一行的，即后面的命令要受到处于它之前的那些命令的影响。
+        #
+        # 执行命令KBUILD_SRC=$(CURDIR)的结果是把变量CURDIR的值赋给变量KBUILD_SRC。
+        # CURDIR这个变量是Makefile提供的,代表了make当前的工作路径。
 
-	# 使用FORCE，该规则下的命令总是会被执行
+        # 使用FORCE，该规则下的命令总是会被执行。
+        # make使用-C进入KBUILD_OUTPUT目录，-f依然使用当前这个顶层的Makefile。
+        # 命令行中KBUILD_SRC为当前目录，即再使用该Makefile时，不会再进入这个块了。
+        # 目标为除了_all和sub-make以外的目标。
 
 sub-make: FORCE
 	$(if $(KBUILD_VERBOSE:1=),@)$(MAKE) -C $(KBUILD_OUTPUT) \
@@ -270,30 +275,40 @@ sub-make: FORCE
 	KBUILD_EXTMOD="$(KBUILD_EXTMOD)" -f $(CURDIR)/Makefile \
 	$(filter-out _all sub-make,$(MAKECMDGOALS))
 
-	# $(if $(KBUILD_VERBOSE:1=),@) 含义是如果$(KBUILD_VERBOSE:1=) 不为空，则等于$@ 
-	# 自动化变量"$@"表示规则中的目标文件集，在模式规则中，如果有多个目标，那么，"$@"就是匹配于目标中模式定义的集合。
-	# 自动化变量还有"$<"、"$%"、"$<"等。
-	#
-	# 宏变量$（MAKE）的值为make命令和参数（参数可省）。
-	#
-	# -C指定读取Makefile的目录，make将切入-C参数指定的目录
-	# -f指定要执行的Makefile
+        # $(if $(KBUILD_VERBOSE:1=),@) 含义是:
+        # $(VAR:x=y) 这种语法相当于 $(patsubst x,y,$(VAR)) 的缩写。
+        # 这里需要注意一点，x 和 y 前面不能有 ‘%’ 匹配符，这是因为 '%' 已经被默认添加，
+        # 所以它就如同如下形式:$(patsubst %x,%y,$(VAR))
+        # 这样，$(if $(KBUILD_VERBOSE:1=)),@) 被展开为$(if $(patsubst %1,%,$(KBUILD_VERBOSE)),@)
+        # 所以，只要 KBUILD_VERBOSE 为非 1 的任何字符时，整个表达式的结果就是 : @ 。
+        # 如果 KBUILD_VERBOSE 为 1 时，那么整个表达式结果为空。
+        # 实际上，表达式结果为 @ 时，就是希望后面的命令能够静默执行。
+        #
+        # 自动化变量"$@"表示规则中的目标文件集，在模式规则中，如果有多个目标，那么，"$@"就是匹配于目标中模式定义的集合。
+        # 自动化变量还有"$<"、"$%"、"$<"等。
+        #
+        # 宏变量$（MAKE）的值为make命令和参数（参数可省）。
+        #
+        # -C指定读取Makefile的目录，make将切入-C参数指定的目录
+        # -f指定要执行的Makefile
 
 # Leave processing to above invocation of make
 
-	# 将skip-makefile变量赋值为1
+        # 将skip-makefile变量赋值为1。
+        # 这样使用KBUILD_OUTPUT时，下面的块不再处理。
+        # 而是由sub-make中的规则命令make使用-f重新使用该Makefile再执行下面的块。
 
 skip-makefile := 1
 endif # ifneq ($(KBUILD_OUTPUT),)
 endif # ifeq ($(KBUILD_SRC),)
 
-	# =========================================================================
+        # =========================================================================
 
-	# 如果KBUILD_SRC为空
-	# 并且make命令行指定了O=或环境变量使用了KBUILD_OUTPUT
-	# 则上面会将skip-makefile赋值为1
-	# 第一层的Makefile便不会再继续调用下面的内容了
-	# 随后由上面的sub-make目标下的命令中再次调用make则解析使用下面的内容
+        # 如果KBUILD_SRC为空
+        # 并且make命令行指定了O=或环境变量使用了KBUILD_OUTPUT
+        # 则上面会将skip-makefile赋值为1
+        # 第一层的Makefile便不会再继续调用下面的内容了
+        # 随后由上面的sub-make目标下的命令中再次调用make则解析使用下面的内容
 
 # We process the rest of the Makefile if this is the final invocation of make
 ifeq ($(skip-makefile),)
@@ -313,29 +328,29 @@ else
 _all: modules
 endif
 
-    # 为srctree赋值，如果KBUILD_SRC有值的话则使用KBUILD_SRC的值
-    # 因为如果上面使用了KBUILD_OUTPUT的话，此时make是在KBUILD_OUTPUT目录中
-    # sub-make的命令中使用KBUILD_SRC记录了内核源码目录
-    # 通常情况下直接在内核源码目录中make，则直接使用CURDIR为srctree变量的值
-    #
-    # 为objtree赋值，即目标对象所在目录，KBUILD_OUTPUT指定的目录或内核源码目录
+        # 为srctree赋值，如果KBUILD_SRC有值的话则使用KBUILD_SRC的值
+        # 因为如果上面使用了KBUILD_OUTPUT的话，此时make是在KBUILD_OUTPUT目录中
+        # sub-make的命令中使用KBUILD_SRC记录了内核源码目录
+        # 通常情况下直接在内核源码目录中make，则直接使用CURDIR为srctree变量的值
+        #
+        # 为objtree赋值，即目标对象所在目录，KBUILD_OUTPUT指定的目录或内核源码目录
 
 srctree		:= $(if $(KBUILD_SRC),$(KBUILD_SRC),$(CURDIR))
 objtree		:= $(CURDIR)
 src		:= $(srctree)
 obj		:= $(objtree)
 
-	# 为变量VPATH追加变量VPATH的值
-	# “VPATH”是Makefile文件中的特殊变量。
-	# 如果没有指明这个变量，make只会在当前的目录中去找寻依赖文件和目标文件。
-	# 如果定义了这个变量，那么，make就会在当当前目录找不到的情况下，到所指定的目录中去找寻文件了。
-	# make使用“VPATH”变量来指定“依赖文件”的搜索路径。
+        # 为变量VPATH追加变量VPATH的值
+        # “VPATH”是Makefile文件中的特殊变量。
+        # 如果没有指明这个变量，make只会在当前的目录中去找寻依赖文件和目标文件。
+        # 如果定义了这个变量，那么，make就会在当当前目录找不到的情况下，到所指定的目录中去找寻文件了。
+        # make使用“VPATH”变量来指定“依赖文件”的搜索路径。
 
 VPATH		:= $(srctree)$(if $(KBUILD_EXTMOD),:$(KBUILD_EXTMOD))
 
-	# 关键词export用来声明变量，被声明的变量要被传递到下级Makefile中。
-	# export srctree objtree VPATH TOPDIR声明了四个变量，
-	# 这四个变量在make嵌套时都将被传递到下级Makefile。
+        # 关键词export用来声明变量，被声明的变量要被传递到下级Makefile中。
+        # export srctree objtree VPATH TOPDIR声明了四个变量，
+        # 这四个变量在make嵌套时都将被传递到下级Makefile。
 
 export srctree objtree VPATH
 
