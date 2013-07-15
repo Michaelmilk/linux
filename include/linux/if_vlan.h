@@ -301,8 +301,6 @@ static inline struct sk_buff *__vlan_hwaccel_put_tag(struct sk_buff *skb,
 	return skb;
 }
 
-#define HAVE_VLAN_PUT_TAG
-
 /*
 根据接口特性将@vlan_tci信息添加到@skb中
 */

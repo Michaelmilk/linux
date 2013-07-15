@@ -1064,10 +1064,10 @@ find_dock_and_bay(acpi_handle handle, u32 lvl, void *context, void **rv)
 	return AE_OK;
 }
 
-int __init acpi_dock_init(void)
+void __init acpi_dock_init(void)
 {
 	if (acpi_disabled)
-		return 0;
+		return;
 
 	/* 扩展坞早年IBM就针对600系列设计了相应的扩展坞（Dock Station）和PDB，
 	   但是因为600系列随后即被T2系列出现所替代，
@@ -1079,11 +1079,10 @@ int __init acpi_dock_init(void)
 
 	if (!dock_station_count) {
 		pr_info(PREFIX "No dock devices found.\n");
-		return 0;
+		return;
 	}
 
 	register_acpi_bus_notifier(&dock_acpi_notifier);
 	pr_info(PREFIX "%s: %d docks/bays found\n",
 		ACPI_DOCK_DRIVER_DESCRIPTION, dock_station_count);
-	return 0;
 }

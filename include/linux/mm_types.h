@@ -361,14 +361,10 @@ struct mm_struct {
 	unsigned long (*get_unmapped_area) (struct file *filp,
 				unsigned long addr, unsigned long len,
 				unsigned long pgoff, unsigned long flags);
-	/* 释放线性地址区间时调用的方法 */
-	void (*unmap_area) (struct mm_struct *mm, unsigned long addr);
 #endif
 	/* 标识第一个分配的匿名线性区或文件内存映射的线性地址 */
 	unsigned long mmap_base;		/* base of mmap area */
 	unsigned long task_size;		/* size of task vm space */
-	unsigned long cached_hole_size; 	/* if non-zero, the largest hole below free_area_cache */
-	unsigned long free_area_cache;		/* first hole of size cached_hole_size or larger */
 	unsigned long highest_vm_end;		/* highest vma end address */
 	/* 指向页全局目录 */
 	pgd_t * pgd;

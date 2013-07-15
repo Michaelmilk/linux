@@ -79,6 +79,7 @@ int br_handle_frame_finish(struct sk_buff *skb)
 	struct net_bridge_fdb_entry *dst;
 	struct net_bridge_mdb_entry *mdst;
 	struct sk_buff *skb2;
+	bool unicast = true;
 	u16 vid = 0;
 
 	if (!p || p->state == BR_STATE_DISABLED)
@@ -91,7 +92,8 @@ int br_handle_frame_finish(struct sk_buff *skb)
 	/* spoofing:欺骗
 	   在netfilter后才记录转发表，以避免记录假报文 */
 	br = p->br;
-	br_fdb_update(br, p, eth_hdr(skb)->h_source, vid);
+	if (p->flags & BR_LEARNING)
+		br_fdb_update(br, p, eth_hdr(skb)->h_source, vid);
 
 	if (!is_broadcast_ether_addr(dest) && is_multicast_ether_addr(dest) &&
 	    br_multicast_rcv(br, p, skb))
@@ -117,9 +119,10 @@ int br_handle_frame_finish(struct sk_buff *skb)
 
 	dst = NULL;
 
-	if (is_broadcast_ether_addr(dest))
+	if (is_broadcast_ether_addr(dest)) {
 		skb2 = skb;
-	else if (is_multicast_ether_addr(dest)) {
+		unicast = false;
+	} else if (is_multicast_ether_addr(dest)) {
 		mdst = br_mdb_get(br, skb, vid);
 		if (mdst || BR_INPUT_SKB_CB_MROUTERS_ONLY(skb)) {
 			if ((mdst && mdst->mglist) ||
@@ -132,6 +135,7 @@ int br_handle_frame_finish(struct sk_buff *skb)
 		} else
 			skb2 = skb;
 
+		unicast = false;
 		br->dev->stats.multicast++;
 	/* 如果没找到出口，则会br_flood_forward
 	   如果找到出口，但是找到的这个接口不是本地某个接口，则br_forward
@@ -152,7 +156,7 @@ int br_handle_frame_finish(struct sk_buff *skb)
 		/* CAM表中没有，只能flood了
 		   或者该帧是多播包或二层广播包 */
 		} else
-			br_flood_forward(br, skb, skb2);
+			br_flood_forward(br, skb, skb2, unicast);
 	}
 
 	/* 混杂模式或本地接口 */
@@ -173,7 +177,8 @@ static int br_handle_local_finish(struct sk_buff *skb)
 	u16 vid = 0;
 
 	br_vlan_get_tag(skb, &vid);
-	br_fdb_update(p->br, p, eth_hdr(skb)->h_source, vid);
+	if (p->flags & BR_LEARNING)
+		br_fdb_update(p->br, p, eth_hdr(skb)->h_source, vid);
 	return 0;	 /* process further */
 }
 
