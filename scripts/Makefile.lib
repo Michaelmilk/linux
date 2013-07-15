@@ -18,15 +18,20 @@ export KBUILD_SUBDIR_CCFLAGS := $(KBUILD_SUBDIR_CCFLAGS) $(subdir-ccflags-y)
 # When an object is listed to be built compiled-in and modular,
 # only build the compiled-in version
 
+        # 去掉obj-m中的obj-y部分
+        # 一个对象既compiled-in又modular，则只编译为compiled-in
+
 obj-m := $(filter-out $(obj-y),$(obj-m))
 
 # Libraries are always collected in one lib file.
 # Filter out objects already built-in
 
+        # 已经built-in的就不再往lib里编译了
+
 lib-y := $(filter-out $(obj-y), $(sort $(lib-y) $(lib-m)))
 
 
-	# 处理子目录中的目标
+        # 处理子目录中的目标
 
 # Handle objects in subdirs
 # ---------------------------------------------------------------------------
@@ -38,22 +43,30 @@ lib-y := $(filter-out $(obj-y), $(sort $(lib-y) $(lib-m)))
 # Determine modorder.
 # Unfortunately, we don't have information about ordering between -y
 # and -m subdirs.  Just put -y's first.
+
+        # 将obj-y中以/结尾的目录过滤出来
+        # 把/结尾的目录目标替换为%/modules.order
+
 modorder	:= $(patsubst %/,%/modules.order, $(filter %/, $(obj-y)) $(obj-m:.o=.ko))
 
-	# 以"/"结尾的为要进入的子目录，提取出来
-	# 例如: 文件系统目录fs里的Makefile，其中obj-y += notify/，即表示要进入notify子目录
+        # 以"/"结尾的为要进入的子目录，提取出来
+        # 例如: 文件系统目录fs里的Makefile，其中obj-y += notify/，即表示要进入notify子目录
 
 __subdir-y	:= $(patsubst %/,%,$(filter %/, $(obj-y)))
 subdir-y	+= $(__subdir-y)
 __subdir-m	:= $(patsubst %/,%,$(filter %/, $(obj-m)))
 subdir-m	+= $(__subdir-m)
 
-	# 每个目录下的目标都会被连接生成built-in.o
+        # 每个目录下的目标都会被链接生成built-in.o
+        # 把obj-y中/结尾的目录目标替换为%/built-in.o
+        # 去掉obj-m中的目录目标，这些目录目标已经记录在上面的subdir-m变量
 
 obj-y		:= $(patsubst %/, %/built-in.o, $(obj-y))
 obj-m		:= $(filter-out %/, $(obj-m))
 
 # Subdirectories we need to descend into
+
+        # 需要进入的子目录
 
 subdir-ym	:= $(sort $(subdir-y) $(subdir-m))
 
@@ -247,9 +260,9 @@ cmd_objcopy = $(OBJCOPY) $(OBJCOPYFLAGS) $(OBJCOPYFLAGS_$(@F)) $< $@
 # Gzip
 # ---------------------------------------------------------------------------
 
-	# -n : 不保存原始文件名和时间戳信息，默认选项
-	# -f : 强制替换已有的压缩文件
-	# -9 : 使用最高压缩比
+        # -n : 不保存原始文件名和时间戳信息，默认选项
+        # -f : 强制替换已有的压缩文件
+        # -9 : 使用最高压缩比
 
 quiet_cmd_gzip = GZIP    $@
 cmd_gzip = (cat $(filter-out FORCE,$^) | gzip -n -f -9 > $@) || \

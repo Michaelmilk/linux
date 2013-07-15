@@ -30,6 +30,11 @@
 # libkconfig.so as the executable conf.
 # Note: Shared libraries consisting of C++ files are not supported
 
+        # $(sort <list>)
+        # 给字符串<list>中的单词排序（升序）。
+        # 返回排序后的字符串。
+        # sort函数会去掉<list>中相同的单词。
+
 __hostprogs := $(sort $(hostprogs-y) $(hostprogs-m))
 
 # C code

@@ -5,6 +5,10 @@
 # and for each file listed in this file with generic-y creates
 # a small wrapper file in $(obj) (arch/$(SRCARCH)/include/generated/asm)
 
+        # verbatim: Öð×ÖµÄ
+        # src=asm
+        # obj=arch/x86/include/generated/asm
+
 kbuild-file := $(srctree)/arch/$(SRCARCH)/include/$(src)/Kbuild
 -include $(kbuild-file)
 
