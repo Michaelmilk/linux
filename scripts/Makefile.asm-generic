@@ -8,6 +8,16 @@
         # verbatim: 逐字的
         # src=asm
         # obj=arch/x86/include/generated/asm
+        #
+        # 包含Kbuild文件
+        # 例如: $(srctree)/arch/x86/include/asm/Kbuild
+        #
+        # genhdr-y += unistd_32.h
+        # genhdr-y += unistd_64.h
+        # genhdr-y += unistd_x32.h
+        #
+        # generic-y += clkdev.h
+        #
 
 kbuild-file := $(srctree)/arch/$(SRCARCH)/include/$(src)/Kbuild
 -include $(kbuild-file)
@@ -17,11 +27,29 @@ include scripts/Kbuild.include
 # Create output directory if not already present
 _dummy := $(shell [ -d $(obj) ] || mkdir -p $(obj))
 
+        # $* 替换%部分的内容
+        # 即向arch/x86/include/generated/asm/clkdev.h文件写入
+        # #include <asm-generic/clkdev.h>
+        # 即clkdev.h使用通用的文件
+
 quiet_cmd_wrap = WRAP    $@
 cmd_wrap = echo "\#include <asm-generic/$*.h>" >$@
 
+        # 规则的命令是一个冒号命令”:”，冒号(:)命令是bash的内建命令，通常把它看作true命令。
+        # bash的help解释（help :）为：No effect; the command does nothing. 
+        # A zero exit code is returned.（没有效果，该命令是空操作，退出状态总是0）。
+        #
+        # 为generic-y前面加上对应的目录
+        # 如: arch/x86/include/asm/Kbuild:7:generic-y += clkdev.h
+        # 则prerequisites为arch/x86/include/generated/asm/clkdev.h
+        # 即先解决arch/x86/include/generated/asm/clkdev.h文件
+
 all: $(patsubst %, $(obj)/%, $(generic-y))
 	@:
+
+        # %.h文件的规则
+        # 例如上面的arch/x86/include/generated/asm/clkdev.h
+        # 调用cmd_wrap命令
 
 $(obj)/%.h:
 	$(call cmd,wrap)
