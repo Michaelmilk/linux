@@ -1,24 +1,24 @@
-#
-# 目标目录
-# $(obj) = arch/x86/syscalls
-# out := arch/x86/syscalls/../include/generated/asm
-# uapi := arch/x86/syscalls/../include/generated/uapi/asm
+        #
+        # 目标目录
+        # $(obj) = arch/x86/syscalls
+        # out := arch/x86/syscalls/../include/generated/asm
+        # uapi := arch/x86/syscalls/../include/generated/uapi/asm
 
 out := $(obj)/../include/generated/asm
 uapi := $(obj)/../include/generated/uapi/asm
 
-# 目录不存在的话在创建
+        # 目录不存在的话在创建
 # Create output directory if not already present
 _dummy := $(shell [ -d '$(out)' ] || mkdir -p '$(out)') \
 	  $(shell [ -d '$(uapi)' ] || mkdir -p '$(uapi)')
 
-# 输入文件
-# $(srctree) = 代码顶层目录
-# $(src) = arch/x86/syscalls
+        # 输入文件
+        # $(srctree) = 代码顶层目录
+        # $(src) = arch/x86/syscalls
 syscall32 := $(srctree)/$(src)/syscall_32.tbl
 syscall64 := $(srctree)/$(src)/syscall_64.tbl
 
-# 要调用的脚本
+        # 要调用的脚本
 syshdr := $(srctree)/$(src)/syscallhdr.sh
 systbl := $(srctree)/$(src)/syscalltbl.sh
 
@@ -30,7 +30,7 @@ quiet_cmd_syshdr = SYSHDR  $@
 quiet_cmd_systbl = SYSTBL  $@
       cmd_systbl = $(CONFIG_SHELL) '$(systbl)' $< $@
 
-# 调用脚本syscallhdr.sh生成头文件
+        # 调用脚本syscallhdr.sh生成头文件
 syshdr_abi_unistd_32 := i386
 $(uapi)/unistd_32.h: $(syscall32) $(syshdr)
 	$(call if_changed,syshdr)

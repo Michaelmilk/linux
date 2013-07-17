@@ -725,6 +725,9 @@ ifneq ($(KBUILD_SRC),)
 	    $(srctree) $(objtree) $(VERSION) $(PATCHLEVEL)
 endif
 
+        # 对应架构下的头文件直接封装使用include/asm-generic中的同名头文件
+        # 这些文件是使用generic-y列出的
+
 # Support for using generic headers in asm-generic
 PHONY += asm-generic
 asm-generic:
