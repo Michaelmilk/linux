@@ -495,6 +495,9 @@ int main(int ac, char **av)
 	const char *name, *defconfig_file = NULL /* gcc uninit */;
 	struct stat tmpstat;
 
+	/* 程序刚运行时，locale设置为"C"
+	   调用setlocale(LC_ALL, "");使用运行环境中的locale设置
+	*/
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
