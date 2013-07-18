@@ -557,7 +557,7 @@ endif
 
 	# 如果make使用了-s参数的话，则阻止命令的输出
 	# 函数findstring的语法是：$(findstring <find>;,<in>;)
-	# 函数findstring的功能是：如果在$(MAKEFLAGS)中能找到字符s，那么返回字符s；否则返回空字符。
+	# 函数findstring的功能是：如果在$(MAKEFLAGS)中能找到字符s或-s开头的选项，那么返回该选项；否则返回空字符。
 ifneq ($(filter s% -s%,$(MAKEFLAGS)),)
   quiet=silent_
 endif
