@@ -79,6 +79,11 @@ const char *conf_get_autoconfig_name(void)
 	return name ? name : "include/config/auto.conf";
 }
 
+/*
+展开@in中$后变量的值
+例如输入"arch/$ARCH/defconfig"
+即展开为对应架构"arch/um/defconfig"文件
+*/
 static char *conf_expand_value(const char *in)
 {
 	struct symbol *sym;
@@ -105,6 +110,10 @@ static char *conf_expand_value(const char *in)
 	return res_value;
 }
 
+/*
+取默认配置文件
+例如"arch/um/defconfig"
+*/
 char *conf_get_default_confname(void)
 {
 	struct stat buf;
@@ -114,6 +123,7 @@ char *conf_get_default_confname(void)
 	name = conf_expand_value(conf_defname);
 	env = getenv(SRCTREE);
 	if (env) {
+		/* 改为绝对路径 */
 		sprintf(fullname, "%s/%s", env, name);
 		if (!stat(fullname, &buf))
 			return fullname;
@@ -241,6 +251,10 @@ e_out:
 	return -1;
 }
 
+/*
+读配置文件
+文件中含有CONFIG_SYSVIPC=y这样的一些配置信息
+*/
 int conf_read_simple(const char *name, int def)
 {
 	FILE *in = NULL;
@@ -255,6 +269,7 @@ int conf_read_simple(const char *name, int def)
 	} else {
 		struct property *prop;
 
+		/* 取配置文件名称，例如默认的配置文件.config */
 		name = conf_get_configname();
 		in = zconf_fopen(name);
 		if (in)
@@ -403,6 +418,10 @@ setsym:
 	return 0;
 }
 
+/*
+读取配置文件
+例如arch/x86/configs/i386_defconfig
+*/
 int conf_read(const char *name)
 {
 	struct symbol *sym;

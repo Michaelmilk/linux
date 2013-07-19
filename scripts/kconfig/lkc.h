@@ -74,6 +74,17 @@ extern int zconfdebug;
 int zconfparse(void);
 void zconfdump(FILE *out);
 void zconf_starthelp(void);
+/*
+ * Try to open specified file with following names:
+ * ./name
+ * $(srctree)/name
+ * The latter is used when srctree is separate from objtree
+ * when compiling the kernel.
+ * Return NULL if file is not found.
+ */
+/* 使用fopen只读打开文件，若打不开则尝试加上$(srctree)绝对路径
+成功返回文件指针，失败返回NULL
+*/
 FILE *zconf_fopen(const char *name);
 void zconf_initscan(const char *name);
 void zconf_nextfile(const char *name);

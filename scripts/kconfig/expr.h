@@ -85,6 +85,9 @@ struct symbol {
 	struct expr_value rev_dep;
 };
 
+/*
+遍历哈希表symbol_hash中的所有节点
+*/
 #define for_all_symbols(i, sym) for (i = 0; i < SYMBOL_HASHSIZE; i++) for (sym = symbol_hash[i]; sym; sym = sym->next) if (sym->type != S_OTHER)
 
 #define SYMBOL_CONST      0x0001  /* symbol is const */

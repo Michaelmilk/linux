@@ -39,6 +39,7 @@ enum input_mode {
 static int indent = 1;
 static int tty_stdio;
 static int valid_stdin = 1;
+/* 选项silentoldconfig */
 static int sync_kconfig;
 static int conf_cnt;
 static char line[128];
@@ -446,6 +447,16 @@ static void check_conf(struct menu *menu)
 		check_conf(child);
 }
 
+/*
+<getopt.h>中结构体的定义
+struct option {
+	      const char *name;
+	      int	  has_arg;
+	      int	 *flag;
+	      int	  val;
+	  };
+getopt_long()函数，flag为空则返回val值，否则返回0
+*/
 static struct option long_opts[] = {
 	{"oldaskconfig",    no_argument,       NULL, oldaskconfig},
 	{"oldconfig",       no_argument,       NULL, oldconfig},
@@ -488,6 +499,12 @@ static void conf_usage(const char *progname)
 	printf("  --randconfig            New config with random answer to all options\n");
 }
 
+/*
+例如make defconfig时调用该程序
+scripts/kconfig/conf --defconfig=arch/x86/configs/i386_defconfig Kconfig
+
+直接make时scripts/kconfig/conf --silentoldconfig Kconfig
+*/
 int main(int ac, char **av)
 {
 	const char *progname = av[0];
@@ -502,8 +519,10 @@ int main(int ac, char **av)
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
 
+	/* 0 1 2是否为终端 */
 	tty_stdio = isatty(0) && isatty(1) && isatty(2);
 
+	/* 命令行参数解析 */
 	while ((opt = getopt_long(ac, av, "", long_opts, NULL)) != -1) {
 		input_mode = (enum input_mode)opt;
 		switch (opt) {
@@ -516,6 +535,7 @@ int main(int ac, char **av)
 			break;
 		case randconfig:
 		{
+			/* 随机配置，设置随机数种子 */
 			struct timeval now;
 			unsigned int seed;
 			char *seed_env;
@@ -524,6 +544,7 @@ int main(int ac, char **av)
 			 * Use microseconds derived seed,
 			 * compensate for systems where it may be zero
 			 */
+			/* compensate: 补偿 */
 			gettimeofday(&now, NULL);
 			seed = (unsigned int)((now.tv_sec + 1) * (now.tv_usec + 1));
 
@@ -560,10 +581,14 @@ int main(int ac, char **av)
 		exit(1);
 	}
 	name = av[optind];
+	/* 解析顶层目录下的Kconfig文件
+	   通过语法器生成的函数，在文件zconf.tab.c_shipped => zconf.tab.c中
+	*/
 	conf_parse(name);
 	//zconfdump(stdout);
 	if (sync_kconfig) {
 		name = conf_get_configname();
+		/* 取文件信息，检查文件是否存在 */
 		if (stat(name, &tmpstat)) {
 			fprintf(stderr, _("***\n"
 				"*** Configuration file \"%s\" not found!\n"
@@ -577,7 +602,9 @@ int main(int ac, char **av)
 
 	switch (input_mode) {
 	case defconfig:
+		/* 如果命令行中--defconfig选项没有传递参数 */
 		if (!defconfig_file)
+			/* 取默认配置文件 */
 			defconfig_file = conf_get_default_confname();
 		if (conf_read(defconfig_file)) {
 			printf(_("***\n"
