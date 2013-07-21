@@ -14,6 +14,14 @@
 struct file *file_lookup(const char *name)
 {
 	struct file *file;
+	/* 展开的Kconfig文件名称
+	   例如
+	   file_name: Kconfig
+	   file_name: arch/x86/Kconfig
+	   file_name: init/Kconfig
+	   file_name: kernel/irq/Kconfig
+	   file_name: kernel/time/Kconfig
+	*/
 	const char *file_name = sym_expand_string_value(name);
 
 	for (file = file_list; file; file = file->next) {
@@ -31,6 +39,20 @@ struct file *file_lookup(const char *name)
 	return file;
 }
 
+/*
+生成依赖文件列表"include/config/auto.conf.cmd"
+
+$ head include/config/auto.conf.cmd
+deps_config := \
+        lib/fonts/Kconfig \
+        lib/xz/Kconfig \
+        lib/Kconfig \
+        drivers/lguest/Kconfig \
+        virt/kvm/Kconfig \
+        arch/x86/kvm/Kconfig \
+        ...
+
+*/
 /* write a dependency file as used by kbuild to track dependencies */
 int file_write_dep(const char *name)
 {

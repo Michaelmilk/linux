@@ -131,6 +131,9 @@ char *conf_get_default_confname(void)
 	return name;
 }
 
+/*
+根据'='等于号后面的字符设置@sym的值
+*/
 static int conf_set_sym_val(struct symbol *sym, int def, int def_flags, char *p)
 {
 	char *p2;
@@ -217,6 +220,9 @@ static int add_byte(int c, char **lineptr, size_t slen, size_t *n)
 	return 0;
 }
 
+/*
+从@stream中读取一行
+*/
 static ssize_t compat_getline(char **lineptr, size_t *n, FILE *stream)
 {
 	char *line = *lineptr;
@@ -322,10 +328,13 @@ load:
 		}
 	}
 
+	/* 逐行解析配置文件 */
 	while (compat_getline(&line, &line_asize, in) != -1) {
 		conf_lineno++;
 		sym = NULL;
+		/* 注释行 */
 		if (line[0] == '#') {
+			/* 判断是否为"# CONFIG_XXX is not set" */
 			if (memcmp(line + 2, CONFIG_, strlen(CONFIG_)))
 				continue;
 			p = strchr(line + 2 + strlen(CONFIG_), ' ');
@@ -358,6 +367,8 @@ load:
 				;
 			}
 		} else if (memcmp(line, CONFIG_, strlen(CONFIG_)) == 0) {
+		/* "CONFIG_XXX"开头的行 */
+			/* 是否有'='等于号赋值 */
 			p = strchr(line + strlen(CONFIG_), '=');
 			if (!p)
 				continue;
@@ -421,6 +432,7 @@ setsym:
 /*
 读取配置文件
 例如arch/x86/configs/i386_defconfig
+如果传的@name为NULL，则读取.config或环境变量KCONFIG_CONFIG设定的文件
 */
 int conf_read(const char *name)
 {
@@ -843,6 +855,11 @@ next:
 			return 1;
 	}
 
+	/* 打印提示信息
+		#
+		# configuration written to .config
+		#
+	*/
 	conf_message(_("configuration written to %s"), newname);
 
 	sym_set_change_count(0);
@@ -961,6 +978,61 @@ out:
 
 	return res;
 }
+
+#if 0
+$ head include/generated/autoconf.h
+/*
+ *
+ * Automatically generated file; DO NOT EDIT.
+ * Linux/x86 3.11.0-rc1 Kernel Configuration
+ *
+ */
+#define CONFIG_RING_BUFFER 1
+#define CONFIG_HAVE_ARCH_SECCOMP_FILTER 1
+#define CONFIG_SCSI_DMA 1
+#define CONFIG_TCP_MD5SIG 1
+
+
+$ head include/config/tristate.conf
+#
+# Automatically generated file; DO NOT EDIT.
+# Linux/x86 3.11.0-rc1 Kernel Configuration
+#
+CONFIG_MICROCODE=Y
+CONFIG_CRC32=Y
+CONFIG_BLK_DEV_DM=Y
+CONFIG_CPU_FREQ_GOV_ONDEMAND=Y
+CONFIG_DRM_I915=Y
+CONFIG_BINFMT_MISC=Y
+
+
+$ head include/config/auto.conf
+#
+# Automatically generated file; DO NOT EDIT.
+# Linux/x86 3.11.0-rc1 Kernel Configuration
+#
+CONFIG_RING_BUFFER=y
+CONFIG_HAVE_ARCH_SECCOMP_FILTER=y
+CONFIG_SCSI_DMA=y
+CONFIG_TCP_MD5SIG=y
+CONFIG_KERNEL_GZIP=y
+CONFIG_MICROCODE=y
+
+
+scripts/Makefile.build包含文件:
+-include include/config/auto.conf
+
+
+scripts/Makefile.modbuiltin包含文件:
+-include include/config/auto.conf
+-include include/config/tristate.conf
+
+
+scripts/Makefile.modpost包含文件:
+include include/config/auto.conf
+
+
+#endif
 
 int conf_write_autoconf(void)
 {

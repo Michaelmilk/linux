@@ -15,7 +15,9 @@ static const char nohelp_text[] = "There is no help available for this option.";
 struct menu rootmenu;
 static struct menu **last_entry_ptr;
 
+/* 打开的文件名称链表 */
 struct file *file_list;
+/* 当前打开的文件名称 */
 struct file *current_file;
 
 void menu_warn(struct menu *menu, const char *fmt, ...)

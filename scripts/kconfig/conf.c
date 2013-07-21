@@ -606,6 +606,7 @@ int main(int ac, char **av)
 		if (!defconfig_file)
 			/* 取默认配置文件 */
 			defconfig_file = conf_get_default_confname();
+		/* 读取arch/x86/configs/i386_defconfig */
 		if (conf_read(defconfig_file)) {
 			printf(_("***\n"
 				"*** Can't find default configuration \"%s\"!\n"
@@ -619,6 +620,7 @@ int main(int ac, char **av)
 	case oldconfig:
 	case listnewconfig:
 	case olddefconfig:
+		/* 读取配置文件.config */
 		conf_read(NULL);
 		break;
 	case allnoconfig:

@@ -11,6 +11,7 @@
 
 #define DEBUG_EXPR	0
 
+/* ·ÖÅäexpr¼ÇÂ¼@sym */
 struct expr *expr_alloc_symbol(struct symbol *sym)
 {
 	struct expr *e = xcalloc(1, sizeof(*e));

@@ -794,6 +794,9 @@ static unsigned strhash(const char *s)
 	return hash;
 }
 
+/*
+查找或创建新的symbol
+*/
 struct symbol *sym_lookup(const char *name, int flags)
 {
 	struct symbol *symbol;
@@ -801,40 +804,51 @@ struct symbol *sym_lookup(const char *name, int flags)
 	int hash;
 
 	if (name) {
+		/* 只有一个字符 */
 		if (name[0] && !name[1]) {
+			/* 返回预设的符号 */
 			switch (name[0]) {
 			case 'y': return &symbol_yes;
 			case 'm': return &symbol_mod;
 			case 'n': return &symbol_no;
 			}
 		}
+		/* 计算哈希值 */
 		hash = strhash(name) % SYMBOL_HASHSIZE;
 
+		/* 遍历该@hash桶下标下面的链表 */
 		for (symbol = symbol_hash[hash]; symbol; symbol = symbol->next) {
 			if (symbol->name &&
+				/* 名称一致 */
 			    !strcmp(symbol->name, name) &&
+				/* 标志符合 */
 			    (flags ? symbol->flags & flags
 				   : !(symbol->flags & (SYMBOL_CONST|SYMBOL_CHOICE))))
+				/* 返回找到的标志 */
 				return symbol;
 		}
+		/* 未找到，复制名称 */
 		new_name = strdup(name);
 	} else {
 		new_name = NULL;
 		hash = 0;
 	}
 
+	/* 创建新的symbol */
 	symbol = xmalloc(sizeof(*symbol));
 	memset(symbol, 0, sizeof(*symbol));
 	symbol->name = new_name;
 	symbol->type = S_UNKNOWN;
 	symbol->flags |= flags;
 
+	/* 链入哈希表 */
 	symbol->next = symbol_hash[hash];
 	symbol_hash[hash] = symbol;
 
 	return symbol;
 }
 
+/* 查找@name对应的symbol */
 struct symbol *sym_find(const char *name)
 {
 	struct symbol *symbol = NULL;
@@ -867,6 +881,10 @@ struct symbol *sym_find(const char *name)
  * name to be expanded shall be prefixed by a '$'. Unknown symbol expands to
  * the empty string.
  */
+/*
+展开字符串@in中的$符合后的变量
+例如arch/$SRCARCH/Kconfig展开为arch/x86/Kconfig
+*/
 const char *sym_expand_string_value(const char *in)
 {
 	const char *src;
