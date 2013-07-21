@@ -16,6 +16,11 @@
 
 #include "lkc.h"
 
+/*
+__attribute__( ( format( printf，m，n ) ) )
+m：第几个参数为格式化字符串（format string）；
+n：参数集合中的第一个，即参数“…”里的第一个参数在函数参数总数排在第几 
+*/
 static void conf_warning(const char *fmt, ...)
 	__attribute__ ((format (printf, 1, 2)));
 
