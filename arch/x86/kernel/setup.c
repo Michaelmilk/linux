@@ -185,7 +185,7 @@ static struct resource bss_resource = {
 该变量new_cpu_data的数据由汇编代码填充，在arch/x86/kernel/head_32.S中
 */
 
-struct cpuinfo_x86 new_cpu_data __cpuinitdata = {
+struct cpuinfo_x86 new_cpu_data = {
 	.wp_works_ok = -1,
 };
 /* common cpu data for all cpus */

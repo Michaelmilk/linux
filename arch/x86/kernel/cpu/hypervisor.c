@@ -62,7 +62,7 @@ detect_hypervisor_vendor(void)
 	}
 }
 
-void __cpuinit init_hypervisor(struct cpuinfo_x86 *c)
+void init_hypervisor(struct cpuinfo_x86 *c)
 {
 	/* 例如调用vmware_set_cpu_features()函数 */
 	if (x86_hyper && x86_hyper->set_cpu_features)

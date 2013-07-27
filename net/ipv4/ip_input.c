@@ -196,11 +196,7 @@ static int ip_local_deliver_finish(struct sk_buff *skb)
 	struct net *net = dev_net(skb->dev);
 
 	/* skb的data指针指向L4传输层数据起始位置 */
-	__skb_pull(skb, ip_hdrlen(skb));
-
-	/* Point into the IP datagram, just past the header. */
-	/* 根据data指针设置transport_header指针 */
-	skb_reset_transport_header(skb);
+	__skb_pull(skb, skb_network_header_len(skb));
 
 	rcu_read_lock();
 	{
@@ -511,6 +507,8 @@ int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt, 
 		IP_INC_STATS_BH(dev_net(dev), IPSTATS_MIB_INDISCARDS);
 		goto drop;
 	}
+
+	skb->transport_header = skb->network_header + iph->ihl*4;
 
 	/* Remove any debris in the socket control block */
 	/* debris:碎片

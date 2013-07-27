@@ -122,7 +122,7 @@ execute_on_irq_stack(int overflow, struct irq_desc *desc, int irq)
 /*
 percpu硬中断和软中断上下文所使用的内核栈的分配与初始化
 */
-void __cpuinit irq_ctx_init(int cpu)
+void irq_ctx_init(int cpu)
 {
 	union irq_ctx *irqctx;
 

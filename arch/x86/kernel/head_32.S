@@ -495,7 +495,6 @@ ENDPROC(start_cpu0)
  * If cpu hotplug is not supported then this code can go in init section
  * which will be freed later
  */
-__CPUINIT
 ENTRY(startup_32_smp)
 	cld
 	/* 数据段选择子0x18 */

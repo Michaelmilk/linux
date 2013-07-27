@@ -1557,12 +1557,13 @@ EXPORT_SYMBOL(schedule_timeout_uninterruptible);
 /*
 初始化指定@cpu上与定时器控制相关的结构
 */
-static int __cpuinit init_timers_cpu(int cpu)
+
+static int init_timers_cpu(int cpu)
 {
 	int j;
 	struct tvec_base *base;
 	/* 标记该cpu上的tvec_base是否已经完成初始化 */
-	static char __cpuinitdata tvec_base_done[NR_CPUS];
+	static char tvec_base_done[NR_CPUS];
 
 	if (!tvec_base_done[cpu]) {
 		/* 标记是否为引导cpu */
@@ -1644,7 +1645,7 @@ static void migrate_timer_list(struct tvec_base *new_base, struct list_head *hea
 迁移定时器
 将@cpu中还未处理的定时器节点迁移到当前活动的cpu定时器结构中
 */
-static void __cpuinit migrate_timers(int cpu)
+static void migrate_timers(int cpu)
 {
 	struct tvec_base *old_base;
 	struct tvec_base *new_base;
@@ -1679,7 +1680,7 @@ static void __cpuinit migrate_timers(int cpu)
 }
 #endif /* CONFIG_HOTPLUG_CPU */
 
-static int __cpuinit timer_cpu_notify(struct notifier_block *self,
+static int timer_cpu_notify(struct notifier_block *self,
 				unsigned long action, void *hcpu)
 {
 	long cpu = (long)hcpu;
@@ -1704,7 +1705,7 @@ static int __cpuinit timer_cpu_notify(struct notifier_block *self,
 	return NOTIFY_OK;
 }
 
-static struct notifier_block __cpuinitdata timers_nb = {
+static struct notifier_block timers_nb = {
 	.notifier_call	= timer_cpu_notify,
 };
 
