@@ -37,7 +37,9 @@
 #define FCS_LEN 4
 
 /*
-B0 B1    | B2 B3 | B4 B7   | B8 | B9   | B10      | B11   | B12       | B13  | B14       | B15
+IEEE Std 802.11-2012, 8.2.4.1 Frame Control field
+
+B0 B1    | B2 B3 | B4   B7 | B8 | B9   | B10      | B11   | B12       | B13  | B14       | B15
 
 Protocol   Type    Subtype   To   From   More       Retry   Power       More   Protected   Order
 Version                      DS   DS     Fragments          Management  Data   Frame
@@ -45,6 +47,12 @@ Version                      DS   DS     Fragments          Management  Data   F
 Bits: 2    2       4         1    1      1          1       1           1      1           1
 */
 
+/* Frame Control field各个bit位含义的掩码
+MAC帧的头两个字节
+
+例如beacon帧的前2个字节为0x80 0x00，为小端序
+转换为两个字节的FC，即0x0080
+*/
 #define IEEE80211_FCTL_VERS		0x0003
 #define IEEE80211_FCTL_FTYPE		0x000c
 #define IEEE80211_FCTL_STYPE		0x00f0
@@ -61,11 +69,13 @@ Bits: 2    2       4         1    1      1          1       1           1      1
 #define IEEE80211_SCTL_FRAG		0x000F
 #define IEEE80211_SCTL_SEQ		0xFFF0
 
+/* B2-B3帧类型字段区分的管理帧、控制帧、数据帧 */
 #define IEEE80211_FTYPE_MGMT		0x0000
 #define IEEE80211_FTYPE_CTL		0x0004
 #define IEEE80211_FTYPE_DATA		0x0008
 #define IEEE80211_FTYPE_EXT		0x000c
 
+/* 管理帧的子类型 */
 /* management */
 #define IEEE80211_STYPE_ASSOC_REQ	0x0000
 #define IEEE80211_STYPE_ASSOC_RESP	0x0010
@@ -80,6 +90,7 @@ Bits: 2    2       4         1    1      1          1       1           1      1
 #define IEEE80211_STYPE_DEAUTH		0x00C0
 #define IEEE80211_STYPE_ACTION		0x00D0
 
+/* 控制帧的子类型 */
 /* control */
 #define IEEE80211_STYPE_CTL_EXT		0x0060
 #define IEEE80211_STYPE_BACK_REQ	0x0080
@@ -91,6 +102,7 @@ Bits: 2    2       4         1    1      1          1       1           1      1
 #define IEEE80211_STYPE_CFEND		0x00E0
 #define IEEE80211_STYPE_CFENDACK	0x00F0
 
+/* 数据帧的子类型 */
 /* data */
 #define IEEE80211_STYPE_DATA			0x0000
 #define IEEE80211_STYPE_DATA_CFACK		0x0010
@@ -153,6 +165,9 @@ static inline u16 ieee80211_sn_sub(u16 sn1, u16 sn2)
 /* miscellaneous IEEE 802.11 constants */
 #define IEEE80211_MAX_FRAG_THRESHOLD	2352
 #define IEEE80211_MAX_RTS_THRESHOLD	2353
+/* association identifier AID范围1-2007
+IEEE Std 802.11-2012, 8.2.4.2 Duration/ID field
+*/
 #define IEEE80211_MAX_AID		2007
 #define IEEE80211_MAX_TIM_LEN		251
 #define IEEE80211_MAX_MESH_PEERINGS	63
@@ -2041,6 +2056,13 @@ enum ieee80211_sa_query_action {
 };
 
 
+/*
+OUI (organizationally unique identifier)
+00-0F-AC
+
+IEEE Std 802.11-2012, 8.4.2.27.2 Cipher suites
+Table 8-99 Cipher suite selectors
+*/
 /* cipher suite selectors */
 #define WLAN_CIPHER_SUITE_USE_GROUP	0x000FAC00
 #define WLAN_CIPHER_SUITE_WEP40		0x000FAC01
@@ -2053,6 +2075,10 @@ enum ieee80211_sa_query_action {
 
 #define WLAN_CIPHER_SUITE_SMS4		0x00147201
 
+/*
+IEEE Std 802.11-2012, 8.4.2.27.3 AKM suites
+Table 8-101 AKM suite selectors
+*/
 /* AKM suite selectors */
 #define WLAN_AKM_SUITE_8021X		0x000FAC01
 #define WLAN_AKM_SUITE_PSK		0x000FAC02
