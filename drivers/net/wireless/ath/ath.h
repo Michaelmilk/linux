@@ -112,11 +112,14 @@ enum ath_cipher {
  * @write_flush: flush buffered register writes and disable buffering
  */
 struct ath_ops {
+	/* ath9k_ioread32 */
 	unsigned int (*read)(void *, u32 reg_offset);
 	void (*multi_read)(void *, u32 *addr, u32 *val, u16 count);
+	/* ath9k_iowrite32 */
 	void (*write)(void *, u32 val, u32 reg_offset);
 	void (*enable_write_buffer)(void *);
 	void (*write_flush) (void *);
+	/* ath9k_reg_rmw */
 	u32 (*rmw)(void *, u32 reg_offset, u32 set, u32 clr);
 };
 
@@ -157,6 +160,7 @@ struct ath_common {
 	const struct ath_ops *ops;
 	const struct ath_bus_ops *bus_ops;
 
+	/* À¶ÑÀ¹²´æ */
 	bool btcoex_enabled;
 	bool disable_ani;
 	bool antenna_diversity;

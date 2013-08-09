@@ -2670,6 +2670,7 @@ struct wiphy {
 
 	enum cfg80211_signal_type signal_type;
 
+	/* 结构体struct ieee80211_bss的大小 */
 	int bss_priv_size;
 	u8 max_scan_ssids;
 	u8 max_sched_scan_ssids;
@@ -2750,6 +2751,9 @@ struct wiphy {
 	const struct iw_handler_def *wext;
 #endif
 
+	/* 零长度数组
+	   分配空间的时候，后面紧跟结构体struct ieee80211_local
+	*/
 	char priv[0] __aligned(NETDEV_ALIGN);
 };
 

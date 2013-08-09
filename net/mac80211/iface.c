@@ -1769,6 +1769,7 @@ static int netdev_notify(struct notifier_block *nb,
 	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
 	struct ieee80211_sub_if_data *sdata;
 
+	/* 只处理接口名称变动 */
 	if (state != NETDEV_CHANGENAME)
 		return 0;
 
@@ -1790,6 +1791,7 @@ static struct notifier_block mac80211_netdev_notifier = {
 	.notifier_call = netdev_notify,
 };
 
+/* 向通知链netdev_chain注册 */
 int ieee80211_iface_init(void)
 {
 	return register_netdevice_notifier(&mac80211_netdev_notifier);

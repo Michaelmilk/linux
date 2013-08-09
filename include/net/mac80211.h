@@ -1598,6 +1598,9 @@ struct ieee80211_hw {
 	struct ieee80211_conf conf;
 	struct wiphy *wiphy;
 	const char *rate_control_algorithm;
+	/* 例如athpk的初始化，ath_pci_probe => ieee80211_alloc_hw => wiphy_new
+	   指向结构体struct ath_softc
+	*/
 	void *priv;
 	u32 flags;
 	unsigned int extra_tx_headroom;

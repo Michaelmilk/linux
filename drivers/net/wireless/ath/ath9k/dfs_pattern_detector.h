@@ -59,6 +59,7 @@ struct radar_detector_specs {
 	u8 max_pri_tolerance;
 };
 
+/* DFS ¶¯Ì¬ÆµÂÊÑ¡Ôñ */
 /**
  * struct dfs_pattern_detector - DFS pattern detector
  * @exit(): destructor

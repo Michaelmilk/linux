@@ -29,6 +29,7 @@ module_param(ieee80211_default_rc_algo, charp, 0644);
 MODULE_PARM_DESC(ieee80211_default_rc_algo,
 		 "Default rate control algorithm for mac80211 to use");
 
+/* 注册速率控制算法 */
 int ieee80211_rate_control_register(struct rate_control_ops *ops)
 {
 	struct rate_control_alg *alg;
@@ -37,6 +38,7 @@ int ieee80211_rate_control_register(struct rate_control_ops *ops)
 		return -EINVAL;
 
 	mutex_lock(&rate_ctrl_mutex);
+	/* 遍历检查名称是否重复 */
 	list_for_each_entry(alg, &rate_ctrl_algs, list) {
 		if (!strcmp(alg->ops->name, ops->name)) {
 			/* don't register an algorithm twice */
@@ -46,6 +48,7 @@ int ieee80211_rate_control_register(struct rate_control_ops *ops)
 		}
 	}
 
+	/* 分配带链表节点的结构 */
 	alg = kzalloc(sizeof(*alg), GFP_KERNEL);
 	if (alg == NULL) {
 		mutex_unlock(&rate_ctrl_mutex);
@@ -53,6 +56,7 @@ int ieee80211_rate_control_register(struct rate_control_ops *ops)
 	}
 	alg->ops = ops;
 
+	/* 加入链表rate_ctrl_algs最后 */
 	list_add_tail(&alg->list, &rate_ctrl_algs);
 	mutex_unlock(&rate_ctrl_mutex);
 

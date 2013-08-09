@@ -326,6 +326,7 @@ static int ath_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	/* Will be cleared in ath9k_start() */
 	set_bit(SC_OP_INVALID, &sc->sc_flags);
 
+	/* 注册中断服务 */
 	ret = request_irq(pdev->irq, ath_isr, IRQF_SHARED, "ath9k", sc);
 	if (ret) {
 		dev_err(&pdev->dev, "request_irq failed\n");
@@ -434,6 +435,7 @@ static struct pci_driver ath_pci_driver = {
 
 int ath_pci_init(void)
 {
+	/* 向驱动模型注册pci驱动 */
 	return pci_register_driver(&ath_pci_driver);
 }
 
