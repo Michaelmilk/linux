@@ -21,6 +21,7 @@
 
 struct cfg80211_registered_device {
 	const struct cfg80211_ops *ops;
+	/* 在wiphy_register中加入链表cfg80211_rdev_list */
 	struct list_head list;
 
 	/* rfkill support */
@@ -41,6 +42,7 @@ struct cfg80211_registered_device {
 	enum environment_cap env;
 
 	/* wiphy index, internal only */
+	/* 从0开始 */
 	int wiphy_idx;
 
 	/* associated wireless interfaces, protected by rtnl or RCU */
@@ -84,6 +86,7 @@ struct cfg80211_registered_device {
 	struct wiphy wiphy __aligned(NETDEV_ALIGN);
 };
 
+/* 结构struct cfg80211_registered_device内嵌struct wiphy */
 static inline
 struct cfg80211_registered_device *wiphy_to_dev(struct wiphy *wiphy)
 {
@@ -111,6 +114,7 @@ cfg80211_rdev_free_wowlan(struct cfg80211_registered_device *rdev)
 }
 
 extern struct workqueue_struct *cfg80211_wq;
+/* wiphy_register中将struct cfg80211_registered_device加入该链表 */
 extern struct list_head cfg80211_rdev_list;
 extern int cfg80211_rdev_list_generation;
 

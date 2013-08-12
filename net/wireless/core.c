@@ -37,13 +37,16 @@ MODULE_DESCRIPTION("wireless configuration support");
 MODULE_ALIAS_GENL_FAMILY(NL80211_GENL_NAME);
 
 /* RCU-protected (and RTNL for writers) */
+/* wiphy_register中将struct cfg80211_registered_device加入该链表 */
 LIST_HEAD(cfg80211_rdev_list);
 int cfg80211_rdev_list_generation;
 
 /* for debugfs */
+/* 目录/sys/kernel/debug/ieee80211/ */
 static struct dentry *ieee80211_debugfs_dir;
 
 /* for the cleanup, scan and event works */
+/* 工作队列线程[cfg80211] */
 struct workqueue_struct *cfg80211_wq;
 
 static bool cfg80211_disable_40mhz_24ghz;
@@ -994,12 +997,14 @@ static int __init cfg80211_init(void)
 	if (err)
 		goto out_fail_nl80211;
 
+	/* 创建目录/sys/kernel/debug/ieee80211/ */
 	ieee80211_debugfs_dir = debugfs_create_dir("ieee80211", NULL);
 
 	err = regulatory_init();
 	if (err)
 		goto out_fail_reg;
 
+	/* 创建一个工作队列线程[cfg80211] */
 	cfg80211_wq = create_singlethread_workqueue("cfg80211");
 	if (!cfg80211_wq) {
 		err = -ENOMEM;

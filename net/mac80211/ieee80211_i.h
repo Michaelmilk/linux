@@ -1009,6 +1009,7 @@ struct ieee80211_local {
 	u32 wep_iv;
 
 	/* see iface.c */
+	/* struct ieee80211_sub_if_data的list字段，加入该链表 */
 	struct list_head interfaces;
 	struct mutex iflist_mtx;
 
@@ -1226,6 +1227,7 @@ struct ieee802_11_elems {
 	bool parse_error;
 };
 
+/* 结构体struct ieee80211_local内嵌struct ieee80211_hw */
 static inline struct ieee80211_local *hw_to_local(
 	struct ieee80211_hw *hw)
 {
