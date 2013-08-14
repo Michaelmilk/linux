@@ -14,6 +14,7 @@ struct firmware {
 	struct page **pages;
 
 	/* firmware loader private fields */
+	/* _request_firmware_prepareÖĞÖ¸Ïòstruct firmware_buf */
 	void *priv;
 };
 
