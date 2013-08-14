@@ -2748,6 +2748,7 @@ struct wiphy {
 #endif
 
 #ifdef CONFIG_CFG80211_WEXT
+	/* 在wiphy_new中指向cfg80211_wext_handler */
 	const struct iw_handler_def *wext;
 #endif
 

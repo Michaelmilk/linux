@@ -1596,9 +1596,11 @@ enum ieee80211_hw_flags {
  */
 struct ieee80211_hw {
 	struct ieee80211_conf conf;
+	/* 在ieee80211_alloc_hw中
+	   指向struct cfg80211_registered_device结构内嵌的struct wiphy wiphy字段 */
 	struct wiphy *wiphy;
 	const char *rate_control_algorithm;
-	/* 例如athpk的初始化，ath_pci_probe => ieee80211_alloc_hw => wiphy_new
+	/* 例如ath9k的初始化，ath_pci_probe => ieee80211_alloc_hw => wiphy_new
 	   指向结构体struct ath_softc
 	*/
 	void *priv;

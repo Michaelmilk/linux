@@ -14,6 +14,7 @@
 
 typedef u64 netdev_features_t;
 
+/* 枚举值flag标记占用的bit位 */
 enum {
 	NETIF_F_SG_BIT,			/* Scatter/gather IO. */
 	NETIF_F_IP_CSUM_BIT,		/* Can checksum TCP/UDP over IPv4. */
@@ -73,6 +74,7 @@ enum {
 
 /* copy'n'paste compression ;) */
 #define __NETIF_F_BIT(bit)	((netdev_features_t)1 << (bit))
+/* 转换为上面的枚举值名称 */
 #define __NETIF_F(name)		__NETIF_F_BIT(NETIF_F_##name##_BIT)
 
 #define NETIF_F_FCOE_CRC	__NETIF_F(FCOE_CRC)

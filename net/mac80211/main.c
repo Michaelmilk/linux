@@ -490,6 +490,10 @@ static const u8 extended_capabilities[] = {
 	WLAN_EXT_CAPA8_OPMODE_NOTIF,
 };
 
+/*
+@priv_data_len	: 驱动私有结构体大小，如struct ath_softc
+@ops		: 驱动的操作函数，如ath9k_ops
+*/
 struct ieee80211_hw *ieee80211_alloc_hw(size_t priv_data_len,
 					const struct ieee80211_ops *ops)
 {
@@ -966,6 +970,7 @@ int ieee80211_register_hw(struct ieee80211_hw *hw)
 
 	/* add one default STA interface if supported */
 	if (local->hw.wiphy->interface_modes & BIT(NL80211_IFTYPE_STATION)) {
+		/* 创建接口，如wlan0 */
 		result = ieee80211_if_add(local, "wlan%d", NULL,
 					  NL80211_IFTYPE_STATION, NULL);
 		if (result)
