@@ -62,8 +62,10 @@ struct ep_device;
  * descriptor within an active interface in a given USB configuration.
  */
 struct usb_host_endpoint {
+	/* 端口描述符 */
 	struct usb_endpoint_descriptor		desc;
 	struct usb_ss_ep_comp_descriptor	ss_ep_comp;
+	/* 本端点的请求块的队列 */
 	struct list_head		urb_list;
 	void				*hcpriv;
 	struct ep_device		*ep_dev;	/* For sysfs info */
@@ -273,12 +275,14 @@ struct usb_interface_cache {
  * all its interfaces.
  */
 struct usb_host_config {
+	/* 配置描述符 */
 	struct usb_config_descriptor	desc;
 
 	char *string;		/* iConfiguration string, if present */
 
 	/* List of any Interface Association Descriptors in this
 	 * configuration. */
+	/* 接口代表一种功能，而配置是功能的组合 */
 	struct usb_interface_assoc_descriptor *intf_assoc[USB_MAXIADS];
 
 	/* the interfaces associated with this configuration,
@@ -320,8 +324,13 @@ struct usb_devmap {
 /*
  * Allocated per bus (tree of devices) we have:
  */
+/*
+保存了一个USB总线系统的信息，包括总线上设备地址信息，根集线器，带宽使用情况等。
+一个USB总线系统肯定有一个主机控制器和一个根集线器。
+*/
 struct usb_bus {
 	struct device *controller;	/* host/master side hardware */
+	/* 当前总线系统的序列号，Linux支持多总线系统并为它们编号 */
 	int busnum;			/* Bus number (in order of reg) */
 	const char *bus_name;		/* stable id (PCI slot_name etc) */
 	u8 uses_dma;			/* Does the host controller use DMA? */
@@ -342,9 +351,12 @@ struct usb_bus {
 	int devnum_next;		/* Next open device number in
 					 * round-robin allocation */
 
+	/* 给连接到子系统上的设备分配设备号的数据结构 */
 	struct usb_devmap devmap;	/* device address allocation map */
+	/* 指向根Hub的指针 */
 	struct usb_device *root_hub;	/* Root hub */
 	struct usb_bus *hs_companion;	/* Companion EHCI bus, if any */
+	/* 双向链表指针，USB内核用一个双向链表来维护系统中所有USB总线系统 */
 	struct list_head bus_list;	/* list of busses */
 
 	int bandwidth_allocated;	/* on this bus: how much of the time
@@ -505,30 +517,43 @@ struct usb3_lpm_parameters {
  * Usbcore drivers should not set usbdev->state directly.  Instead use
  * usb_set_device_state().
  */
+/* 代表一个usb设备 */
 struct usb_device {
+	/* 设备号，分配的设备地址，1-127 */
 	int		devnum;
 	char		devpath[16];
 	u32		route;
 	enum usb_device_state	state;
 	enum usb_device_speed	speed;
 
+	/* 事务处理解释器 */
 	struct usb_tt	*tt;
+	/* 设备所连接的具有事务处理解释器功能的集线器端口 */
 	int		ttport;
 
+	/* 用于同步切换的位图，每个端点占用1位，[0]表示输入，[1]输出 */
 	unsigned int toggle[2];
 
+	/* 表示设备所连的上游集线器指针 */
 	struct usb_device *parent;
+	/* usb设备所在的总线 */
 	struct usb_bus *bus;
+	/* 0号端口，可以双向传输 */
 	struct usb_host_endpoint ep0;
 
 	struct device dev;
 
+	/* usb设备描述符 */
 	struct usb_device_descriptor descriptor;
 	struct usb_host_bos *bos;
 	struct usb_host_config *config;
 
+	/* 配置结构体 */
 	struct usb_host_config *actconfig;
+	/* usb最多支持33个端口，1个控制端口，16个输入端口，16个输出端口 */
+	/* 16个输入端口 */
 	struct usb_host_endpoint *ep_in[16];
+	/* 16个输出端口 */
 	struct usb_host_endpoint *ep_out[16];
 
 	char **rawdescriptors;
@@ -1033,11 +1058,14 @@ struct usbdrv_wrap {
  * them as necessary, and blocking until the unlinks complete).
  */
 struct usb_driver {
+	/* 客户端驱动程序的字符串名称，用于避免重复安装和卸载 */
 	const char *name;
 
+	/* 给USB内核提供的函数，用于判断驱动程序是否能对设备的某个接口进行驱动，如能则分配资源 */
 	int (*probe) (struct usb_interface *intf,
 		      const struct usb_device_id *id);
 
+	/* 给USB内核提供的函数，用于释放设备的某个接口所占用的资源 */
 	void (*disconnect) (struct usb_interface *intf);
 
 	int (*unlocked_ioctl) (struct usb_interface *intf, unsigned int code,
@@ -1392,9 +1420,15 @@ typedef void (*usb_complete_t)(struct urb *);
  * when the urb is owned by the hcd, that is, since the call to
  * usb_submit_urb() till the entry into the completion routine.
  */
+/*
+（USB Request Block）urb，是进行USB通信的数据结构。
+Linux的USB子系统只使用这么一种数据结构来进行USB通信，
+urb包含了建立任何 USB传输所需的所有信息，并贯穿于USB协议栈对数据处理的整个过程。
+*/
 struct urb {
 	/* private: usb core and host controller only fields in the urb */
 	struct kref kref;		/* reference count of the URB */
+	/* 与主机控制器相关数据，对USB内核层是透明 */
 	void *hcpriv;			/* private data for host controller */
 	atomic_t use_count;		/* concurrent submissions counter */
 	atomic_t reject;		/* submissions will fail */
@@ -1405,8 +1439,10 @@ struct urb {
 					 * current owner */
 	struct list_head anchor_list;	/* the URB may be anchored */
 	struct usb_anchor *anchor;
+	/* 接受此URB的USB设备指针 */
 	struct usb_device *dev;		/* (in) pointer to associated device */
 	struct usb_host_endpoint *ep;	/* (internal) pointer to endpoint */
+	/* 表示设备的某个端点和客户端驱动程序之间的管道 */
 	unsigned int pipe;		/* (in) pipe information */
 	unsigned int stream_id;		/* (in) stream ID */
 	int status;			/* (return) non-ISO status */

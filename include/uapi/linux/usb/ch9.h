@@ -263,6 +263,7 @@ struct usb_device_descriptor {
 	__u8  bDeviceClass;
 	__u8  bDeviceSubClass;
 	__u8  bDeviceProtocol;
+	/* 一次传输的最大数据量 */
 	__u8  bMaxPacketSize0;
 	__le16 idVendor;
 	__le16 idProduct;
@@ -370,8 +371,10 @@ struct usb_endpoint_descriptor {
 	__u8  bLength;
 	__u8  bDescriptorType;
 
+	/* 端口地址 */
 	__u8  bEndpointAddress;
 	__u8  bmAttributes;
+	/* 一次传输的最大数据量 */
 	__le16 wMaxPacketSize;
 	__u8  bInterval;
 
