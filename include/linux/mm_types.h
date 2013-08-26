@@ -364,6 +364,7 @@ struct mm_struct {
 #endif
 	/* 标识第一个分配的匿名线性区或文件内存映射的线性地址 */
 	unsigned long mmap_base;		/* base of mmap area */
+	unsigned long mmap_legacy_base;         /* base of mmap area in bottom-up allocations */
 	unsigned long task_size;		/* size of task vm space */
 	unsigned long highest_vm_end;		/* highest vma end address */
 	/* 指向页全局目录 */
