@@ -43,6 +43,16 @@ int netfilter_init(void);
 struct sk_buff;
 
 struct nf_hook_ops;
+/*
+
+linux-2.6.30.9中的定义
+typedef unsigned int nf_hookfn(unsigned int hooknum,
+                               struct sk_buff *skb,
+                               const struct net_device *in,
+                               const struct net_device *out,
+                               int (*okfn)(struct sk_buff *));
+
+*/
 typedef unsigned int nf_hookfn(const struct nf_hook_ops *ops,
 			       struct sk_buff *skb,
 				/* 指向收到数据帧的实际物理接口 */

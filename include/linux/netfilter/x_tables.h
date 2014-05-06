@@ -185,18 +185,22 @@ struct xt_table {
 	struct list_head list;
 
 	/* What hooks you will enter on */
+	/* 该表所检测的hook点 */
 	unsigned int valid_hooks;
 
 	/* Man behind the curtain... */
+	/* 描述表的具体属性，如表的size，表中的规则数等 */
 	struct xt_table_info *private;
 
 	/* Set this to THIS_MODULE if you are a module, otherwise NULL */
 	struct module *me;
 
+	/* NFPROTO协议簇,如 NFPROTO_IPV4 */
 	u_int8_t af;		/* address/protocol family */
 	int priority;		/* hook order */
 
 	/* A unique name... */
+	/* 表名,如 filter */
 	const char name[XT_TABLE_MAXNAMELEN];
 };
 

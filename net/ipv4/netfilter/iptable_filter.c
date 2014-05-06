@@ -32,6 +32,10 @@ static const struct xt_table packet_filter = {
 	.priority	= NF_IP_PRI_FILTER,
 };
 
+/*
+注册到netfilter框架的hook函数
+在FILTER_VALID_HOOKS设置的3个hook点上
+*/
 static unsigned int
 iptable_filter_hook(const struct nf_hook_ops *ops, struct sk_buff *skb,
 		    const struct net_device *in, const struct net_device *out,

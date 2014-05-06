@@ -1245,6 +1245,7 @@ static const struct file_operations xt_target_ops = {
  */
 struct nf_hook_ops *xt_hook_link(const struct xt_table *table, nf_hookfn *fn)
 {
+	/* packet_filter packet_mangler packet_raw */
 	unsigned int hook_mask = table->valid_hooks;
 	uint8_t i, num_hooks = hweight32(hook_mask);
 	uint8_t hooknum;
@@ -1255,10 +1256,12 @@ struct nf_hook_ops *xt_hook_link(const struct xt_table *table, nf_hookfn *fn)
 	if (ops == NULL)
 		return ERR_PTR(-ENOMEM);
 
+	/* 设置各个nf_hook_ops结构 */
 	for (i = 0, hooknum = 0; i < num_hooks && hook_mask != 0;
 	     hook_mask >>= 1, ++hooknum) {
 		if (!(hook_mask & 1))
 			continue;
+		/* iptable_filter_hook iptable_mangle_hook iptable_raw_hook */
 		ops[i].hook     = fn;
 		ops[i].owner    = table->me;
 		ops[i].pf       = table->af;
@@ -1267,6 +1270,7 @@ struct nf_hook_ops *xt_hook_link(const struct xt_table *table, nf_hookfn *fn)
 		++i;
 	}
 
+	/* 向netfilter框架注册hook函数 */
 	ret = nf_register_hooks(ops, num_hooks);
 	if (ret < 0) {
 		kfree(ops);

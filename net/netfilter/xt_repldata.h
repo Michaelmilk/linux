@@ -5,6 +5,10 @@
  * they serve as the hanging-off data accessed through repl.data[].
  */
 
+/*
+xt_alloc_initial_table(ipt, IPT)
+
+*/
 #define xt_alloc_initial_table(type, typ2) ({ \
 	unsigned int hook_mask = info->valid_hooks; \
 	unsigned int nhooks = hweight32(hook_mask); \

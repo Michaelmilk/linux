@@ -1,6 +1,8 @@
 #ifndef _ASM_GENERIC_BITOPS_CONST_HWEIGHT_H_
 #define _ASM_GENERIC_BITOPS_CONST_HWEIGHT_H_
 
+/* 计算bit位置1的个数 */
+
 /*
  * Compile time versions of __arch_hweightN()
  */

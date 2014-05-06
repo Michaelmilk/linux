@@ -65,6 +65,41 @@ MODULE_DESCRIPTION("IPv4 packet filter");
 
 void *ipt_alloc_initial_table(const struct xt_table *info)
 {
+	/*
+	把宏xt_alloc_initial_table展开
+
+	掩码
+	unsigned int hook_mask = info->valid_hooks;
+	有效hook点个数
+	unsigned int nhooks = hweight32(hook_mask);
+	unsigned int bytes = 0, hooknum = 0, i = 0;
+	struct {
+		struct ipt_replace repl;
+		struct ipt_standard entries[nhooks];
+		struct ipt_error term;
+	} *tbl = kzalloc(sizeof(*tbl), GFP_KERNEL);
+	if (tbl == NULL)
+		return NULL;
+	表名
+	strncpy(tbl->repl.name, info->name, sizeof(tbl->repl.name));
+	tbl->term = (struct ipt_error)IPT_ERROR_INIT;
+	tbl->repl.valid_hooks = hook_mask;
+	tbl->repl.num_entries = nhooks + 1;
+	tbl->repl.size = nhooks * sizeof(struct ipt_standard) +
+			 sizeof(struct ipt_error);
+	for (; hook_mask != 0; hook_mask >>= 1, ++hooknum) {
+		if (!(hook_mask & 1))
+			continue;
+		tbl->repl.hook_entry[hooknum] = bytes;
+		tbl->repl.underflow[hooknum]  = bytes;
+		tbl->entries[i++] = (struct ipt_standard)
+			IPT_STANDARD_INIT(NF_ACCEPT);
+		bytes += sizeof(struct ipt_standard);
+	}
+	tbl;
+
+	*/
+
 	return xt_alloc_initial_table(ipt, IPT);
 }
 EXPORT_SYMBOL_GPL(ipt_alloc_initial_table);

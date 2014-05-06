@@ -42,6 +42,7 @@
 #define NF_VERDICT_BITS 16
 #endif
 
+/* netfilter¿ò¼ÜµÄ5¸öhookµã */
 enum nf_inet_hooks {
 	NF_INET_PRE_ROUTING,
 	NF_INET_LOCAL_IN,
