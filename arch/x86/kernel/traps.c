@@ -58,6 +58,7 @@
 #include <asm/mce.h>
 #include <asm/fixmap.h>
 #include <asm/mach_traps.h>
+#include <asm/alternative.h>
 
 #ifdef CONFIG_X86_64
 #include <asm/x86_init.h>
@@ -87,7 +88,7 @@ static inline void conditional_sti(struct pt_regs *regs)
 
 static inline void preempt_conditional_sti(struct pt_regs *regs)
 {
-	inc_preempt_count();
+	preempt_count_inc();
 	if (regs->flags & X86_EFLAGS_IF)
 		local_irq_enable();
 }
@@ -102,7 +103,7 @@ static inline void preempt_conditional_cli(struct pt_regs *regs)
 {
 	if (regs->flags & X86_EFLAGS_IF)
 		local_irq_disable();
-	dec_preempt_count();
+	preempt_count_dec();
 }
 
 static int __kprobes
@@ -210,21 +211,17 @@ dotraplinkage void do_##name(struct pt_regs *regs, long error_code)	\
 	exception_exit(prev_state);					\
 }
 
-DO_ERROR_INFO(X86_TRAP_DE, SIGFPE, "divide error", divide_error, FPE_INTDIV,
-		regs->ip)
-DO_ERROR(X86_TRAP_OF, SIGSEGV, "overflow", overflow)
-DO_ERROR(X86_TRAP_BR, SIGSEGV, "bounds", bounds)
-DO_ERROR_INFO(X86_TRAP_UD, SIGILL, "invalid opcode", invalid_op, ILL_ILLOPN,
-		regs->ip)
-DO_ERROR(X86_TRAP_OLD_MF, SIGFPE, "coprocessor segment overrun",
-		coprocessor_segment_overrun)
-DO_ERROR(X86_TRAP_TS, SIGSEGV, "invalid TSS", invalid_TSS)
-DO_ERROR(X86_TRAP_NP, SIGBUS, "segment not present", segment_not_present)
+DO_ERROR_INFO(X86_TRAP_DE,     SIGFPE,  "divide error",			divide_error,		     FPE_INTDIV, regs->ip )
+DO_ERROR     (X86_TRAP_OF,     SIGSEGV, "overflow",			overflow					  )
+DO_ERROR     (X86_TRAP_BR,     SIGSEGV, "bounds",			bounds						  )
+DO_ERROR_INFO(X86_TRAP_UD,     SIGILL,  "invalid opcode",		invalid_op,		     ILL_ILLOPN, regs->ip )
+DO_ERROR     (X86_TRAP_OLD_MF, SIGFPE,  "coprocessor segment overrun",	coprocessor_segment_overrun			  )
+DO_ERROR     (X86_TRAP_TS,     SIGSEGV, "invalid TSS",			invalid_TSS					  )
+DO_ERROR     (X86_TRAP_NP,     SIGBUS,  "segment not present",		segment_not_present				  )
 #ifdef CONFIG_X86_32
-DO_ERROR(X86_TRAP_SS, SIGBUS, "stack segment", stack_segment)
+DO_ERROR     (X86_TRAP_SS,     SIGBUS,  "stack segment",		stack_segment					  )
 #endif
-DO_ERROR_INFO(X86_TRAP_AC, SIGBUS, "alignment check", alignment_check,
-		BUS_ADRALN, 0)
+DO_ERROR_INFO(X86_TRAP_AC,     SIGBUS,  "alignment check",		alignment_check,	     BUS_ADRALN, 0	  )
 
 #ifdef CONFIG_X86_64
 /* Runs on IST stack */
@@ -327,6 +324,9 @@ dotraplinkage void __kprobes notrace do_int3(struct pt_regs *regs, long error_co
 	    ftrace_int3_handler(regs))
 		return;
 #endif
+	if (poke_int3_handler(regs))
+		return;
+
 	prev_state = exception_enter();
 #ifdef CONFIG_KGDB_LOW_LEVEL_TRAP
 	if (kgdb_ll_trap(DIE_INT3, "int3", regs, error_code, X86_TRAP_BP,
@@ -649,7 +649,7 @@ void math_state_restore(void)
 		return;
 	}
 
-	tsk->fpu_counter++;
+	tsk->thread.fpu_counter++;
 }
 EXPORT_SYMBOL_GPL(math_state_restore);
 
@@ -712,7 +712,7 @@ void __init early_trap_init(void)
 	set_system_intr_gate_ist(X86_TRAP_BP, &int3, DEBUG_STACK);
 #ifdef CONFIG_X86_32
 	/* 页异常 */
-	set_intr_gate(X86_TRAP_PF, &page_fault);
+	set_intr_gate(X86_TRAP_PF, page_fault);
 #endif
 	/* 加载中断描述符表 */
 	load_idt(&idt_descr);
@@ -721,7 +721,7 @@ void __init early_trap_init(void)
 void __init early_trap_pf_init(void)
 {
 #ifdef CONFIG_X86_64
-	set_intr_gate(X86_TRAP_PF, &page_fault);
+	set_intr_gate(X86_TRAP_PF, page_fault);
 #endif
 }
 
@@ -738,18 +738,18 @@ void __init trap_init(void)
 #endif
 
 	/* 除法错误 */
-	set_intr_gate(X86_TRAP_DE, &divide_error);
+	set_intr_gate(X86_TRAP_DE, divide_error);
 	/* NMI 中断 */
 	set_intr_gate_ist(X86_TRAP_NMI, &nmi, NMI_STACK);
 	/* int4 can be called from all */
 	/* 溢出 */
 	set_system_intr_gate(X86_TRAP_OF, &overflow);
 	/* 边界监测中断 */
-	set_intr_gate(X86_TRAP_BR, &bounds);
+	set_intr_gate(X86_TRAP_BR, bounds);
 	/* 无操作码 */
-	set_intr_gate(X86_TRAP_UD, &invalid_op);
+	set_intr_gate(X86_TRAP_UD, invalid_op);
 	/* 设备不可用 */
-	set_intr_gate(X86_TRAP_NM, &device_not_available);
+	set_intr_gate(X86_TRAP_NM, device_not_available);
 #ifdef CONFIG_X86_32
 	/* 双重故障 */
 	set_task_gate(X86_TRAP_DF, GDT_ENTRY_DOUBLEFAULT_TSS);
@@ -757,27 +757,27 @@ void __init trap_init(void)
 	set_intr_gate_ist(X86_TRAP_DF, &double_fault, DOUBLEFAULT_STACK);
 #endif
 	/* 协处理器段溢出 */
-	set_intr_gate(X86_TRAP_OLD_MF, &coprocessor_segment_overrun);
+	set_intr_gate(X86_TRAP_OLD_MF, coprocessor_segment_overrun);
 	/* 无效 TSS */
-	set_intr_gate(X86_TRAP_TS, &invalid_TSS);
+	set_intr_gate(X86_TRAP_TS, invalid_TSS);
 	/* 缺段中断 */
-	set_intr_gate(X86_TRAP_NP, &segment_not_present);
+	set_intr_gate(X86_TRAP_NP, segment_not_present);
 	/* 堆栈异常 */
 	set_intr_gate_ist(X86_TRAP_SS, &stack_segment, STACKFAULT_STACK);
 	/* 一般保护错误 */
-	set_intr_gate(X86_TRAP_GP, &general_protection);
+	set_intr_gate(X86_TRAP_GP, general_protection);
 	/* Intel 保留 */
-	set_intr_gate(X86_TRAP_SPURIOUS, &spurious_interrupt_bug);
+	set_intr_gate(X86_TRAP_SPURIOUS, spurious_interrupt_bug);
 	/* 协处理器出错 */
-	set_intr_gate(X86_TRAP_MF, &coprocessor_error);
+	set_intr_gate(X86_TRAP_MF, coprocessor_error);
 	/* 对齐中断检查 */
-	set_intr_gate(X86_TRAP_AC, &alignment_check);
+	set_intr_gate(X86_TRAP_AC, alignment_check);
 #ifdef CONFIG_X86_MCE
 	/* 机器检查 */
 	set_intr_gate_ist(X86_TRAP_MC, &machine_check, MCE_STACK);
 #endif
 	/* SIMD浮点 */
-	set_intr_gate(X86_TRAP_XF, &simd_coprocessor_error);
+	set_intr_gate(X86_TRAP_XF, simd_coprocessor_error);
 
 	/* Reserve all the builtin and the syscall vector: */
 	/* 标记0--31为已使用

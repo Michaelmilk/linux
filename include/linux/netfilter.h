@@ -35,14 +35,15 @@ static inline void nf_inet_addr_mask(const union nf_inet_addr *a1,
 	result->all[3] = a1->all[3] & mask->all[3];
 }
 
-extern int netfilter_init(void);
+int netfilter_init(void);
 
 /* Largest hook number + 1 */
 #define NF_MAX_HOOKS 8
 
 struct sk_buff;
 
-typedef unsigned int nf_hookfn(unsigned int hooknum,
+struct nf_hook_ops;
+typedef unsigned int nf_hookfn(const struct nf_hook_ops *ops,
 			       struct sk_buff *skb,
 				/* 指向收到数据帧的实际物理接口 */
 			       const struct net_device *in,
@@ -58,19 +59,21 @@ struct nf_hook_ops {
 
 	/* User fills in from here down. */
 	/* 钩子处理函数 */
-	nf_hookfn *hook;
-	struct module *owner;
+	nf_hookfn	*hook;
+	struct module	*owner;
+	void		*priv;
 	/* NF协议 NFPROTO_IPV4 NFPROTO_BRIDGE ... */
-	u_int8_t pf;
+	u_int8_t	pf;
 	/* hook号，5个hook点
 	   网桥的	NF_BR_PRE_ROUTING	NF_BR_LOCAL_IN		...
 	   ARP的	NF_ARP_IN		NF_ARP_OUT		...
 	   IP层的	NF_INET_PRE_ROUTING	NF_INET_LOCAL_IN	...
 	*/
-	unsigned int hooknum;
+	unsigned int	hooknum;
 	/* Hooks are ordered in ascending priority. */
 	/* 优先级，数值越小的越先执行 */
-	int priority;
+
+	int		priority;
 };
 
 struct nf_sockopt_ops {
@@ -244,7 +247,7 @@ int compat_nf_getsockopt(struct sock *sk, u_int8_t pf, int optval,
 /* Call this before modifying an existing packet: ensures it is
    modifiable and linear to the point you care about (writable_len).
    Returns true or false. */
-extern int skb_make_writable(struct sk_buff *skb, unsigned int writable_len);
+int skb_make_writable(struct sk_buff *skb, unsigned int writable_len);
 
 struct flowi;
 struct nf_queue_entry;
@@ -305,8 +308,8 @@ nf_checksum_partial(struct sk_buff *skb, unsigned int hook,
 	return csum;
 }
 
-extern int nf_register_afinfo(const struct nf_afinfo *afinfo);
-extern void nf_unregister_afinfo(const struct nf_afinfo *afinfo);
+int nf_register_afinfo(const struct nf_afinfo *afinfo);
+void nf_unregister_afinfo(const struct nf_afinfo *afinfo);
 
 #include <net/flow.h>
 extern void (*nf_nat_decode_session_hook)(struct sk_buff *, struct flowi *);
@@ -352,25 +355,24 @@ nf_nat_decode_session(struct sk_buff *skb, struct flowi *fl, u_int8_t family)
 #endif /*CONFIG_NETFILTER*/
 
 #if defined(CONFIG_NF_CONNTRACK) || defined(CONFIG_NF_CONNTRACK_MODULE)
-extern void (*ip_ct_attach)(struct sk_buff *, struct sk_buff *) __rcu;
-extern void nf_ct_attach(struct sk_buff *, struct sk_buff *);
+extern void (*ip_ct_attach)(struct sk_buff *, const struct sk_buff *) __rcu;
+void nf_ct_attach(struct sk_buff *, const struct sk_buff *);
 extern void (*nf_ct_destroy)(struct nf_conntrack *) __rcu;
 
 struct nf_conn;
+enum ip_conntrack_info;
 struct nlattr;
 
 struct nfq_ct_hook {
 	size_t (*build_size)(const struct nf_conn *ct);
 	int (*build)(struct sk_buff *skb, struct nf_conn *ct);
 	int (*parse)(const struct nlattr *attr, struct nf_conn *ct);
+	int (*attach_expect)(const struct nlattr *attr, struct nf_conn *ct,
+			     u32 portid, u32 report);
+	void (*seq_adjust)(struct sk_buff *skb, struct nf_conn *ct,
+			   enum ip_conntrack_info ctinfo, s32 off);
 };
 extern struct nfq_ct_hook __rcu *nfq_ct_hook;
-
-struct nfq_ct_nat_hook {
-	void (*seq_adjust)(struct sk_buff *skb, struct nf_conn *ct,
-			   u32 ctinfo, int off);
-};
-extern struct nfq_ct_nat_hook __rcu *nfq_ct_nat_hook;
 #else
 static inline void nf_ct_attach(struct sk_buff *new, struct sk_buff *skb) {}
 #endif

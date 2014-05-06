@@ -39,6 +39,10 @@ static const struct platform_device_id ath9k_platform_id_table[] = {
 		.name = "qca955x_wmac",
 		.driver_data = AR9300_DEVID_QCA955X,
 	},
+	{
+		.name = "qca953x_wmac",
+		.driver_data = AR9300_DEVID_AR953X,
+	},
 	{},
 };
 
@@ -54,7 +58,7 @@ static bool ath_ahb_eeprom_read(struct ath_common *common, u32 off, u16 *data)
 	struct platform_device *pdev = to_platform_device(sc->dev);
 	struct ath9k_platform_data *pdata;
 
-	pdata = (struct ath9k_platform_data *) pdev->dev.platform_data;
+	pdata = dev_get_platdata(&pdev->dev);
 	if (off >= (ARRAY_SIZE(pdata->eeprom_data))) {
 		ath_err(common,
 			"%s: flash read failed, offset %08x is out of range\n",
@@ -82,9 +86,10 @@ static int ath_ahb_probe(struct platform_device *pdev)
 	int irq;
 	int ret = 0;
 	struct ath_hw *ah;
+	struct ath_common *common;
 	char hw_name[64];
 
-	if (!pdev->dev.platform_data) {
+	if (!dev_get_platdata(&pdev->dev)) {
 		dev_err(&pdev->dev, "no platform data specified\n");
 		return -EINVAL;
 	}
@@ -124,9 +129,6 @@ static int ath_ahb_probe(struct platform_device *pdev)
 	sc->mem = mem;
 	sc->irq = irq;
 
-	/* Will be cleared in ath9k_start() */
-	set_bit(SC_OP_INVALID, &sc->sc_flags);
-
 	ret = request_irq(irq, ath_isr, IRQF_SHARED, "ath9k", sc);
 	if (ret) {
 		dev_err(&pdev->dev, "request_irq failed\n");
@@ -144,6 +146,9 @@ static int ath_ahb_probe(struct platform_device *pdev)
 	wiphy_info(hw->wiphy, "%s mem=0x%lx, irq=%d\n",
 		   hw_name, (unsigned long)mem, irq);
 
+	common = ath9k_hw_common(sc->sc_ah);
+	/* Will be cleared in ath9k_start() */
+	set_bit(ATH_OP_INVALID, &common->op_flags);
 	return 0;
 
  err_irq:

@@ -1371,7 +1371,7 @@ struct ring_buffer *__ring_buffer_alloc(unsigned long size, unsigned flags,
 	 * In that off case, we need to allocate for all possible cpus.
 	 */
 #ifdef CONFIG_HOTPLUG_CPU
-	get_online_cpus();
+	cpu_notifier_register_begin();
 	cpumask_copy(buffer->cpumask, cpu_online_mask);
 #else
 	cpumask_copy(buffer->cpumask, cpu_possible_mask);
@@ -1403,10 +1403,10 @@ struct ring_buffer *__ring_buffer_alloc(unsigned long size, unsigned flags,
 	buffer->cpu_notify.notifier_call = rb_cpu_notify;
 	buffer->cpu_notify.priority = 0;
 	/* 注册到cpu热插拔通知链中 */
-	register_cpu_notifier(&buffer->cpu_notify);
+	__register_cpu_notifier(&buffer->cpu_notify);
+	cpu_notifier_register_done();
 #endif
 
-	put_online_cpus();
 	mutex_init(&buffer->mutex);
 
 	return buffer;
@@ -1420,7 +1420,9 @@ struct ring_buffer *__ring_buffer_alloc(unsigned long size, unsigned flags,
 
  fail_free_cpumask:
 	free_cpumask_var(buffer->cpumask);
-	put_online_cpus();
+#ifdef CONFIG_HOTPLUG_CPU
+	cpu_notifier_register_done();
+#endif
 
  fail_free_buffer:
 	kfree(buffer);
@@ -1437,16 +1439,17 @@ ring_buffer_free(struct ring_buffer *buffer)
 {
 	int cpu;
 
-	get_online_cpus();
-
 #ifdef CONFIG_HOTPLUG_CPU
-	unregister_cpu_notifier(&buffer->cpu_notify);
+	cpu_notifier_register_begin();
+	__unregister_cpu_notifier(&buffer->cpu_notify);
 #endif
 
 	for_each_buffer_cpu(buffer, cpu)
 		rb_free_cpu_buffer(buffer->buffers[cpu]);
 
-	put_online_cpus();
+#ifdef CONFIG_HOTPLUG_CPU
+	cpu_notifier_register_done();
+#endif
 
 	kfree(buffer->buffers);
 	free_cpumask_var(buffer->cpumask);
@@ -2490,6 +2493,13 @@ __rb_reserve_next(struct ring_buffer_per_cpu *cpu_buffer,
 	write &= RB_WRITE_MASK;
 	tail = write - length;
 
+	/*
+	 * If this is the first commit on the page, then it has the same
+	 * timestamp as the page itself.
+	 */
+	if (!tail)
+		delta = 0;
+
 	/* See if we shot pass the end of this buffer page */
 	/* 当前页剩余部分大小不够
 	   跳到下一个页中
@@ -2656,7 +2666,7 @@ rb_reserve_next_event(struct ring_buffer *buffer,
 		if (unlikely(test_time_stamp(delta))) {
 			int local_clock_stable = 1;
 #ifdef CONFIG_HAVE_UNSTABLE_SCHED_CLOCK
-			local_clock_stable = sched_clock_stable;
+			local_clock_stable = sched_clock_stable();
 #endif
 			WARN_ONCE(delta > (1ULL << 59),
 				  KERN_WARNING "Delta way too big! %llu ts=%llu write stamp = %llu\n%s",

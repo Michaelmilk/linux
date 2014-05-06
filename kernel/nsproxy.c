@@ -32,15 +32,15 @@ static struct kmem_cache *nsproxy_cachep;
 初始的全局命名空间
 */
 struct nsproxy init_nsproxy = {
-	.count	= ATOMIC_INIT(1),
-	.uts_ns	= &init_uts_ns,
+	.count			= ATOMIC_INIT(1),
+	.uts_ns			= &init_uts_ns,
 #if defined(CONFIG_POSIX_MQUEUE) || defined(CONFIG_SYSVIPC)
-	.ipc_ns	= &init_ipc_ns,
+	.ipc_ns			= &init_ipc_ns,
 #endif
-	.mnt_ns	= NULL,
-	.pid_ns	= &init_pid_ns,
+	.mnt_ns			= NULL,
+	.pid_ns_for_children	= &init_pid_ns,
 #ifdef CONFIG_NET
-	.net_ns	= &init_net,
+	.net_ns			= &init_net,
 #endif
 };
 
@@ -93,9 +93,10 @@ static struct nsproxy *create_new_namespaces(unsigned long flags,
 		goto out_ipc;
 	}
 
-	new_nsp->pid_ns = copy_pid_ns(flags, user_ns, tsk->nsproxy->pid_ns);
-	if (IS_ERR(new_nsp->pid_ns)) {
-		err = PTR_ERR(new_nsp->pid_ns);
+	new_nsp->pid_ns_for_children =
+		copy_pid_ns(flags, user_ns, tsk->nsproxy->pid_ns_for_children);
+	if (IS_ERR(new_nsp->pid_ns_for_children)) {
+		err = PTR_ERR(new_nsp->pid_ns_for_children);
 		goto out_pid;
 	}
 
@@ -108,8 +109,8 @@ static struct nsproxy *create_new_namespaces(unsigned long flags,
 	return new_nsp;
 
 out_net:
-	if (new_nsp->pid_ns)
-		put_pid_ns(new_nsp->pid_ns);
+	if (new_nsp->pid_ns_for_children)
+		put_pid_ns(new_nsp->pid_ns_for_children);
 out_pid:
 	if (new_nsp->ipc_ns)
 		put_ipc_ns(new_nsp->ipc_ns);
@@ -133,24 +134,18 @@ int copy_namespaces(unsigned long flags, struct task_struct *tsk)
 	struct nsproxy *old_ns = tsk->nsproxy;
 	struct user_namespace *user_ns = task_cred_xxx(tsk, user_ns);
 	struct nsproxy *new_ns;
-	int err = 0;
-
-	if (!old_ns)
-		return 0;
-
-	/* 增加原命名空间代理的引用计数 */
-	get_nsproxy(old_ns);
 
 	/* 没有创建新的命名空间的标志，则返回
 	   原命名空间代理的引用计数已经增1，即新进程@tsk使用其父进程的命名空间代理 */
-	if (!(flags & (CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC |
-				CLONE_NEWPID | CLONE_NEWNET)))
+	if (likely(!(flags & (CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC |
+			      CLONE_NEWPID | CLONE_NEWNET)))) {
+		/* 增加原命名空间代理的引用计数 */
+		get_nsproxy(old_ns);
 		return 0;
-
-	if (!ns_capable(user_ns, CAP_SYS_ADMIN)) {
-		err = -EPERM;
-		goto out;
 	}
+
+	if (!ns_capable(user_ns, CAP_SYS_ADMIN))
+		return -EPERM;
 
 	/*
 	 * CLONE_NEWIPC must detach from the undolist: after switching
@@ -162,25 +157,17 @@ int copy_namespaces(unsigned long flags, struct task_struct *tsk)
 	/* parlance: 用法
 	   CLONE_NEWIPC和CLONE_SYSVSEM对信号量的共享有互斥含义
 	   不能同时置这2个标志 */
-	if ((flags & CLONE_NEWIPC) && (flags & CLONE_SYSVSEM)) {
-		err = -EINVAL;
-		goto out;
-	}
+	if ((flags & (CLONE_NEWIPC | CLONE_SYSVSEM)) ==
+		(CLONE_NEWIPC | CLONE_SYSVSEM)) 
+		return -EINVAL;
 
 	new_ns = create_new_namespaces(flags, tsk, user_ns, tsk->fs);
-	if (IS_ERR(new_ns)) {
-		err = PTR_ERR(new_ns);
-		goto out;
-	}
+	if (IS_ERR(new_ns))
+		return  PTR_ERR(new_ns);
 
 	/* 记录新进程的命名空间代理 */
 	tsk->nsproxy = new_ns;
-
-out:
-	/* 出错或者分配了新的命名空间代理
-	   则减小old_ns的引用计数 */
-	put_nsproxy(old_ns);
-	return err;
+	return 0;
 }
 
 void free_nsproxy(struct nsproxy *ns)
@@ -191,8 +178,8 @@ void free_nsproxy(struct nsproxy *ns)
 		put_uts_ns(ns->uts_ns);
 	if (ns->ipc_ns)
 		put_ipc_ns(ns->ipc_ns);
-	if (ns->pid_ns)
-		put_pid_ns(ns->pid_ns);
+	if (ns->pid_ns_for_children)
+		put_pid_ns(ns->pid_ns_for_children);
 	put_net(ns->net_ns);
 	kmem_cache_free(nsproxy_cachep, ns);
 }

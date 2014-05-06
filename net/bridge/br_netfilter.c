@@ -172,7 +172,7 @@ void br_netfilter_rtable_init(struct net_bridge *br)
 	rt->dst.dev = br->dev;
 	rt->dst.path = &rt->dst;
 	dst_init_metrics(&rt->dst, br_dst_default_metrics, true);
-	rt->dst.flags	= DST_NOXFRM | DST_NOPEER | DST_FAKE_RTABLE;
+	rt->dst.flags	= DST_NOXFRM | DST_FAKE_RTABLE;
 	rt->dst.ops = &fake_dst_ops;
 }
 
@@ -528,7 +528,7 @@ bridged_dnat:
 					       1);
 				return 0;
 			}
-			memcpy(eth_hdr(skb)->h_dest, dev->dev_addr, ETH_ALEN);
+			ether_addr_copy(eth_hdr(skb)->h_dest, dev->dev_addr);
 			skb->pkt_type = PACKET_HOST;
 		}
 	} else {
@@ -591,6 +591,8 @@ static struct net_device *setup_pre_routing(struct sk_buff *skb)
 	else if (skb->protocol == htons(ETH_P_PPP_SES))
 		nf_bridge->mask |= BRNF_PPPoE;
 
+	/* Must drop socket now because of tproxy. */
+	skb_orphan(skb);
 	return skb->dev;
 }
 
@@ -651,7 +653,7 @@ bad:
 
 /* Replicate the checks that IPv6 does on packet reception and pass the packet
  * to ip6tables, which doesn't support NAT, so things are fairly simple. */
-static unsigned int br_nf_pre_routing_ipv6(unsigned int hook,
+static unsigned int br_nf_pre_routing_ipv6(const struct nf_hook_ops *ops,
 					   struct sk_buff *skb,
 					   const struct net_device *in,
 					   const struct net_device *out,
@@ -701,11 +703,14 @@ static unsigned int br_nf_pre_routing_ipv6(unsigned int hook,
  * receiving device) to make netfilter happy, the REDIRECT
  * target in particular.  Save the original destination IP
  * address to be able to detect DNAT afterwards. */
+
 /*
 网桥上的netfilter
 会上3层判断ip table规则
 */
-static unsigned int br_nf_pre_routing(unsigned int hook, struct sk_buff *skb,
+
+static unsigned int br_nf_pre_routing(const struct nf_hook_ops *ops,
+				      struct sk_buff *skb,
 				      const struct net_device *in,
 				      const struct net_device *out,
 				      int (*okfn)(struct sk_buff *))
@@ -730,7 +735,7 @@ static unsigned int br_nf_pre_routing(unsigned int hook, struct sk_buff *skb,
 			return NF_ACCEPT;
 
 		nf_bridge_pull_encap_header_rcsum(skb);
-		return br_nf_pre_routing_ipv6(hook, skb, in, out, okfn);
+		return br_nf_pre_routing_ipv6(ops, skb, in, out, okfn);
 	}
 
 	/* 是否处理iptables规则 */
@@ -780,7 +785,8 @@ static unsigned int br_nf_pre_routing(unsigned int hook, struct sk_buff *skb,
  * took place when the packet entered the bridge), but we
  * register an IPv4 PRE_ROUTING 'sabotage' hook that will
  * prevent this from happening. */
-static unsigned int br_nf_local_in(unsigned int hook, struct sk_buff *skb,
+static unsigned int br_nf_local_in(const struct nf_hook_ops *ops,
+				   struct sk_buff *skb,
 				   const struct net_device *in,
 				   const struct net_device *out,
 				   int (*okfn)(struct sk_buff *))
@@ -827,7 +833,8 @@ static int br_nf_forward_finish(struct sk_buff *skb)
  * but we are still able to filter on the 'real' indev/outdev
  * because of the physdev module. For ARP, indev and outdev are the
  * bridge ports. */
-static unsigned int br_nf_forward_ip(unsigned int hook, struct sk_buff *skb,
+static unsigned int br_nf_forward_ip(const struct nf_hook_ops *ops,
+				     struct sk_buff *skb,
 				     const struct net_device *in,
 				     const struct net_device *out,
 				     int (*okfn)(struct sk_buff *))
@@ -895,7 +902,8 @@ static unsigned int br_nf_forward_ip(unsigned int hook, struct sk_buff *skb,
 	return NF_STOLEN;
 }
 
-static unsigned int br_nf_forward_arp(unsigned int hook, struct sk_buff *skb,
+static unsigned int br_nf_forward_arp(const struct nf_hook_ops *ops,
+				      struct sk_buff *skb,
 				      const struct net_device *in,
 				      const struct net_device *out,
 				      int (*okfn)(struct sk_buff *))
@@ -964,10 +972,13 @@ static int br_nf_dev_queue_xmit(struct sk_buff *skb)
 #endif
 
 /* PF_BRIDGE/POST_ROUTING ********************************************/
+
 /*
 网桥NF_BR_POST_ROUTING点的最后1个钩子函数
 */
-static unsigned int br_nf_post_routing(unsigned int hook, struct sk_buff *skb,
+
+static unsigned int br_nf_post_routing(const struct nf_hook_ops *ops,
+				       struct sk_buff *skb,
 				       const struct net_device *in,
 				       const struct net_device *out,
 				       int (*okfn)(struct sk_buff *))
@@ -1014,6 +1025,7 @@ static unsigned int br_nf_post_routing(unsigned int hook, struct sk_buff *skb,
 /* IP/SABOTAGE *****************************************************/
 /* Don't hand locally destined packets to PF_INET(6)/PRE_ROUTING
  * for the second time. */
+ 
 /*
 sabotage:破坏
 如果在网桥中已经走过了IP层的hook，则停止，不再继续进行IP层的netfilter
@@ -1021,7 +1033,9 @@ sabotage:破坏
 参考br_nf_pre_routing()和br_nf_pre_routing_finish()函数
 这两个函数中会设置和清除BRNF_NF_BRIDGE_PREROUTING标记
 */
-static unsigned int ip_sabotage_in(unsigned int hook, struct sk_buff *skb,
+
+static unsigned int ip_sabotage_in(const struct nf_hook_ops *ops,
+				   struct sk_buff *skb,
 				   const struct net_device *in,
 				   const struct net_device *out,
 				   int (*okfn)(struct sk_buff *))
@@ -1097,7 +1111,7 @@ static struct nf_hook_ops br_nf_ops[] __read_mostly = {
 #ifdef CONFIG_SYSCTL
 static
 int brnf_sysctl_call_tables(struct ctl_table *ctl, int write,
-			    void __user * buffer, size_t * lenp, loff_t * ppos)
+			    void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	int ret;
 

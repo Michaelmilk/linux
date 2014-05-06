@@ -42,11 +42,12 @@ int main(int argc, char *argv[])
 	uint32_t olen;
 	long ilen;
 	unsigned long offs;
-	FILE *f;
+	FILE *f = NULL;
+	int retval = 1;
 
 	if (argc < 2) {
 		fprintf(stderr, "Usage: %s compressed_file\n", argv[0]);
-		return 1;
+		goto bail;
 	}
 
 	/* Get the information for the compressed kernel image first */
@@ -54,7 +55,7 @@ int main(int argc, char *argv[])
 	f = fopen(argv[1], "r");
 	if (!f) {
 		perror(argv[1]);
-		return 1;
+		goto bail;
 	}
 
 
@@ -66,14 +67,13 @@ int main(int argc, char *argv[])
 	/* 读取文件的最后4个字节内容 */
 	if (fread(&olen, sizeof(olen), 1, f) != 1) {
 		perror(argv[1]);
-		return 1;
+		goto bail;
 	}
 
 	/* 通过文件指针的移动，这里便得到了压缩后文件的长度 */
 	ilen = ftell(f);
 	/* 压缩文件的最后4个字节保存的是原始文件的长度 */
 	olen = get_unaligned_le32(&olen);
-	fclose(f);
 
 	/*
 	 * Now we have the input (compressed) and output (uncompressed)
@@ -122,5 +122,10 @@ int main(int argc, char *argv[])
 		.incbin "arch/x86/boot/compressed/vmlinux.bin.gz"
 		input_data_end:
 	*/
-	return 0;
+
+	retval = 0;
+bail:
+	if (f)
+		fclose(f);
+	return retval;
 }

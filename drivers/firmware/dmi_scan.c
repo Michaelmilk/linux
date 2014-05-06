@@ -8,13 +8,14 @@
 #include <linux/bootmem.h>
 #include <linux/random.h>
 #include <asm/dmi.h>
+#include <asm/unaligned.h>
 
 /*
  * DMI stands for "Desktop Management Interface".  It is part
  * of and an antecedent to, SMBIOS, which stands for System
  * Management BIOS.  See further: http://www.dmtf.org/standards
  */
-static char dmi_empty_string[] = "        ";
+static const char dmi_empty_string[] = "        ";
 
 static u16 __initdata dmi_ver;
 /*
@@ -27,6 +28,13 @@ static int dmi_initialized;
 
 /* DMI system identification string used during boot */
 static char dmi_ids_string[128] __initdata;
+
+static struct dmi_memdev_info {
+	const char *device;
+	const char *bank;
+	u16 handle;
+} *dmi_memdev;
+static int dmi_memdev_nr;
 
 static const char * __init dmi_string_nosave(const struct dmi_header *dm, u8 s)
 {
@@ -52,7 +60,7 @@ static const char * __init dmi_string_nosave(const struct dmi_header *dm, u8 s)
 	return "";
 }
 
-static char * __init dmi_string(const struct dmi_header *dm, u8 s)
+static const char * __init dmi_string(const struct dmi_header *dm, u8 s)
 {
 	const char *bp = dmi_string_nosave(dm, s);
 	char *str;
@@ -66,8 +74,6 @@ static char * __init dmi_string(const struct dmi_header *dm, u8 s)
 	str = dmi_alloc(len);
 	if (str != NULL)
 		strcpy(str, bp);
-	else
-		printk(KERN_ERR "dmi_string: cannot allocate %Zu bytes.\n", len);
 
 	return str;
 }
@@ -122,7 +128,7 @@ static int __init dmi_walk_early(void (*decode)(const struct dmi_header *,
 {
 	u8 *buf;
 
-	buf = dmi_ioremap(dmi_base, dmi_len);
+	buf = dmi_early_remap(dmi_base, dmi_len);
 	if (buf == NULL)
 		return -1;
 
@@ -130,7 +136,7 @@ static int __init dmi_walk_early(void (*decode)(const struct dmi_header *,
 
 	add_device_randomness(buf, dmi_len);
 
-	dmi_iounmap(buf, dmi_len);
+	dmi_early_unmap(buf, dmi_len);
 	return 0;
 }
 
@@ -149,7 +155,7 @@ static int __init dmi_checksum(const u8 *buf, u8 len)
 通过指针记录解析出的dmi信息
 由函数dmi_scan_machine()的调用链完成dmi信息的处理
 */
-static char *dmi_ident[DMI_STRING_MAX];
+static const char *dmi_ident[DMI_STRING_MAX];
 static LIST_HEAD(dmi_devices);
 /*
 如果配置了CONFIG_DMI
@@ -160,10 +166,11 @@ int dmi_available;
 /*
  *	Save a DMI string
  */
-static void __init dmi_save_ident(const struct dmi_header *dm, int slot, int string)
+static void __init dmi_save_ident(const struct dmi_header *dm, int slot,
+		int string)
 {
-	const char *d = (const char*) dm;
-	char *p;
+	const char *d = (const char *) dm;
+	const char *p;
 
 	/* 该插槽处指针已经指向一个字符串了
 	   直接返回，以免冲突覆盖 */
@@ -178,9 +185,10 @@ static void __init dmi_save_ident(const struct dmi_header *dm, int slot, int str
 	dmi_ident[slot] = p;
 }
 
-static void __init dmi_save_uuid(const struct dmi_header *dm, int slot, int index)
+static void __init dmi_save_uuid(const struct dmi_header *dm, int slot,
+		int index)
 {
-	const u8 *d = (u8*) dm + index;
+	const u8 *d = (u8 *) dm + index;
 	char *s;
 	int is_ff = 1, is_00 = 1, i;
 
@@ -213,12 +221,13 @@ static void __init dmi_save_uuid(const struct dmi_header *dm, int slot, int inde
 	else
 		sprintf(s, "%pUB", d);
 
-        dmi_ident[slot] = s;
+	dmi_ident[slot] = s;
 }
 
-static void __init dmi_save_type(const struct dmi_header *dm, int slot, int index)
+static void __init dmi_save_type(const struct dmi_header *dm, int slot,
+		int index)
 {
-	const u8 *d = (u8*) dm + index;
+	const u8 *d = (u8 *) dm + index;
 	char *s;
 
 	if (dmi_ident[slot])
@@ -241,10 +250,8 @@ static void __init dmi_save_one_device(int type, const char *name)
 		return;
 
 	dev = dmi_alloc(sizeof(*dev) + strlen(name) + 1);
-	if (!dev) {
-		printk(KERN_ERR "dmi_save_one_device: out of memory.\n");
+	if (!dev)
 		return;
-	}
 
 	dev->type = type;
 	strcpy((char *)(dev + 1), name);
@@ -274,17 +281,14 @@ static void __init dmi_save_oem_strings_devices(const struct dmi_header *dm)
 	struct dmi_device *dev;
 
 	for (i = 1; i <= count; i++) {
-		char *devname = dmi_string(dm, i);
+		const char *devname = dmi_string(dm, i);
 
 		if (devname == dmi_empty_string)
 			continue;
 
 		dev = dmi_alloc(sizeof(*dev));
-		if (!dev) {
-			printk(KERN_ERR
-			   "dmi_save_oem_strings_devices: out of memory.\n");
+		if (!dev)
 			break;
-		}
 
 		dev->type = DMI_DEV_TYPE_OEM_STRING;
 		dev->name = devname;
@@ -297,21 +301,17 @@ static void __init dmi_save_oem_strings_devices(const struct dmi_header *dm)
 static void __init dmi_save_ipmi_device(const struct dmi_header *dm)
 {
 	struct dmi_device *dev;
-	void * data;
+	void *data;
 
 	data = dmi_alloc(dm->length);
-	if (data == NULL) {
-		printk(KERN_ERR "dmi_save_ipmi_device: out of memory.\n");
+	if (data == NULL)
 		return;
-	}
 
 	memcpy(data, dm, dm->length);
 
 	dev = dmi_alloc(sizeof(*dev));
-	if (!dev) {
-		printk(KERN_ERR "dmi_save_ipmi_device: out of memory.\n");
+	if (!dev)
 		return;
-	}
 
 	dev->type = DMI_DEV_TYPE_IPMI;
 	dev->name = "IPMI controller";
@@ -326,10 +326,9 @@ static void __init dmi_save_dev_onboard(int instance, int segment, int bus,
 	struct dmi_dev_onboard *onboard_dev;
 
 	onboard_dev = dmi_alloc(sizeof(*onboard_dev) + strlen(name) + 1);
-	if (!onboard_dev) {
-		printk(KERN_ERR "dmi_save_dev_onboard: out of memory.\n");
+	if (!onboard_dev)
 		return;
-	}
+
 	onboard_dev->instance = instance;
 	onboard_dev->segment = segment;
 	onboard_dev->bus = bus;
@@ -345,7 +344,7 @@ static void __init dmi_save_dev_onboard(int instance, int segment, int bus,
 
 static void __init dmi_save_extended_devices(const struct dmi_header *dm)
 {
-	const u8 *d = (u8*) dm + 5;
+	const u8 *d = (u8 *) dm + 5;
 
 	/* Skip disabled device */
 	if ((*d & 0x80) == 0)
@@ -356,6 +355,42 @@ static void __init dmi_save_extended_devices(const struct dmi_header *dm)
 	dmi_save_one_device(*d & 0x7f, dmi_string_nosave(dm, *(d - 1)));
 }
 
+static void __init count_mem_devices(const struct dmi_header *dm, void *v)
+{
+	if (dm->type != DMI_ENTRY_MEM_DEVICE)
+		return;
+	dmi_memdev_nr++;
+}
+
+static void __init save_mem_devices(const struct dmi_header *dm, void *v)
+{
+	const char *d = (const char *)dm;
+	static int nr;
+
+	if (dm->type != DMI_ENTRY_MEM_DEVICE)
+		return;
+	if (nr >= dmi_memdev_nr) {
+		pr_warn(FW_BUG "Too many DIMM entries in SMBIOS table\n");
+		return;
+	}
+	dmi_memdev[nr].handle = get_unaligned(&dm->handle);
+	dmi_memdev[nr].device = dmi_string(dm, d[0x10]);
+	dmi_memdev[nr].bank = dmi_string(dm, d[0x11]);
+	nr++;
+}
+
+void __init dmi_memdev_walk(void)
+{
+	if (!dmi_available)
+		return;
+
+	if (dmi_walk_early(count_mem_devices) == 0 && dmi_memdev_nr) {
+		dmi_memdev = dmi_alloc(sizeof(*dmi_memdev) * dmi_memdev_nr);
+		if (dmi_memdev)
+			dmi_walk_early(save_mem_devices);
+	}
+}
+
 /*
  *	Process a DMI table entry. Right now all we care about are the BIOS
  *	and machine entries. For 2.5 we should pull the smbus controller info
@@ -363,7 +398,7 @@ static void __init dmi_save_extended_devices(const struct dmi_header *dm)
  */
 static void __init dmi_decode(const struct dmi_header *dm, void *dummy)
 {
-	switch(dm->type) {
+	switch (dm->type) {
 	case 0:		/* BIOS Information */
 		dmi_save_ident(dm, DMI_BIOS_VENDOR, 4);
 		dmi_save_ident(dm, DMI_BIOS_VERSION, 5);
@@ -533,26 +568,18 @@ void __init dmi_scan_machine(void)
 		 * needed during early boot.  This also means we can
 		 * iounmap the space when we're done with it.
 		 */
-		p = dmi_ioremap(efi.smbios, 32);
+		p = dmi_early_remap(efi.smbios, 32);
 		if (p == NULL)
 			goto error;
 		memcpy_fromio(buf, p, 32);
-		dmi_iounmap(p, 32);
+		dmi_early_unmap(p, 32);
 
 		if (!dmi_present(buf)) {
 			dmi_available = 1;
 			goto out;
 		}
-	}
-	else {
-		/*
-		 * no iounmap() for that ioremap(); it would be a no-op, but
-		 * it's so early in setup that sucker gets confused into doing
-		 * what it shouldn't if we actually call it.
-		 */
-		/* 物理内存960KB开始的64KB空间
-		   即960KB ~ 1MB */
-		p = dmi_ioremap(0xF0000, 0x10000);
+	} else if (IS_ENABLED(CONFIG_DMI_SCAN_MACHINE_NON_EFI_FALLBACK)) {
+		p = dmi_early_remap(0xF0000, 0x10000);
 		if (p == NULL)
 			goto error;
 
@@ -569,15 +596,15 @@ void __init dmi_scan_machine(void)
 			if (!dmi_present(buf)) {
 				/* 标记dmi可用 */
 				dmi_available = 1;
-				dmi_iounmap(p, 0x10000);
+				dmi_early_unmap(p, 0x10000);
 				goto out;
 			}
 			memcpy(buf, buf + 16, 16);
 		}
-		dmi_iounmap(p, 0x10000);
+		dmi_early_unmap(p, 0x10000);
 	}
  error:
-	printk(KERN_INFO "DMI not present or invalid.\n");
+	pr_info("DMI not present or invalid.\n");
  out:
 	/* 标记dmi已初始化完成
 	   信息由指针数组dmi_ident[]记录 */
@@ -729,7 +756,7 @@ int dmi_name_in_serial(const char *str)
 
 /**
  *	dmi_name_in_vendors - Check if string is in the DMI system or board vendor name
- *	@str: 	Case sensitive Name
+ *	@str: Case sensitive Name
  */
 int dmi_name_in_vendors(const char *str)
 {
@@ -756,13 +783,13 @@ EXPORT_SYMBOL(dmi_name_in_vendors);
  *	A new search is initiated by passing %NULL as the @from argument.
  *	If @from is not %NULL, searches continue from next device.
  */
-const struct dmi_device * dmi_find_device(int type, const char *name,
+const struct dmi_device *dmi_find_device(int type, const char *name,
 				    const struct dmi_device *from)
 {
 	const struct list_head *head = from ? &from->list : &dmi_devices;
 	struct list_head *d;
 
-	for(d = head->next; d != &dmi_devices; d = d->next) {
+	for (d = head->next; d != &dmi_devices; d = d->next) {
 		const struct dmi_device *dev =
 			list_entry(d, struct dmi_device, list);
 
@@ -862,13 +889,13 @@ int dmi_walk(void (*decode)(const struct dmi_header *, void *),
 	if (!dmi_available)
 		return -1;
 
-	buf = ioremap(dmi_base, dmi_len);
+	buf = dmi_remap(dmi_base, dmi_len);
 	if (buf == NULL)
 		return -1;
 
 	dmi_table(buf, dmi_len, dmi_num, decode, private_data);
 
-	iounmap(buf);
+	dmi_unmap(buf);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(dmi_walk);
@@ -890,3 +917,20 @@ bool dmi_match(enum dmi_field f, const char *str)
 	return !strcmp(info, str);
 }
 EXPORT_SYMBOL_GPL(dmi_match);
+
+void dmi_memdev_name(u16 handle, const char **bank, const char **device)
+{
+	int n;
+
+	if (dmi_memdev == NULL)
+		return;
+
+	for (n = 0; n < dmi_memdev_nr; n++) {
+		if (handle == dmi_memdev[n].handle) {
+			*bank = dmi_memdev[n].bank;
+			*device = dmi_memdev[n].device;
+			break;
+		}
+	}
+}
+EXPORT_SYMBOL_GPL(dmi_memdev_name);

@@ -64,7 +64,85 @@ static inline int radix_tree_is_indirect_ptr(void *ptr)
 
 #define RADIX_TREE_MAX_TAGS 3
 
+
+/* 每个节点下slots个数的偏移 */
+
+#ifdef __KERNEL__
+#define RADIX_TREE_MAP_SHIFT	(CONFIG_BASE_SMALL ? 4 : 6)
+#else
+#define RADIX_TREE_MAP_SHIFT	3	/* For more stressful testing */
+#endif
+
+/* 每个节点下slots的个数
+使用2^n计算
+根据配置有8 16 64
+*/
+
+#define RADIX_TREE_MAP_SIZE	(1UL << RADIX_TREE_MAP_SHIFT)
+
+/* slots个数的掩码 */
+
+#define RADIX_TREE_MAP_MASK	(RADIX_TREE_MAP_SIZE-1)
+
+/* 表示RADIX_TREE_MAP_SIZE个slots需要几个long型数来表示这么多个bits */
+
+#define RADIX_TREE_TAG_LONGS	\
+	((RADIX_TREE_MAP_SIZE + BITS_PER_LONG - 1) / BITS_PER_LONG)
+
+/* 使用多少个bit来表示index */
+
+#define RADIX_TREE_INDEX_BITS  (8 /* CHAR_BIT */ * sizeof(unsigned long))
+
+/*
+                          11    6        5    0        <= bits[]
+
+             111111        111111        111111        <= RADIX_TREE_INDEX_BITS
+                                  RADIX_TREE_MAP_SHIFT
+
+            height=3      height=2      height=1       对应height使用的index位
+
+每一组RADIX_TREE_MAP_SHIFT个bit代表其在slots[]中的偏移
+*/
+
+#define RADIX_TREE_MAX_PATH (DIV_ROUND_UP(RADIX_TREE_INDEX_BITS, \
+					  RADIX_TREE_MAP_SHIFT))
+
+/* Height component in node->path */
+#define RADIX_TREE_HEIGHT_SHIFT	(RADIX_TREE_MAX_PATH + 1)
+#define RADIX_TREE_HEIGHT_MASK	((1UL << RADIX_TREE_HEIGHT_SHIFT) - 1)
+
+/* Internally used bits of node->count */
+#define RADIX_TREE_COUNT_SHIFT	(RADIX_TREE_MAP_SHIFT + 1)
+#define RADIX_TREE_COUNT_MASK	((1UL << RADIX_TREE_COUNT_SHIFT) - 1)
+
+struct radix_tree_node {
+	/* 从叶子向上计算的树高度
+	   该节点在树中的高度
+	   item记为0，上一层的radix_tree_node节点记为1，再往上为2
+	*/
+
+	unsigned int	path;	/* Offset in parent & height from the bottom */
+	/* 该叶节点子节点的个数 */
+	unsigned int	count;
+	union {
+		struct {
+			/* Used when ascending tree */
+			struct radix_tree_node *parent;
+			/* For tree user */
+			void *private_data;
+		};
+		/* Used when freeing node */
+		struct rcu_head	rcu_head;
+	};
+	/* For tree user */
+	struct list_head private_list;
+	void __rcu	*slots[RADIX_TREE_MAP_SIZE];
+	unsigned long	tags[RADIX_TREE_MAX_TAGS][RADIX_TREE_TAG_LONGS];
+};
+
+
 /* 基数树的根节点 */
+
 /* root tags are stored in gfp_mask, shifted by __GFP_BITS_SHIFT */
 struct radix_tree_root {
 	/* 树的高度，与第一个节点@rnode中记录的height大小一致 */
@@ -109,6 +187,7 @@ do {									\
  *   concurrently with other readers.
  *
  * The notable exceptions to this rule are the following functions:
+ * __radix_tree_lookup
  * radix_tree_lookup
  * radix_tree_lookup_slot
  * radix_tree_tag_get
@@ -224,9 +303,16 @@ static inline void radix_tree_replace_slot(void **pslot, void *item)
 	rcu_assign_pointer(*pslot, item);
 }
 
+int __radix_tree_create(struct radix_tree_root *root, unsigned long index,
+			struct radix_tree_node **nodep, void ***slotp);
 int radix_tree_insert(struct radix_tree_root *, unsigned long, void *);
+void *__radix_tree_lookup(struct radix_tree_root *root, unsigned long index,
+			  struct radix_tree_node **nodep, void ***slotp);
 void *radix_tree_lookup(struct radix_tree_root *, unsigned long);
 void **radix_tree_lookup_slot(struct radix_tree_root *, unsigned long);
+bool __radix_tree_delete_node(struct radix_tree_root *root,
+			      struct radix_tree_node *node);
+void *radix_tree_delete_item(struct radix_tree_root *, unsigned long, void *);
 void *radix_tree_delete(struct radix_tree_root *, unsigned long);
 unsigned int
 radix_tree_gang_lookup(struct radix_tree_root *root, void **results,
@@ -234,11 +320,8 @@ radix_tree_gang_lookup(struct radix_tree_root *root, void **results,
 unsigned int radix_tree_gang_lookup_slot(struct radix_tree_root *root,
 			void ***results, unsigned long *indices,
 			unsigned long first_index, unsigned int max_items);
-unsigned long radix_tree_next_hole(struct radix_tree_root *root,
-				unsigned long index, unsigned long max_scan);
-unsigned long radix_tree_prev_hole(struct radix_tree_root *root,
-				unsigned long index, unsigned long max_scan);
 int radix_tree_preload(gfp_t gfp_mask);
+int radix_tree_maybe_preload(gfp_t gfp_mask);
 void radix_tree_init(void);
 void *radix_tree_tag_set(struct radix_tree_root *root,
 			unsigned long index, unsigned int tag);

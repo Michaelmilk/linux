@@ -167,7 +167,7 @@ int ip_options_echo(struct ip_options *dopt, struct sk_buff *skb)
 		soffset -= 4;
 		if (soffset > 3) {
 			memcpy(&faddr, &start[soffset-1], 4);
-			for (soffset-=4, doffset=4; soffset > 3; soffset-=4, doffset+=4)
+			for (soffset -= 4, doffset = 4; soffset > 3; soffset -= 4, doffset += 4)
 				memcpy(&dptr[doffset-1], &start[soffset-1], 4);
 			/*
 			 * RFC1812 requires to fix illegal source routes.
@@ -227,7 +227,7 @@ void ip_options_fragment(struct sk_buff *skb)
 			continue;
 		}
 		optlen = optptr[1];
-		if (optlen<2 || optlen>l)
+		if (optlen < 2 || optlen > l)
 		  return;
 		if (!IPOPT_COPIED(*optptr))
 			memset(optptr, IPOPT_NOOP, optlen);
@@ -286,27 +286,27 @@ int ip_options_compile(struct net *net,
 	/* 遍历解析选项长度的数据 */
 	for (l = opt->optlen; l > 0; ) {
 		switch (*optptr) {
-		      case IPOPT_END:
-			for (optptr++, l--; l>0; optptr++, l--) {
+		case IPOPT_END:
+			for (optptr++, l--; l > 0; optptr++, l--) {
 				if (*optptr != IPOPT_END) {
 					*optptr = IPOPT_END;
 					opt->is_changed = 1;
 				}
 			}
 			goto eol;
-		      case IPOPT_NOOP:
+		case IPOPT_NOOP:
 			l--;
 			optptr++;
 			continue;
 		}
 		optlen = optptr[1];
-		if (optlen<2 || optlen>l) {
+		if (optlen < 2 || optlen > l) {
 			pp_ptr = optptr;
 			goto error;
 		}
 		switch (*optptr) {
-		      case IPOPT_SSRR:
-		      case IPOPT_LSRR:
+		case IPOPT_SSRR:
+		case IPOPT_LSRR:
 			if (optlen < 3) {
 				pp_ptr = optptr + 1;
 				goto error;
@@ -332,7 +332,7 @@ int ip_options_compile(struct net *net,
 			opt->is_strictroute = (optptr[0] == IPOPT_SSRR);
 			opt->srr = optptr - iph;
 			break;
-		      case IPOPT_RR:
+		case IPOPT_RR:
 			if (opt->rr) {
 				pp_ptr = optptr;
 				goto error;
@@ -360,7 +360,7 @@ int ip_options_compile(struct net *net,
 			}
 			opt->rr = optptr - iph;
 			break;
-		      case IPOPT_TIMESTAMP:
+		case IPOPT_TIMESTAMP:
 			if (opt->ts) {
 				pp_ptr = optptr;
 				goto error;
@@ -380,13 +380,13 @@ int ip_options_compile(struct net *net,
 					goto error;
 				}
 				switch (optptr[3]&0xF) {
-				      case IPOPT_TS_TSONLY:
+				case IPOPT_TS_TSONLY:
 					if (skb)
 						timeptr = &optptr[optptr[2]-1];
 					opt->ts_needtime = 1;
 					optptr[2] += 4;
 					break;
-				      case IPOPT_TS_TSANDADDR:
+				case IPOPT_TS_TSANDADDR:
 					if (optptr[2]+7 > optptr[1]) {
 						pp_ptr = optptr + 2;
 						goto error;
@@ -400,7 +400,7 @@ int ip_options_compile(struct net *net,
 					opt->ts_needtime = 1;
 					optptr[2] += 8;
 					break;
-				      case IPOPT_TS_PRESPEC:
+				case IPOPT_TS_PRESPEC:
 					if (optptr[2]+7 > optptr[1]) {
 						pp_ptr = optptr + 2;
 						goto error;
@@ -416,7 +416,7 @@ int ip_options_compile(struct net *net,
 					opt->ts_needtime = 1;
 					optptr[2] += 8;
 					break;
-				      default:
+				default:
 					if (!skb && !ns_capable(net->user_ns, CAP_NET_RAW)) {
 						pp_ptr = optptr + 3;
 						goto error;
@@ -444,7 +444,7 @@ int ip_options_compile(struct net *net,
 			}
 			opt->ts = optptr - iph;
 			break;
-		      case IPOPT_RA:
+		case IPOPT_RA:
 			if (optlen < 4) {
 				pp_ptr = optptr + 1;
 				goto error;
@@ -452,7 +452,7 @@ int ip_options_compile(struct net *net,
 			if (optptr[2] == 0 && optptr[3] == 0)
 				opt->router_alert = optptr - iph;
 			break;
-		      case IPOPT_CIPSO:
+		case IPOPT_CIPSO:
 			if ((!skb && !ns_capable(net->user_ns, CAP_NET_RAW)) || opt->cipso) {
 				pp_ptr = optptr;
 				goto error;
@@ -463,9 +463,9 @@ int ip_options_compile(struct net *net,
 				goto error;
 			}
 			break;
-		      case IPOPT_SEC:
-		      case IPOPT_SID:
-		      default:
+		case IPOPT_SEC:
+		case IPOPT_SID:
+		default:
 			if (!skb && !ns_capable(net->user_ns, CAP_NET_RAW)) {
 				pp_ptr = optptr;
 				goto error;
@@ -588,7 +588,7 @@ void ip_forward_options(struct sk_buff *skb)
 
 		optptr = raw + opt->srr;
 
-		for ( srrptr=optptr[2], srrspace = optptr[1];
+		for ( srrptr = optptr[2], srrspace = optptr[1];
 		     srrptr <= srrspace;
 		     srrptr += 4
 		     ) {
@@ -644,7 +644,7 @@ int ip_options_rcv_srr(struct sk_buff *skb)
 	if (rt->rt_type != RTN_LOCAL)
 		return -EINVAL;
 
-	for (srrptr=optptr[2], srrspace = optptr[1]; srrptr <= srrspace; srrptr += 4) {
+	for (srrptr = optptr[2], srrspace = optptr[1]; srrptr <= srrspace; srrptr += 4) {
 		if (srrptr + 3 > srrspace) {
 			icmp_send(skb, ICMP_PARAMETERPROB, 0, htonl((opt->srr+2)<<24));
 			return -EINVAL;

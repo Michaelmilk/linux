@@ -73,7 +73,6 @@ struct pt_regs {
 
 #endif /* !__i386__ */
 
-#include <linux/init.h>
 #ifdef CONFIG_PARAVIRT
 #include <asm/paravirt_types.h>
 #endif

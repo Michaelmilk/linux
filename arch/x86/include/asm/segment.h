@@ -256,6 +256,9 @@ RPL : 请求者特权级
 #ifdef __KERNEL__
 #ifndef __ASSEMBLY__
 extern const char early_idt_handlers[NUM_EXCEPTION_VECTORS][2+2+5];
+#ifdef CONFIG_TRACING
+#define trace_early_idt_handlers early_idt_handlers
+#endif
 
 /*
  * Load a segment. Fall back on loading the zero

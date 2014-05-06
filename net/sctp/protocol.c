@@ -23,16 +23,12 @@
  * See the GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GNU CC; see the file COPYING.  If not, write to
- * the Free Software Foundation, 59 Temple Place - Suite 330,
- * Boston, MA 02111-1307, USA.
+ * along with GNU CC; see the file COPYING.  If not, see
+ * <http://www.gnu.org/licenses/>.
  *
  * Please send any bug reports or fixes you make to the
  * email address(es):
- *    lksctp developers <lksctp-developers@lists.sourceforge.net>
- *
- * Or submit a bug report through the following website:
- *    http://www.sf.net/projects/lksctp
+ *    lksctp developers <linux-sctp@vger.kernel.org>
  *
  * Written or modified by:
  *    La Monte H.P. Yarroll <piggy@acm.org>
@@ -41,9 +37,6 @@
  *    Sridhar Samudrala <sri@us.ibm.com>
  *    Daisy Chang <daisyc@us.ibm.com>
  *    Ardelle Fan <ardelle.fan@intel.com>
- *
- * Any bugs reported given to us we will try to fix... any fixes shared will
- * be incorporated into the next SCTP release.
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -641,10 +634,10 @@ static void sctp_addr_wq_timeout_handler(unsigned long arg)
 			/* ignore bound-specific endpoints */
 			if (!sctp_is_ep_boundall(sk))
 				continue;
-			sctp_bh_lock_sock(sk);
+			bh_lock_sock(sk);
 			if (sctp_asconf_mgmt(sp, addrw) < 0)
 				pr_debug("%s: sctp_asconf_mgmt failed\n", __func__);
-			sctp_bh_unlock_sock(sk);
+			bh_unlock_sock(sk);
 		}
 #if IS_ENABLED(CONFIG_IPV6)
 free_next:
@@ -964,7 +957,7 @@ static inline int sctp_v4_xmit(struct sk_buff *skb,
 
 	SCTP_INC_STATS(sock_net(&inet->sk), SCTP_MIB_OUTSCTPPACKS);
 
-	return ip_queue_xmit(skb, &transport->fl);
+	return ip_queue_xmit(&inet->sk, skb, &transport->fl);
 }
 
 static struct sctp_af sctp_af_inet;
@@ -1037,6 +1030,7 @@ static const struct net_protocol sctp_protocol = {
 	.err_handler = sctp_v4_err,
 	.no_policy   = 1,
 	.netns_ok    = 1,
+	.icmp_strict_tag_validation = 1,
 };
 
 /* IPv4 address related functions.  */
@@ -1072,8 +1066,8 @@ static struct sctp_af sctp_af_inet = {
 #endif
 };
 
-struct sctp_pf *sctp_get_pf_specific(sa_family_t family) {
-
+struct sctp_pf *sctp_get_pf_specific(sa_family_t family)
+{
 	switch (family) {
 	case PF_INET:
 		return sctp_pf_inet_specific;
@@ -1467,7 +1461,6 @@ static __init int sctp_init(void)
 	if (status)
 		goto err_v6_add_protocol;
 
-	status = 0;
 out:
 	return status;
 err_v6_add_protocol:
@@ -1547,7 +1540,7 @@ module_exit(sctp_exit);
  */
 MODULE_ALIAS("net-pf-" __stringify(PF_INET) "-proto-132");
 MODULE_ALIAS("net-pf-" __stringify(PF_INET6) "-proto-132");
-MODULE_AUTHOR("Linux Kernel SCTP developers <lksctp-developers@lists.sourceforge.net>");
+MODULE_AUTHOR("Linux Kernel SCTP developers <linux-sctp@vger.kernel.org>");
 MODULE_DESCRIPTION("Support for the SCTP protocol (RFC2960)");
 module_param_named(no_checksums, sctp_checksum_disable, bool, 0644);
 MODULE_PARM_DESC(no_checksums, "Disable checksums computing and verification");

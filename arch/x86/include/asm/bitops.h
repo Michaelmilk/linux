@@ -14,6 +14,15 @@
 
 #include <linux/compiler.h>
 #include <asm/alternative.h>
+#include <asm/rmwcc.h>
+
+#if BITS_PER_LONG == 32
+# define _BITOPS_LONG_SHIFT 5
+#elif BITS_PER_LONG == 64
+# define _BITOPS_LONG_SHIFT 6
+#else
+# error "Unexpected BITS_PER_LONG"
+#endif
 
 #define BIT_64(n)			(U64_C(1) << (n))
 
@@ -67,7 +76,7 @@ bts nr, ADDR，该指令的两个操作数不能全是内存变量，
 这样两个操作数中只有ADDR为内存变量。
 */
 static __always_inline void
-set_bit(unsigned int nr, volatile unsigned long *addr)
+set_bit(long nr, volatile unsigned long *addr)
 {
 	if (IS_IMMEDIATE(nr)) {
 		asm volatile(LOCK_PREFIX "orb %1,%0"
@@ -89,10 +98,12 @@ set_bit(unsigned int nr, volatile unsigned long *addr)
  * If it's called on the same region of memory simultaneously, the effect
  * may be that only one operation succeeds.
  */
+
 /*
 无LOCK_PREFIX，不会锁定内存总线，对多处理器而言，不会是原子操作
 */
-static inline void __set_bit(int nr, volatile unsigned long *addr)
+
+static inline void __set_bit(long nr, volatile unsigned long *addr)
 {
 	asm volatile("bts %1,%0" : ADDR : "Ir" (nr) : "memory");
 }
@@ -108,7 +119,7 @@ static inline void __set_bit(int nr, volatile unsigned long *addr)
  * in order to ensure changes are visible on other processors.
  */
 static __always_inline void
-clear_bit(int nr, volatile unsigned long *addr)
+clear_bit(long nr, volatile unsigned long *addr)
 {
 	if (IS_IMMEDIATE(nr)) {
 		asm volatile(LOCK_PREFIX "andb %1,%0"
@@ -129,13 +140,13 @@ clear_bit(int nr, volatile unsigned long *addr)
  * clear_bit() is atomic and implies release semantics before the memory
  * operation. It can be used for an unlock.
  */
-static inline void clear_bit_unlock(unsigned nr, volatile unsigned long *addr)
+static inline void clear_bit_unlock(long nr, volatile unsigned long *addr)
 {
 	barrier();
 	clear_bit(nr, addr);
 }
 
-static inline void __clear_bit(int nr, volatile unsigned long *addr)
+static inline void __clear_bit(long nr, volatile unsigned long *addr)
 {
 	asm volatile("btr %1,%0" : ADDR : "Ir" (nr));
 }
@@ -152,7 +163,7 @@ static inline void __clear_bit(int nr, volatile unsigned long *addr)
  * No memory barrier is required here, because x86 cannot reorder stores past
  * older loads. Same principle as spin_unlock.
  */
-static inline void __clear_bit_unlock(unsigned nr, volatile unsigned long *addr)
+static inline void __clear_bit_unlock(long nr, volatile unsigned long *addr)
 {
 	barrier();
 	__clear_bit(nr, addr);
@@ -170,7 +181,7 @@ static inline void __clear_bit_unlock(unsigned nr, volatile unsigned long *addr)
  * If it's called on the same region of memory simultaneously, the effect
  * may be that only one operation succeeds.
  */
-static inline void __change_bit(int nr, volatile unsigned long *addr)
+static inline void __change_bit(long nr, volatile unsigned long *addr)
 {
 	asm volatile("btc %1,%0" : ADDR : "Ir" (nr));
 }
@@ -184,7 +195,7 @@ static inline void __change_bit(int nr, volatile unsigned long *addr)
  * Note that @nr may be almost arbitrarily large; this function is not
  * restricted to acting on a single-word quantity.
  */
-static inline void change_bit(int nr, volatile unsigned long *addr)
+static inline void change_bit(long nr, volatile unsigned long *addr)
 {
 	if (IS_IMMEDIATE(nr)) {
 		asm volatile(LOCK_PREFIX "xorb %1,%0"
@@ -205,17 +216,14 @@ static inline void change_bit(int nr, volatile unsigned long *addr)
  * This operation is atomic and cannot be reordered.
  * It also implies a memory barrier.
  */
+
 /*
 bts : 将ADDR操作数中的第nr位（从0始）送CF，并且第nr位置1。
 */
-static inline int test_and_set_bit(int nr, volatile unsigned long *addr)
+
+static inline int test_and_set_bit(long nr, volatile unsigned long *addr)
 {
-	int oldbit;
-
-	asm volatile(LOCK_PREFIX "bts %2,%1\n\t"
-		     "sbb %0,%0" : "=r" (oldbit), ADDR : "Ir" (nr) : "memory");
-
-	return oldbit;
+	GEN_BINARY_RMWcc(LOCK_PREFIX "bts", *addr, "Ir", nr, "%0", "c");
 }
 
 /**
@@ -226,7 +234,7 @@ static inline int test_and_set_bit(int nr, volatile unsigned long *addr)
  * This is the same as test_and_set_bit on x86.
  */
 static __always_inline int
-test_and_set_bit_lock(int nr, volatile unsigned long *addr)
+test_and_set_bit_lock(long nr, volatile unsigned long *addr)
 {
 	return test_and_set_bit(nr, addr);
 }
@@ -240,7 +248,7 @@ test_and_set_bit_lock(int nr, volatile unsigned long *addr)
  * If two examples of this operation race, one can appear to succeed
  * but actually fail.  You must protect multiple accesses with a lock.
  */
-static inline int __test_and_set_bit(int nr, volatile unsigned long *addr)
+static inline int __test_and_set_bit(long nr, volatile unsigned long *addr)
 {
 	int oldbit;
 
@@ -259,15 +267,9 @@ static inline int __test_and_set_bit(int nr, volatile unsigned long *addr)
  * This operation is atomic and cannot be reordered.
  * It also implies a memory barrier.
  */
-static inline int test_and_clear_bit(int nr, volatile unsigned long *addr)
+static inline int test_and_clear_bit(long nr, volatile unsigned long *addr)
 {
-	int oldbit;
-
-	asm volatile(LOCK_PREFIX "btr %2,%1\n\t"
-		     "sbb %0,%0"
-		     : "=r" (oldbit), ADDR : "Ir" (nr) : "memory");
-
-	return oldbit;
+	GEN_BINARY_RMWcc(LOCK_PREFIX "btr", *addr, "Ir", nr, "%0", "c");
 }
 
 /**
@@ -286,7 +288,7 @@ static inline int test_and_clear_bit(int nr, volatile unsigned long *addr)
  * accessed from a hypervisor on the same CPU if running in a VM: don't change
  * this without also updating arch/x86/kernel/kvm.c
  */
-static inline int __test_and_clear_bit(int nr, volatile unsigned long *addr)
+static inline int __test_and_clear_bit(long nr, volatile unsigned long *addr)
 {
 	int oldbit;
 
@@ -298,7 +300,7 @@ static inline int __test_and_clear_bit(int nr, volatile unsigned long *addr)
 }
 
 /* WARNING: non atomic and it can be reordered! */
-static inline int __test_and_change_bit(int nr, volatile unsigned long *addr)
+static inline int __test_and_change_bit(long nr, volatile unsigned long *addr)
 {
 	int oldbit;
 
@@ -318,15 +320,9 @@ static inline int __test_and_change_bit(int nr, volatile unsigned long *addr)
  * This operation is atomic and cannot be reordered.
  * It also implies a memory barrier.
  */
-static inline int test_and_change_bit(int nr, volatile unsigned long *addr)
+static inline int test_and_change_bit(long nr, volatile unsigned long *addr)
 {
-	int oldbit;
-
-	asm volatile(LOCK_PREFIX "btc %2,%1\n\t"
-		     "sbb %0,%0"
-		     : "=r" (oldbit), ADDR : "Ir" (nr) : "memory");
-
-	return oldbit;
+	GEN_BINARY_RMWcc(LOCK_PREFIX "btc", *addr, "Ir", nr, "%0", "c");
 }
 
 /*
@@ -335,13 +331,14 @@ static inline int test_and_change_bit(int nr, volatile unsigned long *addr)
 (1UL << (nr % BITS_PER_LONG))表示第N个分组中的bit置位
 (addr[nr / BITS_PER_LONG])按BITS_PER_LONG取数组下标，与每次判断BITS_PER_LONG位对应
 */
-static __always_inline int constant_test_bit(unsigned int nr, const volatile unsigned long *addr)
+
+static __always_inline int constant_test_bit(long nr, const volatile unsigned long *addr)
 {
-	return ((1UL << (nr % BITS_PER_LONG)) &
-		(addr[nr / BITS_PER_LONG])) != 0;
+	return ((1UL << (nr & (BITS_PER_LONG-1))) &
+		(addr[nr >> _BITOPS_LONG_SHIFT])) != 0;
 }
 
-static inline int variable_test_bit(int nr, volatile const unsigned long *addr)
+static inline int variable_test_bit(long nr, volatile const unsigned long *addr)
 {
 	int oldbit;
 

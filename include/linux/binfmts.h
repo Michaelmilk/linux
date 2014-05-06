@@ -35,7 +35,7 @@ struct linux_binprm {
 #ifdef __alpha__
 	unsigned int taso:1;
 #endif
-	unsigned int recursion_depth;
+	unsigned int recursion_depth; /* only for search_binary_handler() */
 	/* 要执行的文件 */
 	struct file * file;
 	struct cred *cred;	/* new credentials */
@@ -51,7 +51,6 @@ struct linux_binprm {
 	unsigned interp_flags;
 	unsigned interp_data;
 	unsigned long loader, exec;
-	char tcomm[TASK_COMM_LEN];
 };
 
 #define BINPRM_FLAGS_ENFORCE_NONDUMP_BIT 0
@@ -63,11 +62,12 @@ struct linux_binprm {
 
 /* Function parameter for binfmt->coredump */
 struct coredump_params {
-	siginfo_t *siginfo;
+	const siginfo_t *siginfo;
 	struct pt_regs *regs;
 	struct file *file;
 	unsigned long limit;
 	unsigned long mm_flags;
+	loff_t written;
 };
 
 /*
@@ -106,9 +106,6 @@ extern void setup_new_exec(struct linux_binprm * bprm);
 extern void would_dump(struct linux_binprm *, struct file *);
 
 extern int suid_dumpable;
-#define SUID_DUMP_DISABLE	0	/* No setuid dumping */
-#define SUID_DUMP_USER		1	/* Dump as user of process */
-#define SUID_DUMP_ROOT		2	/* Dump as root */
 
 /* Stack area protections */
 #define EXSTACK_DEFAULT   0	/* Whatever the arch defaults to */
@@ -124,7 +121,6 @@ extern int copy_strings_kernel(int argc, const char *const *argv,
 extern int prepare_bprm_creds(struct linux_binprm *bprm);
 extern void install_exec_creds(struct linux_binprm *bprm);
 extern void set_binfmt(struct linux_binfmt *new);
-extern void free_bprm(struct linux_binprm *);
 extern ssize_t read_code(struct file *, unsigned long, loff_t, size_t);
 
 #endif /* _LINUX_BINFMTS_H */

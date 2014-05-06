@@ -25,7 +25,7 @@ struct nameidata {
 	struct inode	*inode; /* path.dentry.d_inode */
 	/* 查找标志 */
 	unsigned int	flags;
-	unsigned	seq;
+	unsigned	seq, m_seq;
 	/* 路径名称最后一部分的类型 */
 	int		last_type;
 	/* 符号链接的嵌套深度 */
@@ -93,8 +93,7 @@ extern struct dentry *kern_path_create(int, const char *, struct path *, unsigne
 extern struct dentry *user_path_create(int, const char __user *, struct path *, unsigned int);
 extern void done_path_create(struct path *, struct dentry *);
 extern struct dentry *kern_path_locked(const char *, struct path *);
-extern int vfs_path_lookup(struct dentry *, struct vfsmount *,
-			   const char *, unsigned int, struct path *);
+extern int kern_path_mountpoint(int, const char *, struct path *, unsigned int);
 
 extern struct dentry *lookup_one_len(const char *, struct dentry *, int);
 

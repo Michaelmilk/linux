@@ -35,6 +35,7 @@ struct pid_namespace {
 	struct kref kref;
 	/* pid号的位图 */
 	struct pidmap pidmap[PIDMAP_ENTRIES];
+	struct rcu_head rcu;
 	/* 该命名空间下最后一个使用的pid号 */
 	int last_pid;
 	unsigned int nr_hashed;

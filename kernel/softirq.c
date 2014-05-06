@@ -6,9 +6,9 @@
  *	Distribute under GPLv2.
  *
  *	Rewritten. Old one was good in 2.2, but in 2.3 it was immoral. --ANK (990903)
- *
- *	Remote softirq infrastructure is by Jens Axboe.
  */
+
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/export.h>
 #include <linux/kernel_stat.h>
@@ -25,11 +25,11 @@
 #include <linux/smp.h>
 #include <linux/smpboot.h>
 #include <linux/tick.h>
+#include <linux/irq.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/irq.h>
 
-#include <asm/irq.h>
 /*
    - No shared variables, all the data are CPU local.
    - If a softirq needs serialization, let it serialize itself
@@ -62,7 +62,7 @@ static struct softirq_action softirq_vec[NR_SOFTIRQS] __cacheline_aligned_in_smp
 
 DEFINE_PER_CPU(struct task_struct *, ksoftirqd);
 
-char *softirq_to_name[NR_SOFTIRQS] = {
+const char * const softirq_to_name[NR_SOFTIRQS] = {
 	"HI", "TIMER", "NET_TX", "NET_RX", "BLOCK", "BLOCK_IOPOLL",
 	"TASKLET", "SCHED", "HRTIMER", "RCU"
 };
@@ -97,7 +97,7 @@ static void wakeup_softirqd(void)
  * where hardirqs are disabled legitimately:
  */
 #ifdef CONFIG_TRACE_IRQFLAGS
-static void __local_bh_disable(unsigned long ip, unsigned int cnt)
+void __local_bh_disable_ip(unsigned long ip, unsigned int cnt)
 {
 	unsigned long flags;
 
@@ -105,46 +105,33 @@ static void __local_bh_disable(unsigned long ip, unsigned int cnt)
 
 	raw_local_irq_save(flags);
 	/*
-	 * The preempt tracer hooks into add_preempt_count and will break
+	 * The preempt tracer hooks into preempt_count_add and will break
 	 * lockdep because it calls back into lockdep after SOFTIRQ_OFFSET
 	 * is set and before current->softirq_enabled is cleared.
 	 * We must manually increment preempt_count here and manually
 	 * call the trace_preempt_off later.
 	 */
-	preempt_count() += cnt;
+	__preempt_count_add(cnt);
 	/*
 	 * Were softirqs turned off above:
 	 */
-	if (softirq_count() == cnt)
+	if (softirq_count() == (cnt & SOFTIRQ_MASK))
 		trace_softirqs_off(ip);
 	raw_local_irq_restore(flags);
 
 	if (preempt_count() == cnt)
 		trace_preempt_off(CALLER_ADDR0, get_parent_ip(CALLER_ADDR1));
 }
-#else /* !CONFIG_TRACE_IRQFLAGS */
-static inline void __local_bh_disable(unsigned long ip, unsigned int cnt)
-{
-	add_preempt_count(cnt);
-	barrier();
-}
+EXPORT_SYMBOL(__local_bh_disable_ip);
 #endif /* CONFIG_TRACE_IRQFLAGS */
-
-void local_bh_disable(void)
-{
-	__local_bh_disable(_RET_IP_, SOFTIRQ_DISABLE_OFFSET);
-}
-
-EXPORT_SYMBOL(local_bh_disable);
 
 static void __local_bh_enable(unsigned int cnt)
 {
-	WARN_ON_ONCE(in_irq());
 	WARN_ON_ONCE(!irqs_disabled());
 
-	if (softirq_count() == cnt)
+	if (softirq_count() == (cnt & SOFTIRQ_MASK))
 		trace_softirqs_on(_RET_IP_);
-	sub_preempt_count(cnt);
+	preempt_count_sub(cnt);
 }
 
 /*
@@ -154,12 +141,12 @@ static void __local_bh_enable(unsigned int cnt)
  */
 void _local_bh_enable(void)
 {
+	WARN_ON_ONCE(in_irq());
 	__local_bh_enable(SOFTIRQ_DISABLE_OFFSET);
 }
-
 EXPORT_SYMBOL(_local_bh_enable);
 
-static inline void _local_bh_enable_ip(unsigned long ip)
+void __local_bh_enable_ip(unsigned long ip, unsigned int cnt)
 {
 	WARN_ON_ONCE(in_irq() || irqs_disabled());
 #ifdef CONFIG_TRACE_IRQFLAGS
@@ -173,31 +160,25 @@ static inline void _local_bh_enable_ip(unsigned long ip)
 	/*
 	 * Keep preemption disabled until we are done with
 	 * softirq processing:
- 	 */
-	sub_preempt_count(SOFTIRQ_DISABLE_OFFSET - 1);
+	 */
+	preempt_count_sub(cnt - 1);
 
 	/* 看是否有挂起的软中断 */
-	if (unlikely(!in_interrupt() && local_softirq_pending()))
+	if (unlikely(!in_interrupt() && local_softirq_pending())) {
+		/*
+		 * Run softirq if any pending. And do it in its own stack
+		 * as we may be calling this deep in a task call stack already.
+		 */
 		do_softirq();
+	}
 
-	dec_preempt_count();
+	preempt_count_dec();
 #ifdef CONFIG_TRACE_IRQFLAGS
 	local_irq_enable();
 #endif
 	preempt_check_resched();
 }
-
-void local_bh_enable(void)
-{
-	_local_bh_enable_ip(_RET_IP_);
-}
-EXPORT_SYMBOL(local_bh_enable);
-
-void local_bh_enable_ip(unsigned long ip)
-{
-	_local_bh_enable_ip(ip);
-}
-EXPORT_SYMBOL(local_bh_enable_ip);
+EXPORT_SYMBOL(__local_bh_enable_ip);
 
 /*
  * We restart softirq processing for at most MAX_SOFTIRQ_RESTART times,
@@ -215,15 +196,50 @@ EXPORT_SYMBOL(local_bh_enable_ip);
 #define MAX_SOFTIRQ_TIME  msecs_to_jiffies(2)
 #define MAX_SOFTIRQ_RESTART 10
 
+#ifdef CONFIG_TRACE_IRQFLAGS
+/*
+ * When we run softirqs from irq_exit() and thus on the hardirq stack we need
+ * to keep the lockdep irq context tracking as tight as possible in order to
+ * not miss-qualify lock contexts and miss possible deadlocks.
+ */
+
+static inline bool lockdep_softirq_start(void)
+{
+	bool in_hardirq = false;
+
+	if (trace_hardirq_context(current)) {
+		in_hardirq = true;
+		trace_hardirq_exit();
+	}
+
+	lockdep_softirq_enter();
+
+	return in_hardirq;
+}
+
+static inline void lockdep_softirq_end(bool in_hardirq)
+{
+	lockdep_softirq_exit();
+
+	if (in_hardirq)
+		trace_hardirq_enter();
+}
+#else
+static inline bool lockdep_softirq_start(void) { return false; }
+static inline void lockdep_softirq_end(bool in_hardirq) { }
+#endif
+
 asmlinkage void __do_softirq(void)
 {
-	/* 软件中断处理结构，此结构中包括了ISR中注册的回调函数 */
-	struct softirq_action *h;
-	__u32 pending;
 	unsigned long end = jiffies + MAX_SOFTIRQ_TIME;
-	int cpu;
 	unsigned long old_flags = current->flags;
 	int max_restart = MAX_SOFTIRQ_RESTART;
+	/* 软件中断处理结构，此结构中包括了ISR中注册的回调函数 */
+	struct softirq_action *h;
+	bool in_hardirq;
+	__u32 pending;
+	int softirq_bit;
+	int cpu;
 
 	/*
 	 * Mask out PF_MEMALLOC s current task context is borrowed for the
@@ -237,8 +253,8 @@ asmlinkage void __do_softirq(void)
 	account_irq_enter_time(current);
 
 	/* 执行到这里要屏蔽其他软中断，这里也就证明了每个CPU上同时运行的软中断只能有一个 */
-	__local_bh_disable(_RET_IP_, SOFTIRQ_OFFSET);
-	lockdep_softirq_enter();
+	__local_bh_disable_ip(_RET_IP_, SOFTIRQ_OFFSET);
+	in_hardirq = lockdep_softirq_start();
 
 	/* 针对SMP得到当前正在处理的CPU */
 	cpu = smp_processor_id();
@@ -270,35 +286,35 @@ restart:
 	h = softirq_vec;
 
 	/* 循环处理所有softirq软中断注册函数 */
-	do {
-		/* 如果对应的软中断设置pending标志则表明需要进一步处理它所注册的函数 */
-		if (pending & 1) {
-			unsigned int vec_nr = h - softirq_vec;
-			int prev_count = preempt_count();
+	/* 如果对应的软中断设置pending标志则表明需要进一步处理它所注册的函数 */
+	while ((softirq_bit = ffs(pending))) {
+		unsigned int vec_nr;
+		int prev_count;
 
-			kstat_incr_softirqs_this_cpu(vec_nr);
+		h += softirq_bit - 1;
 
-			trace_softirq_entry(vec_nr);
-			h->action(h);
-			trace_softirq_exit(vec_nr);
-			if (unlikely(prev_count != preempt_count())) {
-				printk(KERN_ERR "huh, entered softirq %u %s %p"
-				       "with preempt_count %08x,"
-				       " exited with %08x?\n", vec_nr,
-				       softirq_to_name[vec_nr], h->action,
-				       prev_count, preempt_count());
-				preempt_count() = prev_count;
-			}
+		vec_nr = h - softirq_vec;
+		prev_count = preempt_count();
 
-			rcu_bh_qs(cpu);
+		kstat_incr_softirqs_this_cpu(vec_nr);
+
+		trace_softirq_entry(vec_nr);
+		h->action(h);
+		trace_softirq_exit(vec_nr);
+		if (unlikely(prev_count != preempt_count())) {
+			pr_err("huh, entered softirq %u %s %p with preempt_count %08x, exited with %08x?\n",
+			       vec_nr, softirq_to_name[vec_nr], h->action,
+			       prev_count, preempt_count());
+			preempt_count_set(prev_count);
 		}
 		/* 继续找，直到把软中断向量表中所有pending的软中断处理完成 */
-		h++;
 		/* 从代码里可以看出按位操作，表明一次循环只处理32个软中断的回调函数 */
-		pending >>= 1;
 	/* pending是32位无符号整数
 	   对应softirq_vec的32项，softirq_vec数组大小就是32 */
-	} while (pending);
+		rcu_bh_qs(cpu);
+		h++;
+		pending >>= softirq_bit;
+	}
 
 	/* 关中断执行以下代码。
 	   注意：这里又关中断了，下面的代码执行过程中硬件中断无法抢占。
@@ -319,17 +335,15 @@ restart:
 		wakeup_softirqd();
 	}
 
-	lockdep_softirq_exit();
-
+	lockdep_softirq_end(in_hardirq);
 	account_irq_exit_time(current);
 	/* 到最后才开软中断执行环境，允许软中断执行。
 	   注意:这里使用的不是local_bh_enable()，不会再次触发do_softirq()的调用。
 	*/
 	__local_bh_enable(SOFTIRQ_OFFSET);
+	WARN_ON_ONCE(in_interrupt());
 	tsk_restore_flags(current, old_flags, PF_MEMALLOC);
 }
-
-#ifndef __ARCH_HAS_DO_SOFTIRQ
 
 asmlinkage void do_softirq(void)
 {
@@ -352,13 +366,11 @@ asmlinkage void do_softirq(void)
 
 	/* 判断是否有pending的软中断需要处理 */
 	if (pending)
-		__do_softirq();
+		do_softirq_own_stack();
 
 	/* 将flags里的值再设回CPU的flag里，开中断 */
 	local_irq_restore(flags);
 }
-
-#endif
 
 /*
  * Enter an interrupt context.
@@ -369,8 +381,6 @@ preempt_count里硬中断位+1
 */
 void irq_enter(void)
 {
-	int cpu = smp_processor_id();
-
 	rcu_irq_enter();
 	if (is_idle_task(current) && !in_interrupt()) {
 		/*
@@ -378,7 +388,7 @@ void irq_enter(void)
 		 * here, as softirq will be serviced on return from interrupt.
 		 */
 		local_bh_disable();
-		tick_check_idle(cpu);
+		tick_irq_enter();
 		_local_bh_enable();
 	}
 
@@ -387,10 +397,25 @@ void irq_enter(void)
 
 static inline void invoke_softirq(void)
 {
-	if (!force_irqthreads)
+	if (!force_irqthreads) {
+#ifdef CONFIG_HAVE_IRQ_EXIT_ON_IRQ_STACK
+		/*
+		 * We can safely execute softirq on the current stack if
+		 * it is the irq stack, because it should be near empty
+		 * at this stage.
+		 */
 		__do_softirq();
-	else
+#else
+		/*
+		 * Otherwise, irq_exit() is called on the task stack that can
+		 * be potentially deep already. So call softirq in its own stack
+		 * to prevent from any overrun.
+		 */
+		do_softirq_own_stack();
+#endif
+	} else {
 		wakeup_softirqd();
+	}
 }
 
 static inline void tick_irq_exit(void)
@@ -418,18 +443,18 @@ void irq_exit(void)
 #endif
 
 	account_irq_exit_time(current);
-	trace_hardirq_exit();
 	/* 恢复preempt_count的值 */
-	sub_preempt_count(HARDIRQ_OFFSET);
 	/* 判断当前是否有硬件中断嵌套，并且是否有软中断在pending状态
 	   注意:这里只有两个条件同时满足时，才有可能调用do_softirq()进入软中断
 	   也就是说确认当前所有硬件中断处理完成，且有硬件中断安装了软中断处理时理时才会进入
 	*/
+	preempt_count_sub(HARDIRQ_OFFSET);
 	if (!in_interrupt() && local_softirq_pending())
 		invoke_softirq();
 
 	tick_irq_exit();
 	rcu_irq_exit();
+	trace_hardirq_exit(); /* must be last! */
 }
 
 /*
@@ -475,8 +500,7 @@ void open_softirq(int nr, void (*action)(struct softirq_action *))
 /*
  * Tasklets
  */
-struct tasklet_head
-{
+struct tasklet_head {
 	struct tasklet_struct *head;
 	struct tasklet_struct **tail;
 };
@@ -495,7 +519,6 @@ void __tasklet_schedule(struct tasklet_struct *t)
 	raise_softirq_irqoff(TASKLET_SOFTIRQ);
 	local_irq_restore(flags);
 }
-
 EXPORT_SYMBOL(__tasklet_schedule);
 
 void __tasklet_hi_schedule(struct tasklet_struct *t)
@@ -509,7 +532,6 @@ void __tasklet_hi_schedule(struct tasklet_struct *t)
 	raise_softirq_irqoff(HI_SOFTIRQ);
 	local_irq_restore(flags);
 }
-
 EXPORT_SYMBOL(__tasklet_hi_schedule);
 
 void __tasklet_hi_schedule_first(struct tasklet_struct *t)
@@ -520,7 +542,6 @@ void __tasklet_hi_schedule_first(struct tasklet_struct *t)
 	__this_cpu_write(tasklet_hi_vec.head, t);
 	__raise_softirq_irqoff(HI_SOFTIRQ);
 }
-
 EXPORT_SYMBOL(__tasklet_hi_schedule_first);
 
 static void tasklet_action(struct softirq_action *a)
@@ -540,7 +561,8 @@ static void tasklet_action(struct softirq_action *a)
 
 		if (tasklet_trylock(t)) {
 			if (!atomic_read(&t->count)) {
-				if (!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state))
+				if (!test_and_clear_bit(TASKLET_STATE_SCHED,
+							&t->state))
 					BUG();
 				t->func(t->data);
 				tasklet_unlock(t);
@@ -575,7 +597,8 @@ static void tasklet_hi_action(struct softirq_action *a)
 
 		if (tasklet_trylock(t)) {
 			if (!atomic_read(&t->count)) {
-				if (!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state))
+				if (!test_and_clear_bit(TASKLET_STATE_SCHED,
+							&t->state))
 					BUG();
 				t->func(t->data);
 				tasklet_unlock(t);
@@ -593,7 +616,6 @@ static void tasklet_hi_action(struct softirq_action *a)
 	}
 }
 
-
 void tasklet_init(struct tasklet_struct *t,
 		  void (*func)(unsigned long), unsigned long data)
 {
@@ -603,13 +625,12 @@ void tasklet_init(struct tasklet_struct *t,
 	t->func = func;
 	t->data = data;
 }
-
 EXPORT_SYMBOL(tasklet_init);
 
 void tasklet_kill(struct tasklet_struct *t)
 {
 	if (in_interrupt())
-		printk("Attempt to kill tasklet from interrupt\n");
+		pr_notice("Attempt to kill tasklet from interrupt\n");
 
 	while (test_and_set_bit(TASKLET_STATE_SCHED, &t->state)) {
 		do {
@@ -619,7 +640,6 @@ void tasklet_kill(struct tasklet_struct *t)
 	tasklet_unlock_wait(t);
 	clear_bit(TASKLET_STATE_SCHED, &t->state);
 }
-
 EXPORT_SYMBOL(tasklet_kill);
 
 /*
@@ -673,147 +693,20 @@ void tasklet_hrtimer_init(struct tasklet_hrtimer *ttimer,
 }
 EXPORT_SYMBOL_GPL(tasklet_hrtimer_init);
 
-/*
- * Remote softirq bits
- */
-
-DEFINE_PER_CPU(struct list_head [NR_SOFTIRQS], softirq_work_list);
-EXPORT_PER_CPU_SYMBOL(softirq_work_list);
-
-static void __local_trigger(struct call_single_data *cp, int softirq)
-{
-	struct list_head *head = &__get_cpu_var(softirq_work_list[softirq]);
-
-	list_add_tail(&cp->list, head);
-
-	/* Trigger the softirq only if the list was previously empty.  */
-	if (head->next == &cp->list)
-		raise_softirq_irqoff(softirq);
-}
-
-#ifdef CONFIG_USE_GENERIC_SMP_HELPERS
-static void remote_softirq_receive(void *data)
-{
-	struct call_single_data *cp = data;
-	unsigned long flags;
-	int softirq;
-
-	softirq = *(int *)cp->info;
-	local_irq_save(flags);
-	__local_trigger(cp, softirq);
-	local_irq_restore(flags);
-}
-
-static int __try_remote_softirq(struct call_single_data *cp, int cpu, int softirq)
-{
-	if (cpu_online(cpu)) {
-		cp->func = remote_softirq_receive;
-		cp->info = &softirq;
-		cp->flags = 0;
-
-		__smp_call_function_single(cpu, cp, 0);
-		return 0;
-	}
-	return 1;
-}
-#else /* CONFIG_USE_GENERIC_SMP_HELPERS */
-static int __try_remote_softirq(struct call_single_data *cp, int cpu, int softirq)
-{
-	return 1;
-}
-#endif
-
-/**
- * __send_remote_softirq - try to schedule softirq work on a remote cpu
- * @cp: private SMP call function data area
- * @cpu: the remote cpu
- * @this_cpu: the currently executing cpu
- * @softirq: the softirq for the work
- *
- * Attempt to schedule softirq work on a remote cpu.  If this cannot be
- * done, the work is instead queued up on the local cpu.
- *
- * Interrupts must be disabled.
- */
-void __send_remote_softirq(struct call_single_data *cp, int cpu, int this_cpu, int softirq)
-{
-	if (cpu == this_cpu || __try_remote_softirq(cp, cpu, softirq))
-		__local_trigger(cp, softirq);
-}
-EXPORT_SYMBOL(__send_remote_softirq);
-
-/**
- * send_remote_softirq - try to schedule softirq work on a remote cpu
- * @cp: private SMP call function data area
- * @cpu: the remote cpu
- * @softirq: the softirq for the work
- *
- * Like __send_remote_softirq except that disabling interrupts and
- * computing the current cpu is done for the caller.
- */
-void send_remote_softirq(struct call_single_data *cp, int cpu, int softirq)
-{
-	unsigned long flags;
-	int this_cpu;
-
-	local_irq_save(flags);
-	this_cpu = smp_processor_id();
-	__send_remote_softirq(cp, cpu, this_cpu, softirq);
-	local_irq_restore(flags);
-}
-EXPORT_SYMBOL(send_remote_softirq);
-
-static int remote_softirq_cpu_notify(struct notifier_block *self,
-					       unsigned long action, void *hcpu)
-{
-	/*
-	 * If a CPU goes away, splice its entries to the current CPU
-	 * and trigger a run of the softirq
-	 */
-	if (action == CPU_DEAD || action == CPU_DEAD_FROZEN) {
-		int cpu = (unsigned long) hcpu;
-		int i;
-
-		local_irq_disable();
-		for (i = 0; i < NR_SOFTIRQS; i++) {
-			struct list_head *head = &per_cpu(softirq_work_list[i], cpu);
-			struct list_head *local_head;
-
-			if (list_empty(head))
-				continue;
-
-			local_head = &__get_cpu_var(softirq_work_list[i]);
-			list_splice_init(head, local_head);
-			raise_softirq_irqoff(i);
-		}
-		local_irq_enable();
-	}
-
-	return NOTIFY_OK;
-}
-
-static struct notifier_block remote_softirq_cpu_notifier = {
-	.notifier_call	= remote_softirq_cpu_notify,
-};
-
 void __init softirq_init(void)
 {
 	int cpu;
 
 	for_each_possible_cpu(cpu) {
-		int i;
-
 		per_cpu(tasklet_vec, cpu).tail =
 			&per_cpu(tasklet_vec, cpu).head;
 		per_cpu(tasklet_hi_vec, cpu).tail =
 			&per_cpu(tasklet_hi_vec, cpu).head;
-		for (i = 0; i < NR_SOFTIRQS; i++)
-			INIT_LIST_HEAD(&per_cpu(softirq_work_list[i], cpu));
 	}
 
-	register_hotcpu_notifier(&remote_softirq_cpu_notifier);
 
 	/* 注册小任务的软中断处理函数 */
+
 	open_softirq(TASKLET_SOFTIRQ, tasklet_action);
 	open_softirq(HI_SOFTIRQ, tasklet_hi_action);
 }
@@ -827,6 +720,10 @@ static void run_ksoftirqd(unsigned int cpu)
 {
 	local_irq_disable();
 	if (local_softirq_pending()) {
+		/*
+		 * We can safely run softirq on inline stack, as we are not deep
+		 * in the task stack here.
+		 */
 		__do_softirq();
 		rcu_note_context_switch(cpu);
 		local_irq_enable();
@@ -895,9 +792,8 @@ static void takeover_tasklets(unsigned int cpu)
 }
 #endif /* CONFIG_HOTPLUG_CPU */
 
-static int cpu_callback(struct notifier_block *nfb,
-				  unsigned long action,
-				  void *hcpu)
+static int cpu_callback(struct notifier_block *nfb, unsigned long action,
+			void *hcpu)
 {
 	switch (action) {
 #ifdef CONFIG_HOTPLUG_CPU
@@ -941,7 +837,6 @@ int __init __weak early_irq_init(void)
 	return 0;
 }
 
-#ifdef CONFIG_GENERIC_HARDIRQS
 int __init __weak arch_probe_nr_irqs(void)
 {
 	return NR_IRQS_LEGACY;
@@ -951,4 +846,8 @@ int __init __weak arch_early_irq_init(void)
 {
 	return 0;
 }
-#endif
+
+unsigned int __weak arch_dynirq_lower_bound(unsigned int from)
+{
+	return from;
+}

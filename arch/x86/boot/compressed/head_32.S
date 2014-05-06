@@ -62,33 +62,56 @@ ENTRY(startup_32)
 ENTRY(efi_pe_entry)
 	add	$0x4, %esp
 
+	call	1f
+1:	popl	%esi
+	subl	$1b, %esi
+
+	popl	%ecx
+	movl	%ecx, efi32_config(%esi)	/* Handle */
+	popl	%ecx
+	movl	%ecx, efi32_config+8(%esi)	/* EFI System table pointer */
+
+	/* Relocate efi_config->call() */
+	leal	efi32_config(%esi), %eax
+	add	%esi, 88(%eax)
+	pushl	%eax
+
 	call	make_boot_params
 	cmpl	$0, %eax
-	je	1f
-	movl	0x4(%esp), %esi
-	movl	(%esp), %ecx
+	je	fail
+	movl	%esi, BP_code32_start(%eax)
+	popl	%ecx
 	pushl	%eax
-	pushl	%esi
 	pushl	%ecx
-	sub	$0x4, %esp
+	jmp	2f		/* Skip efi_config initialization */
 
-ENTRY(efi_stub_entry)
+ENTRY(efi32_stub_entry)
 	add	$0x4, %esp
+	popl	%ecx
+	popl	%edx
+
+	call	1f
+1:	popl	%esi
+	subl	$1b, %esi
+
+	movl	%ecx, efi32_config(%esi)	/* Handle */
+	movl	%edx, efi32_config+8(%esi)	/* EFI System table pointer */
+
+	/* Relocate efi_config->call() */
+	leal	efi32_config(%esi), %eax
+	add	%esi, 88(%eax)
+	pushl	%eax
+2:
 	call	efi_main
 	cmpl	$0, %eax
 	movl	%eax, %esi
 	jne	2f
-1:
+fail:
 	/* EFI init failed, so hang. */
 	hlt
-	jmp	1b
+	jmp	fail
 2:
-	call	3f
-3:
-	popl	%eax
-	subl	$3b, %eax
-	subl	BP_pref_address(%esi), %eax
-	add	BP_code32_start(%esi), %eax
+	movl	BP_code32_start(%esi), %eax
 	leal	preferred_addr(%eax), %eax
 	jmp	*%eax
 
@@ -179,9 +202,11 @@ relocate : 迁移
 	/* notl: bitwise logical NOT */
 	notl	%eax
 	andl    %eax, %ebx
-#else
-	movl	$LOAD_PHYSICAL_ADDR, %ebx
+	cmpl	$LOAD_PHYSICAL_ADDR, %ebx
+	jge	1f
 #endif
+	movl	$LOAD_PHYSICAL_ADDR, %ebx
+1:
 
 	/* Target address to relocate to for decompression */
 	/* z_extract_offset为压缩文件填补对齐后的大小
@@ -305,10 +330,13 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 
 */
 
+				/* push arguments for decompress_kernel: */
+	pushl	$z_output_len	/* decompressed length */
+
 	/* %ebx为临时的包含未解压代码的起始地址
 	   %ebx减去增加的偏移，得到最终的解压地址 */
+
 	leal	z_extract_offset_negative(%ebx), %ebp
-				/* push arguments for decompress_kernel: */
 	pushl	%ebp		/* output address */
 	/* 压缩文件的大小，字节 */
 	pushl	$z_input_len	/* input_len */
@@ -322,44 +350,14 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 	pushl	%esi		/* real mode pointer */
 
 	/* 调用decompress_kernel()函数 */
-	call	decompress_kernel
 
-	/* 栈顶指针+20，即decompress_kernel()函数5个参数所占的长度
+	call	decompress_kernel /* returns kernel location in %eax */
+
+	/* 栈顶指针+24，即decompress_kernel()函数6个参数所占的长度
 	   decompress_kernel()函数返回的时候退栈
 	   栈是由高地址向低地址的，所以加20起到退栈的作用 */
-	addl	$20, %esp
 
-#if CONFIG_RELOCATABLE
-/*
- * Find the address of the relocations.
- */
- 	/* z_output_len为解压后文件的长度 */
-	leal	z_output_len(%ebp), %edi
-
-/*
- * Calculate the delta between where vmlinux was compiled to run
- * and where it was actually loaded.
- */
-	movl	%ebp, %ebx
-	/* %ebx - $LOAD_PHYSICAL_ADDR */
-	subl	$LOAD_PHYSICAL_ADDR, %ebx
-	/* 如果EFLAGS中的zero位为0
-	   即2者相等的话，则什么也不用干，直接跳至标号2f处
-	   否则就需要进行代码移动 */
-	jz	2f	/* Nothing to be done if loaded at compiled addr. */
-/*
- * Process relocations.
- */
-
-	/* 递减，从后往前复制 */
-1:	subl	$4, %edi
-	movl	(%edi), %ecx
-	testl	%ecx, %ecx
-	jz	2f
-	addl	%ebx, -__PAGE_OFFSET(%ebx, %ecx)
-	jmp	1b
-2:
-#endif
+	addl	$24, %esp
 
 /*
  * Jump to the decompressed kernel.
@@ -367,7 +365,16 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 	xorl	%ebx, %ebx
 	/* 跳转到解压后的代码
 	   arch/x86/kernel/head_32.S中的startup_32 */
-	jmp	*%ebp
+	jmp	*%eax
+
+#ifdef CONFIG_EFI_STUB
+	.data
+efi32_config:
+	.fill 11,8,0
+	.long efi_call_phys
+	.long 0
+	.byte 0
+#endif
 
 /*
  * Stack and heap for uncompression

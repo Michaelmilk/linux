@@ -14,6 +14,7 @@
  */
 
 #include "boot.h"
+#include "string.h"
 
 /*
 实模式代码setup部分使用的boot_params全局变量

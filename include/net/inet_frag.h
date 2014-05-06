@@ -74,6 +74,10 @@ struct inet_frags {
 	int			secret_interval;
 	/* inet_frags_init中设置回调函数inet_frag_secret_rebuild */
 	struct timer_list	secret_timer;
+
+	/* The first call to hashfn is responsible to initialize
+	 * rnd. This is best done with net_get_random_once.
+	 */
 	u32			rnd;
 	int			qsize;
 

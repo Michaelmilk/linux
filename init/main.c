@@ -75,6 +75,8 @@
 #include <linux/blkdev.h>
 #include <linux/elevator.h>
 #include <linux/sched_clock.h>
+#include <linux/context_tracking.h>
+#include <linux/random.h>
 
 #include <asm/io.h>
 #include <asm/bugs.h>
@@ -90,15 +92,9 @@ static int kernel_init(void *);
 
 extern void init_IRQ(void);
 extern void fork_init(unsigned long);
-extern void mca_init(void);
-extern void sbus_init(void);
 extern void radix_tree_init(void);
 #ifndef CONFIG_DEBUG_RODATA
 static inline void mark_rodata_ro(void) { }
-#endif
-
-#ifdef CONFIG_TC
-extern void tc_init(void);
 #endif
 
 /*
@@ -130,7 +126,6 @@ extern void time_init(void);
 架构相关的
 */
 void (*__initdata late_time_init)(void);
-extern void softirq_init(void);
 
 /* Untouched command line saved by arch-specific code. */
 /*
@@ -152,6 +147,8 @@ char *saved_command_line;
 中间部分的空格会被'\0'截断
 */
 static char *static_command_line;
+/* Command line for per-initcall parameter parsing */
+static char *initcall_command_line;
 
 /*
 将会指向引导参数"init="
@@ -161,6 +158,13 @@ static char *execute_command;
 将会指向引导参数"rdinit="
 */
 static char *ramdisk_execute_command;
+
+/*
+ * Used to generate warnings if static_key manipulation functions are used
+ * before jump_label_init is called.
+ */
+bool static_key_initialized __read_mostly = false;
+EXPORT_SYMBOL_GPL(static_key_initialized);
 
 /*
  * If set, this is an indication to the drivers that reset the underlying
@@ -300,7 +304,7 @@ static int __init unknown_bootoption(char *param, char *val, const char *unused)
 		unsigned int i;
 		for (i = 0; envp_init[i]; i++) {
 			if (i == MAX_INIT_ENVS) {
-				panic_later = "Too many boot env vars at `%s'";
+				panic_later = "env";
 				panic_param = param;
 			}
 			if (!strncmp(param, envp_init[i], val - param))
@@ -312,7 +316,7 @@ static int __init unknown_bootoption(char *param, char *val, const char *unused)
 		unsigned int i;
 		for (i = 0; argv_init[i]; i++) {
 			if (i == MAX_INIT_ARGS) {
-				panic_later = "Too many boot init vars at `%s'";
+				panic_later = "init";
 				panic_param = param;
 			}
 		}
@@ -384,8 +388,11 @@ static inline void smp_prepare_cpus(unsigned int maxcpus) { }
 */
 static void __init setup_command_line(char *command_line)
 {
-	saved_command_line = alloc_bootmem(strlen (boot_command_line)+1);
-	static_command_line = alloc_bootmem(strlen (command_line)+1);
+	saved_command_line =
+		memblock_virt_alloc(strlen(boot_command_line) + 1, 0);
+	initcall_command_line =
+		memblock_virt_alloc(strlen(boot_command_line) + 1, 0);
+	static_command_line = memblock_virt_alloc(strlen(command_line) + 1, 0);
 	strcpy (saved_command_line, boot_command_line);
 	strcpy (static_command_line, command_line);
 }
@@ -516,7 +523,7 @@ static void __init mm_init(void)
 	mem_init();
 	kmem_cache_init();
 	percpu_init_late();
-	pgtable_cache_init();
+	pgtable_init();
 	vmalloc_init();
 }
 
@@ -630,6 +637,7 @@ asmlinkage void __init start_kernel(void)
 	/* 初始化RCU(Read-Copy Update)机制 */
 	rcu_init();
 	tick_nohz_init();
+	context_tracking_init();
 	/* 基数树初始化 */
 	radix_tree_init();
 	/* init some links before init_ISA_irqs() */
@@ -666,7 +674,8 @@ asmlinkage void __init start_kernel(void)
 	/* 控制台初始化 */
 	console_init();
 	if (panic_later)
-		panic(panic_later, panic_param);
+		panic("Too many boot %s vars at `%s'", panic_later,
+		      panic_param);
 
 	lockdep_info();
 
@@ -701,6 +710,7 @@ asmlinkage void __init start_kernel(void)
 	calibrate_delay();
 	pidmap_init();
 	anon_vma_init();
+	acpi_early_init();
 #ifdef CONFIG_X86
 	if (efi_enabled(EFI_RUNTIME_SERVICES))
 		efi_enter_virtual_mode();
@@ -731,7 +741,6 @@ asmlinkage void __init start_kernel(void)
 
 	check_bugs();
 
-	acpi_early_init(); /* before LAPIC and SMP init */
 	/* SFI: Simple Firmware Interface */
 	sfi_init_late();
 
@@ -794,7 +803,7 @@ int __init_or_module do_one_initcall(initcall_t fn)
 
 	if (preempt_count() != count) {
 		sprintf(msgbuf, "preemption imbalance ");
-		preempt_count() = count;
+		preempt_count_set(count);
 	}
 	if (irqs_disabled()) {
 		strlcat(msgbuf, "disabled interrupts ", sizeof(msgbuf));
@@ -846,9 +855,9 @@ static void __init do_initcall_level(int level)
 	extern const struct kernel_param __start___param[], __stop___param[];
 	initcall_t *fn;
 
-	strcpy(static_command_line, saved_command_line);
+	strcpy(initcall_command_line, saved_command_line);
 	parse_args(initcall_level_names[level],
-		   static_command_line, __start___param,
+		   initcall_command_line, __start___param,
 		   __stop___param - __start___param,
 		   level, level,
 		   &repair_env_string);
@@ -882,6 +891,7 @@ static void __init do_basic_setup(void)
 	do_ctors();
 	usermodehelper_enable();
 	do_initcalls();
+	random_int_secret_init();
 }
 
 static void __init do_pre_smp_initcalls(void)
@@ -912,15 +922,31 @@ run_init_process()在调用相应程序运行的时候，用的是kernel_execve()
 static int run_init_process(const char *init_filename)
 {
 	argv_init[0] = init_filename;
-	return do_execve(init_filename,
+	return do_execve(getname_kernel(init_filename),
 		(const char __user *const __user *)argv_init,
 		(const char __user *const __user *)envp_init);
+}
+
+static int try_to_run_init_process(const char *init_filename)
+{
+	int ret;
+
+	ret = run_init_process(init_filename);
+
+	if (ret && ret != -ENOENT) {
+		pr_err("Starting init: %s exists but couldn't execute it (error %d)\n",
+		       init_filename, ret);
+	}
+
+	return ret;
 }
 
 static noinline void __init kernel_init_freeable(void);
 
 static int __ref kernel_init(void *unused)
 {
+	int ret;
+
 	kernel_init_freeable();
 	/* need to finish all async __init code before freeing the memory */
 	async_synchronize_full();
@@ -937,9 +963,11 @@ static int __ref kernel_init(void *unused)
 
 	/* 执行在启动阶段用rdinit=x指定的内核命令 */
 	if (ramdisk_execute_command) {
-		if (!run_init_process(ramdisk_execute_command))
+		ret = run_init_process(ramdisk_execute_command);
+		if (!ret)
 			return 0;
-		pr_err("Failed to execute %s\n", ramdisk_execute_command);
+		pr_err("Failed to execute %s (error %d)\n",
+		       ramdisk_execute_command, ret);
 	}
 
 	/*
@@ -953,26 +981,29 @@ static int __ref kernel_init(void *unused)
 	   则使用run_init_process函数建立一个进程来运行由execute_command指定的命令
 	   在内核启动的时候可以通过传递init=/bin/bash来绕过口令登录界面 */
 	if (execute_command) {
-		if (!run_init_process(execute_command))
+		ret = run_init_process(execute_command);
+		if (!ret)
 			return 0;
-		pr_err("Failed to execute %s.  Attempting defaults...\n",
-			execute_command);
+		pr_err("Failed to execute %s (error %d).  Attempting defaults...\n",
+			execute_command, ret);
 	}
+
 	/* 运行init进程，init进程是linux系统上其他进程的父进程
 	   到这里内核启动就完成了
 	   /etc/inittab文件是init进程的配置文件
 	   系统可以配置inittab文件来启动需要的进程 */
-	if (!run_init_process("/sbin/init") ||
-	    !run_init_process("/etc/init") ||
-	    !run_init_process("/bin/init") ||
-	    !run_init_process("/bin/sh"))
-		return 0;
 
 	/* run_init_process()在调用相应程序运行的时候，用的是kernel_execve。
 	   也就是说调用进程会替换当前进程。
 	   只要上述任意一个文件调用成功，就不会返回到这个函数。
 	   如果上面几个文件都无法执行。打印出没有找到init文件的错误。 */
-	panic("No init found.  Try passing init= option to kernel. "
+	if (!try_to_run_init_process("/sbin/init") ||
+	    !try_to_run_init_process("/etc/init") ||
+	    !try_to_run_init_process("/bin/init") ||
+	    !try_to_run_init_process("/bin/sh"))
+		return 0;
+
+	panic("No working init found.  Try passing init= option to kernel. "
 	      "See Linux Documentation/init.txt for guidance.");
 }
 

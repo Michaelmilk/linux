@@ -2,6 +2,7 @@
 #define _LINUX_ERR_H
 
 #include <linux/compiler.h>
+#include <linux/types.h>
 
 #include <asm/errno.h>
 
@@ -16,7 +17,7 @@
 
 /*
  * Kernel pointers have redundant information, so we can use a
- * scheme where we can return either an error code or a dentry
+ * scheme where we can return either an error code or a normal
  * pointer with the same return value.
  *
  * This should be a per-architecture thing, to allow different
@@ -47,7 +48,7 @@ static inline long __must_check PTR_ERR(__force const void *ptr)
 /*
 指针的值是一个错误码
 */
-static inline long __must_check IS_ERR(__force const void *ptr)
+static inline bool __must_check IS_ERR(__force const void *ptr)
 {
 	return IS_ERR_VALUE((unsigned long)ptr);
 }
@@ -56,7 +57,7 @@ static inline long __must_check IS_ERR(__force const void *ptr)
 是一个空指针
 或者是一个错误码
 */
-static inline long __must_check IS_ERR_OR_NULL(__force const void *ptr)
+static inline bool __must_check IS_ERR_OR_NULL(__force const void *ptr)
 {
 	return !ptr || IS_ERR_VALUE((unsigned long)ptr);
 }
@@ -82,13 +83,16 @@ static inline void * __must_check ERR_CAST(__force const void *ptr)
 如果是错误码指针的话，转换为错误码返回
 正常指针则返回0
 */
-static inline int __must_check PTR_RET(__force const void *ptr)
+static inline int __must_check PTR_ERR_OR_ZERO(__force const void *ptr)
 {
 	if (IS_ERR(ptr))
 		return PTR_ERR(ptr);
 	else
 		return 0;
 }
+
+/* Deprecated */
+#define PTR_RET(p) PTR_ERR_OR_ZERO(p)
 
 #endif
 

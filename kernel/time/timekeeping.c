@@ -22,6 +22,7 @@
 #include <linux/tick.h>
 #include <linux/stop_machine.h>
 #include <linux/pvclock_gtod.h>
+#include <linux/compiler.h>
 
 #include "tick-internal.h"
 #include "ntp_internal.h"
@@ -77,7 +78,7 @@ static void tk_set_wall_to_mono(struct timekeeper *tk, struct timespec wtm)
 	tk->wall_to_monotonic = wtm;
 	set_normalized_timespec(&tmp, -wtm.tv_sec, -wtm.tv_nsec);
 	tk->offs_real = timespec_to_ktime(tmp);
-	tk->offs_tai = ktime_sub(tk->offs_real, ktime_set(tk->tai_offset, 0));
+	tk->offs_tai = ktime_add(tk->offs_real, ktime_set(tk->tai_offset, 0));
 }
 
 static void tk_set_sleep_time(struct timekeeper *tk, struct timespec t)
@@ -90,8 +91,9 @@ static void tk_set_sleep_time(struct timekeeper *tk, struct timespec t)
 }
 
 /**
- * timekeeper_setup_internals - Set up internals to use clocksource clock.
+ * tk_setup_internals - Set up internals to use clocksource clock.
  *
+ * @tk:		The target timekeeper to setup.
  * @clock:		Pointer to clocksource.
  *
  * Calculates a fixed cycle/nsec interval for a given clocksource/adjustment
@@ -596,7 +598,7 @@ s32 timekeeping_get_tai_offset(void)
 static void __timekeeping_set_tai_offset(struct timekeeper *tk, s32 tai_offset)
 {
 	tk->tai_offset = tai_offset;
-	tk->offs_tai = ktime_sub(tk->offs_real, ktime_set(tai_offset, 0));
+	tk->offs_tai = ktime_add(tk->offs_real, ktime_set(tai_offset, 0));
 }
 
 /**
@@ -611,6 +613,7 @@ void timekeeping_set_tai_offset(s32 tai_offset)
 	raw_spin_lock_irqsave(&timekeeper_lock, flags);
 	write_seqcount_begin(&timekeeper_seq);
 	__timekeeping_set_tai_offset(tk, tai_offset);
+	timekeeping_update(tk, TK_MIRROR | TK_CLOCK_WAS_SET);
 	write_seqcount_end(&timekeeper_seq);
 	raw_spin_unlock_irqrestore(&timekeeper_lock, flags);
 	clock_was_set();
@@ -759,7 +762,7 @@ u64 timekeeping_max_deferment(void)
  *
  *  XXX - Do be sure to remove it once all arches implement it.
  */
-void __attribute__((weak)) read_persistent_clock(struct timespec *ts)
+void __weak read_persistent_clock(struct timespec *ts)
 {
 	ts->tv_sec = 0;
 	ts->tv_nsec = 0;
@@ -774,7 +777,7 @@ void __attribute__((weak)) read_persistent_clock(struct timespec *ts)
  *
  *  XXX - Do be sure to remove it once all arches implement it.
  */
-void __attribute__((weak)) read_boot_clock(struct timespec *ts)
+void __weak read_boot_clock(struct timespec *ts)
 {
 	ts->tv_sec = 0;
 	ts->tv_nsec = 0;
@@ -1031,6 +1034,8 @@ static int timekeeping_suspend(void)
 		timekeeping_suspend_time =
 			timespec_add(timekeeping_suspend_time, delta_delta);
 	}
+
+	timekeeping_update(tk, TK_MIRROR);
 	write_seqcount_end(&timekeeper_seq);
 	raw_spin_unlock_irqrestore(&timekeeper_lock, flags);
 
@@ -1138,16 +1143,6 @@ static void timekeeping_adjust(struct timekeeper *tk, s64 offset)
 		 * we can adjust by 1.
 		 */
 		error >>= 2;
-		/*
-		 * XXX - In update_wall_time, we round up to the next
-		 * nanosecond, and store the amount rounded up into
-		 * the error. This causes the likely below to be unlikely.
-		 *
-		 * The proper fix is to avoid rounding up by using
-		 * the high precision tk->xtime_nsec instead of
-		 * xtime.tv_nsec everywhere. Fixing this will take some
-		 * time.
-		 */
 		if (likely(error <= interval))
 			adj = 1;
 		else
@@ -1263,7 +1258,7 @@ out_adjust:
 static inline unsigned int accumulate_nsecs_to_secs(struct timekeeper *tk)
 {
 	u64 nsecps = (u64)NSEC_PER_SEC << tk->shift;
-	unsigned int action = 0;
+	unsigned int clock_set = 0;
 
 	while (tk->xtime_nsec >= nsecps) {
 		int leap;
@@ -1285,11 +1280,10 @@ static inline unsigned int accumulate_nsecs_to_secs(struct timekeeper *tk)
 
 			__timekeeping_set_tai_offset(tk, tk->tai_offset - leap);
 
-			clock_was_set_delayed();
-			action = TK_CLOCK_WAS_SET;
+			clock_set = TK_CLOCK_WAS_SET;
 		}
 	}
-	return action;
+	return clock_set;
 }
 
 /**
@@ -1302,7 +1296,8 @@ static inline unsigned int accumulate_nsecs_to_secs(struct timekeeper *tk)
  * Returns the unconsumed cycles.
  */
 static cycle_t logarithmic_accumulation(struct timekeeper *tk, cycle_t offset,
-						u32 shift)
+						u32 shift,
+						unsigned int *clock_set)
 {
 	cycle_t interval = tk->cycle_interval << shift;
 	u64 raw_nsecs;
@@ -1316,7 +1311,7 @@ static cycle_t logarithmic_accumulation(struct timekeeper *tk, cycle_t offset,
 	tk->cycle_last += interval;
 
 	tk->xtime_nsec += tk->xtime_interval << shift;
-	accumulate_nsecs_to_secs(tk);
+	*clock_set |= accumulate_nsecs_to_secs(tk);
 
 	/* Accumulate raw time */
 	raw_nsecs = (u64)tk->raw_interval << shift;
@@ -1355,7 +1350,7 @@ static inline void old_vsyscall_fixup(struct timekeeper *tk)
 	tk->xtime_nsec -= remainder;
 	tk->xtime_nsec += 1ULL << tk->shift;
 	tk->ntp_error += remainder << tk->ntp_error_shift;
-
+	tk->ntp_error -= (1ULL << tk->shift) << tk->ntp_error_shift;
 }
 #else
 #define old_vsyscall_fixup(tk)
@@ -1367,14 +1362,14 @@ static inline void old_vsyscall_fixup(struct timekeeper *tk)
  * update_wall_time - Uses the current clocksource to increment the wall time
  *
  */
-static void update_wall_time(void)
+void update_wall_time(void)
 {
 	struct clocksource *clock;
 	struct timekeeper *real_tk = &timekeeper;
 	struct timekeeper *tk = &shadow_timekeeper;
 	cycle_t offset;
 	int shift = 0, maxshift;
-	unsigned int action;
+	unsigned int clock_set = 0;
 	unsigned long flags;
 
 	raw_spin_lock_irqsave(&timekeeper_lock, flags);
@@ -1409,7 +1404,8 @@ static void update_wall_time(void)
 	maxshift = (64 - (ilog2(ntp_tick_length())+1)) - 1;
 	shift = min(shift, maxshift);
 	while (offset >= tk->cycle_interval) {
-		offset = logarithmic_accumulation(tk, offset, shift);
+		offset = logarithmic_accumulation(tk, offset, shift,
+							&clock_set);
 		if (offset < tk->cycle_interval<<shift)
 			shift--;
 	}
@@ -1427,7 +1423,7 @@ static void update_wall_time(void)
 	 * Finally, make sure that after the rounding
 	 * xtime_nsec isn't larger than NSEC_PER_SEC
 	 */
-	action = accumulate_nsecs_to_secs(tk);
+	clock_set |= accumulate_nsecs_to_secs(tk);
 
 	write_seqcount_begin(&timekeeper_seq);
 	/* Update clock->cycle_last with the new value */
@@ -1443,10 +1439,13 @@ static void update_wall_time(void)
 	 * updating.
 	 */
 	memcpy(real_tk, tk, sizeof(*tk));
-	timekeeping_update(real_tk, action);
+	timekeeping_update(real_tk, clock_set);
 	write_seqcount_end(&timekeeper_seq);
 out:
 	raw_spin_unlock_irqrestore(&timekeeper_lock, flags);
+	if (clock_set)
+		/* Have to call _delayed version, since in irq context*/
+		clock_was_set_delayed();
 }
 
 /**
@@ -1593,8 +1592,6 @@ void do_timer(unsigned long ticks)
 {
 	/* 更新jiffy */
 	jiffies_64 += ticks;
-	/*更新墙上时间 */
-	update_wall_time();
 	/* 计算负载 */
 	calc_global_load(ticks);
 }
@@ -1625,9 +1622,10 @@ void get_xtime_and_monotonic_and_sleep_offset(struct timespec *xtim,
  * ktime_get_update_offsets - hrtimer helper
  * @offs_real:	pointer to storage for monotonic -> realtime offset
  * @offs_boot:	pointer to storage for monotonic -> boottime offset
+ * @offs_tai:	pointer to storage for monotonic -> clock tai offset
  *
  * Returns current monotonic time and updates the offsets
- * Called from hrtimer_interupt() or retrigger_next_event()
+ * Called from hrtimer_interrupt() or retrigger_next_event()
  */
 ktime_t ktime_get_update_offsets(ktime_t *offs_real, ktime_t *offs_boot,
 							ktime_t *offs_tai)
@@ -1709,11 +1707,15 @@ int do_adjtimex(struct timex *txc)
 
 	if (tai != orig_tai) {
 		__timekeeping_set_tai_offset(tk, tai);
-		update_pvclock_gtod(tk, true);
-		clock_was_set_delayed();
+		timekeeping_update(tk, TK_MIRROR | TK_CLOCK_WAS_SET);
 	}
 	write_seqcount_end(&timekeeper_seq);
 	raw_spin_unlock_irqrestore(&timekeeper_lock, flags);
+
+	if (tai != orig_tai)
+		clock_was_set();
+
+	ntp_notify_cmos_timer();
 
 	return ret;
 }
@@ -1748,4 +1750,5 @@ void xtime_update(unsigned long ticks)
 	write_seqlock(&jiffies_lock);
 	do_timer(ticks);
 	write_sequnlock(&jiffies_lock);
+	update_wall_time();
 }

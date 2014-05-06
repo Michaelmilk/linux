@@ -20,15 +20,11 @@ struct fib_rule {
 	   参考fib_default_rule_add()函数
 	*/
 	struct list_head	list;
-	/* 引用计数 */
-	atomic_t		refcnt;
 	/* 接口索引 */
 	int			iifindex;
 	int			oifindex;
 	u32			mark;
 	u32			mark_mask;
-	/* 优先级 */
-	u32			pref;
 	/* 标志位 */
 	u32			flags;
 	/* 路由表标识符
@@ -38,17 +34,30 @@ struct fib_rule {
 	u32			table;
 	/* 参考fib_default_rule_add()函数 */
 	u8			action;
+	/* 3 bytes hole, try to use */
 	u32			target;
 	/* 当前规则 */
 	struct fib_rule __rcu	*ctarget;
+
+	/* 网络命名空间
+	   参考fib_default_rule_add()函数
+	*/
+
+	struct net		*fr_net;
+
+	/* 引用计数 */
+
+	atomic_t		refcnt;
+
+	/* 优先级 */
+
+	u32			pref;
+	int			suppress_ifgroup;
+	int			suppress_prefixlen;
 	/* 接口名称 */
 	char			iifname[IFNAMSIZ];
 	char			oifname[IFNAMSIZ];
 	struct rcu_head		rcu;
-	/* 网络命名空间
-	   参考fib_default_rule_add()函数
-	*/
-	struct net *		fr_net;
 };
 
 struct fib_lookup_arg {
@@ -79,6 +88,8 @@ struct fib_rules_ops {
 	int			(*action)(struct fib_rule *,
 					  struct flowi *, int,
 					  struct fib_lookup_arg *);
+	bool			(*suppress)(struct fib_rule *,
+					    struct fib_lookup_arg *);
 	int			(*match)(struct fib_rule *,
 					 struct flowi *, int);
 	int			(*configure)(struct fib_rule *,
@@ -114,6 +125,8 @@ struct fib_rules_ops {
 	[FRA_FWMARK]	= { .type = NLA_U32 }, \
 	[FRA_FWMASK]	= { .type = NLA_U32 }, \
 	[FRA_TABLE]     = { .type = NLA_U32 }, \
+	[FRA_SUPPRESS_PREFIXLEN] = { .type = NLA_U32 }, \
+	[FRA_SUPPRESS_IFGROUP] = { .type = NLA_U32 }, \
 	[FRA_GOTO]	= { .type = NLA_U32 }
 
 static inline void fib_rule_get(struct fib_rule *rule)
@@ -141,14 +154,13 @@ static inline u32 frh_get_table(struct fib_rule_hdr *frh, struct nlattr **nla)
 	return frh->table;
 }
 
-extern struct fib_rules_ops *fib_rules_register(const struct fib_rules_ops *, struct net *);
-extern void fib_rules_unregister(struct fib_rules_ops *);
+struct fib_rules_ops *fib_rules_register(const struct fib_rules_ops *,
+					 struct net *);
+void fib_rules_unregister(struct fib_rules_ops *);
 
-extern int			fib_rules_lookup(struct fib_rules_ops *,
-						 struct flowi *, int flags,
-						 struct fib_lookup_arg *);
-extern int			fib_default_rule_add(struct fib_rules_ops *,
-						     u32 pref, u32 table,
-						     u32 flags);
-extern u32			fib_default_rule_pref(struct fib_rules_ops *ops);
+int fib_rules_lookup(struct fib_rules_ops *, struct flowi *, int flags,
+		     struct fib_lookup_arg *);
+int fib_default_rule_add(struct fib_rules_ops *, u32 pref, u32 table,
+			 u32 flags);
+u32 fib_default_rule_pref(struct fib_rules_ops *ops);
 #endif

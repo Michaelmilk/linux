@@ -18,6 +18,7 @@
 */
 #define __PAGE_OFFSET		_AC(CONFIG_PAGE_OFFSET, UL)
 
+#define __START_KERNEL_map	__PAGE_OFFSET
 
 /*
 使用2个页面，即8KB的进程栈

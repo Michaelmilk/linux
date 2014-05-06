@@ -32,14 +32,14 @@ bool vlan_do_receive(struct sk_buff **skbp)
 
 	/* 接收接口改为虚拟的vlan接口 */
 	skb->dev = vlan_dev;
-	if (skb->pkt_type == PACKET_OTHERHOST) {
+	if (unlikely(skb->pkt_type == PACKET_OTHERHOST)) {
 		/* Our lower layer thinks this is not local, let's make sure.
 		 * This allows the VLAN to have a different MAC than the
 		 * underlying device, and still route correctly. */
 
 		/* 修正底层协议栈对目的mac的检查
 		   主要是驱动中使用eth_type_trans()的结果 */
-		if (ether_addr_equal(eth_hdr(skb)->h_dest, vlan_dev->dev_addr))
+		if (ether_addr_equal_64bits(eth_hdr(skb)->h_dest, vlan_dev->dev_addr))
 			skb->pkt_type = PACKET_HOST;
 	}
 
@@ -122,9 +122,16 @@ u16 vlan_dev_vlan_id(const struct net_device *dev)
 }
 EXPORT_SYMBOL(vlan_dev_vlan_id);
 
+__be16 vlan_dev_vlan_proto(const struct net_device *dev)
+{
+	return vlan_dev_priv(dev)->vlan_proto;
+}
+EXPORT_SYMBOL(vlan_dev_vlan_proto);
+
 /*
 将以太网头的源和目的mac的12个字节后移4字节，去掉vlan头
 */
+
 static struct sk_buff *vlan_reorder_header(struct sk_buff *skb)
 {
 	if (skb_cow(skb, skb_headroom(skb)) < 0)

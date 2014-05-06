@@ -385,17 +385,12 @@ END(ret_from_exception)
 
 ENTRY(resume_kernel)
 	DISABLE_INTERRUPTS(CLBR_ANY)
+need_resched:
 	/* 是否可以抢占,即preempt_count是否为0 */
-	cmpl $0,TI_preempt_count(%ebp)	# non-zero preempt_count ?
+	cmpl $0,PER_CPU_VAR(__preempt_count)
 	/* 不能抢占,则恢复被中断时处理器状态 */
 	jnz restore_all
 /* 可以抢占 */
-need_resched:
-	movl TI_flags(%ebp), %ecx	# need_resched set ?
-	/* 是否需要重新调度 */
-	testb $_TIF_NEED_RESCHED, %cl
-	/* 不需要重新调度 */
-	jz restore_all
 	testl $X86_EFLAGS_IF,PT_EFLAGS(%esp)	# interrupts off (exception path) ?
 	/* 发生异常则不调度 */
 	jz restore_all
@@ -1137,7 +1132,7 @@ ENTRY(ftrace_caller)
 	pushl $0	/* Pass NULL as regs pointer */
 	movl 4*4(%esp), %eax
 	movl 0x4(%ebp), %edx
-	leal function_trace_op, %ecx
+	movl function_trace_op, %ecx
 	subl $MCOUNT_INSN_SIZE, %eax
 
 .globl ftrace_call
@@ -1195,7 +1190,7 @@ ENTRY(ftrace_regs_caller)
 	movl 12*4(%esp), %eax	/* Load ip (1st parameter) */
 	subl $MCOUNT_INSN_SIZE, %eax	/* Adjust ip */
 	movl 0x4(%ebp), %edx	/* Load parent ip (2nd parameter) */
-	leal function_trace_op, %ecx /* Save ftrace_pos in 3rd parameter */
+	movl function_trace_op, %ecx /* Save ftrace_pos in 3rd parameter */
 	pushl %esp		/* Save pt_regs as 4th parameter */
 
 GLOBAL(ftrace_regs_call)
@@ -1228,6 +1223,9 @@ ftrace_restore_flags:
 #else /* ! CONFIG_DYNAMIC_FTRACE */
 
 ENTRY(mcount)
+	cmpl $__PAGE_OFFSET, %esp
+	jb ftrace_stub		/* Paging not enabled yet? */
+
 	cmpl $0, function_trace_stop
 	jne  ftrace_stub
 
@@ -1295,6 +1293,16 @@ return_to_handler:
  * Some functions should be protected against kprobes
  */
 	.pushsection .kprobes.text, "ax"
+
+#ifdef CONFIG_TRACING
+ENTRY(trace_page_fault)
+	RING0_EC_FRAME
+	ASM_CLAC
+	pushl_cfi $trace_do_page_fault
+	jmp error_code
+	CFI_ENDPROC
+END(trace_page_fault)
+#endif
 
 ENTRY(page_fault)
 	RING0_EC_FRAME

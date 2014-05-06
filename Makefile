@@ -1,10 +1,10 @@
 VERSION = 3
-PATCHLEVEL = 11
+PATCHLEVEL = 15
 SUBLEVEL = 0
-EXTRAVERSION = -rc7
-NAME = Linux for Workgroups
+EXTRAVERSION = -rc4
+NAME = Shuffling Zombie Juror
 
-	# 内核版本信息
+        # 内核版本信息
 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
@@ -18,16 +18,16 @@ NAME = Linux for Workgroups
 # o  print "Entering directory ...";
 MAKEFLAGS += -rR --no-print-directory
 
-	# 在执行make时的命令行选项参数通过变量 “MAKEFLAGS”传递给子目录下的make程序。
-	#
-	# 对于这个变量除非使用指示符“unexport”对它们进行声明，
-	# 它们在整个make的执行过程中始终被自动的传递给所有的子make。
-	# 还有个特殊变量SHELL与MAKEFLAGS一样，
-	# 默认情况（没有用“unexport”声明）下在整个make的执行过程中被自动的传递给所有的子make。
+        # 在执行make时的命令行选项参数通过变量 “MAKEFLAGS”传递给子目录下的make程序。
+        #
+        # 对于这个变量除非使用指示符“unexport”对它们进行声明，
+        # 它们在整个make的执行过程中始终被自动的传递给所有的子make。
+        # 还有个特殊变量SHELL与MAKEFLAGS一样，
+        # 默认情况（没有用“unexport”声明）下在整个make的执行过程中被自动的传递给所有的子make。
 
-	# -r disable the built-in impilict rules.
-	# -R disable the built-in variable setttings.
-	# --no-print-directory 不打印进出目录信息
+        # -r disable the built-in impilict rules.
+        # -R disable the built-in variable setttings.
+        # --no-print-directory 不打印进出目录信息
 
 # Avoid funny character set dependencies
 unexport LC_ALL
@@ -35,10 +35,16 @@ LC_COLLATE=C
 LC_NUMERIC=C
 export LC_COLLATE LC_NUMERIC
 
+
         # 取消LC_ALL的导出，以免覆盖了LC_*的设置值
         # collate : 校对
         # LC_COLLATE : 比较和排序习惯
         # LC_NUMERIC : 非货币的数字显示格式
+
+
+# Avoid interference with shell env settings
+unexport GREP_OPTIONS
+
 
 # We are using a recursive build, so we need to do a little thinking
 # to get the ordering right.
@@ -203,6 +209,7 @@ ifneq ($(KBUILD_OUTPUT),)
 
 saved-output := $(KBUILD_OUTPUT)
 
+
         # 函数shell是make与外部环境的通讯工具，它用于命令的扩展。
         # shell函数起着调用shell命令（cd $(KBUILD_OUTPUT) && /bin/pwd）和返回命令输出结果的参数的作用。
         # Make仅仅处理返回结果，再返回结果替换调用点之前，make将每一个换行符或者一对回车/换行符处理为单个空格；
@@ -210,13 +217,15 @@ saved-output := $(KBUILD_OUTPUT)
         # 通过shell命令cd切换目录，如果成功则执行pwd，将新的目录赋给KBUILD_OUTPUT
         # 如果cd不成功则KBUILD_OUTPUT为空
 
-KBUILD_OUTPUT := $(shell cd $(KBUILD_OUTPUT) && /bin/pwd)
 
         # 判断KBUILD_OUTPUT是否为空，即判断先前的输出目录是否存在
         # 不存在则打印错误信息，退出make
 
+
+KBUILD_OUTPUT := $(shell mkdir -p $(KBUILD_OUTPUT) && cd $(KBUILD_OUTPUT) \
+								&& /bin/pwd)
 $(if $(KBUILD_OUTPUT),, \
-     $(error output directory "$(saved-output)" does not exist))
+     $(error failed to create output directory "$(saved-output)"))
 
         # 函数if对在函数上下文中扩展条件提供了支持（相对于GNU make makefile文件中的条件语句，例如ifeq指令。）
         # if函数的语法是：$(if <condition>,<then-part>) 或是 $(if <condition>,<then-part>,<else-part>)。
@@ -457,35 +466,40 @@ ifeq ($(ARCH),tilegx)
        SRCARCH := tile
 endif
 
-	# 对应架构头文件目录所在的架构目录
+        # 对应架构头文件目录所在的架构目录
 
 # Where to locate arch specific headers
 hdr-arch  := $(SRCARCH)
 
-	# 内核配置文件.config
+        # 内核配置文件.config
 
 KCONFIG_CONFIG	?= .config
 export KCONFIG_CONFIG
 
-	# 取使用的shell程序
+        # 取使用的shell程序
 
 # SHELL used by kbuild
 CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 	  else if [ -x /bin/bash ]; then echo /bin/bash; \
 	  else echo sh; fi ; fi)
 
-	# 编译内核所使用的编译器及编译参数
+        # 编译内核所使用的编译器及编译参数
 
 HOSTCC       = gcc
 HOSTCXX      = g++
 HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 -fomit-frame-pointer
 HOSTCXXFLAGS = -O2
 
+ifeq ($(shell $(HOSTCC) -v 2>&1 | grep -c "clang version"), 1)
+HOSTCFLAGS  += -Wno-unused-value -Wno-unused-parameter \
+		-Wno-missing-field-initializers -fno-delete-null-pointer-checks
+endif
+
 # Decide whether to build built-in, modular, or both.
 # Normally, just do built-in.
 
-	# 决定是编译整个内核还是编译单个模块，或者2者都是
-	# 通常都是在编译内核vmlinux
+        # 决定是编译整个内核还是编译单个模块，或者2者都是
+        # 通常都是在编译内核vmlinux
 
 KBUILD_MODULES :=
 KBUILD_BUILTIN := 1
@@ -495,8 +509,8 @@ KBUILD_BUILTIN := 1
 #	the built-in objects during the descend as well, in order to
 #	make sure the checksums are up to date before we record them.
 
-	# 如果仅是编译外部模块的话，则无需再编译内核vmlinux
-	# 如果配置文件中配置了CONFIG_MODVERSIONS的话，则需要检查checksum来决定是否重新编译内核
+        # 如果仅是编译外部模块的话，则无需再编译内核vmlinux
+        # 如果配置文件中配置了CONFIG_MODVERSIONS的话，则需要检查checksum来决定是否重新编译内核
 
 ifeq ($(MAKECMDGOALS),modules)
   KBUILD_BUILTIN := $(if $(CONFIG_MODVERSIONS),1)
@@ -510,7 +524,7 @@ ifneq ($(filter all _all modules,$(MAKECMDGOALS)),)
   KBUILD_MODULES := 1
 endif
 
-	# 命令行只使用了make
+        # 命令行只使用了make
 
 ifeq ($(MAKECMDGOALS),)
   KBUILD_MODULES := 1
@@ -519,7 +533,7 @@ endif
 export KBUILD_MODULES KBUILD_BUILTIN
 export KBUILD_CHECKSRC KBUILD_SRC KBUILD_EXTMOD
 
-	# 美化输出
+        # 美化输出
 
 # Beautify output
 # ---------------------------------------------------------------------------
@@ -555,17 +569,33 @@ endif
 # If the user is running make -s (silent mode), suppress echoing of
 # commands
 
-	# 如果make使用了-s参数的话，则阻止命令的输出
-	# 函数findstring的语法是：$(findstring <find>;,<in>;)
-	# 函数findstring的功能是：如果在$(MAKEFLAGS)中能找到字符s或-s开头的选项，那么返回该选项；否则返回空字符。
+
+        # 如果make使用了-s参数的话，则阻止命令的输出
+        # 函数findstring的语法是：$(findstring <find>;,<in>;)
+        # 函数findstring的功能是：如果在$(MAKEFLAGS)中能找到字符s或-s开头的选项，那么返回该选项；否则返回空字符。
+
+ifneq ($(filter 4.%,$(MAKE_VERSION)),)	# make-4
+ifneq ($(filter %s ,$(firstword x$(MAKEFLAGS))),)
+  quiet=silent_
+endif
+else					# make-3.8x
 ifneq ($(filter s% -s%,$(MAKEFLAGS)),)
   quiet=silent_
+endif
 endif
 
 export quiet Q KBUILD_VERBOSE
 
+ifneq ($(CC),)
+ifeq ($(shell $(CC) -v 2>&1 | grep -c "clang version"), 1)
+COMPILER := clang
+else
+COMPILER := gcc
+endif
+export COMPILER
+endif
 
-	# 指定make搜索的头文件目录，make也可以使用-I参数指定多个目录
+        # 指定make搜索的头文件目录，make也可以使用-I参数指定多个目录
 
 # Look for make include files relative to root of kernel src
 MAKEFLAGS += --include-dir=$(srctree)
@@ -573,17 +603,17 @@ MAKEFLAGS += --include-dir=$(srctree)
 # We need some generic definitions (do not try to remake the file).
 $(srctree)/scripts/Kbuild.include: ;
 
-	# 包含Kbuild.include文件
-	# 在Makefile使用include关键字可以把别的Makefile包含进来。
-	# 这很像C语言的#include，被包含的文件会原模原样的放在当前文件的包含位置。
-	# include的语法是： include <filename>;
-	# 这里没有使用-include，所以Kbuild.include文件必须存在
+        # 包含Kbuild.include文件
+        # 在Makefile使用include关键字可以把别的Makefile包含进来。
+        # 这很像C语言的#include，被包含的文件会原模原样的放在当前文件的包含位置。
+        # include的语法是： include <filename>;
+        # 这里没有使用-include，所以Kbuild.include文件必须存在
 
 include $(srctree)/scripts/Kbuild.include
 
 # Make variables (CC, etc...)
 
-	# Makefile中常用的一些变量定义
+        # Makefile中常用的一些变量定义
 
 AS		= $(CROSS_COMPILE)as
 LD		= $(CROSS_COMPILE)ld
@@ -637,7 +667,7 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common \
 		   -Werror-implicit-function-declaration \
 		   -Wno-format-security \
-		   -fno-delete-null-pointer-checks
+		   $(call cc-option,-fno-delete-null-pointer-checks,)
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
 KBUILD_AFLAGS   := -D__ASSEMBLY__
@@ -651,11 +681,11 @@ KBUILD_LDFLAGS_MODULE := -T $(srctree)/scripts/module-common.lds
 # Read KERNELRELEASE from include/config/kernel.release (if it exists)
 KERNELRELEASE = $(shell cat include/config/kernel.release 2> /dev/null)
 
-	# 由该文件头部定义的几个变量生成内核版本标识
+        # 由该文件头部定义的几个变量生成内核版本标识
 
 KERNELVERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(EXTRAVERSION)
 
-	# 用关键词export声明变量，使得这些变量能传到下级Makefile中
+        # 用关键词export声明变量，使得这些变量能传到下级Makefile中
 
 export VERSION PATCHLEVEL SUBLEVEL KERNELRELEASE KERNELVERSION
 export ARCH SRCARCH CONFIG_SHELL HOSTCC HOSTCFLAGS CROSS_COMPILE AS LD CC
@@ -674,16 +704,18 @@ export KBUILD_ARFLAGS
 # tree rather than in the kernel tree. The kernel tree might
 # even be read-only.
 
-	# 编译外部模块时，在对应的外部模块目录下创建隐藏文件.tmp_versions
+        # 编译外部模块时，在对应的外部模块目录下创建隐藏文件.tmp_versions
 
 export MODVERDIR := $(if $(KBUILD_EXTMOD),$(firstword $(KBUILD_EXTMOD))/).tmp_versions
 
 # Files to ignore in find ... statements
 
+
         # 忽略和版本控制相关的一些文件
 
-RCS_FIND_IGNORE := \( -name SCCS -o -name BitKeeper -o -name .svn -o -name CVS \
-		   -o -name .pc -o -name .hg -o -name .git \) -prune -o
+export RCS_FIND_IGNORE := \( -name SCCS -o -name BitKeeper -o -name .svn -o    \
+			  -name CVS -o -name .pc -o -name .hg -o -name .git \) \
+			  -prune -o
 export RCS_TAR_IGNORE := --exclude SCCS --exclude BitKeeper --exclude .svn \
 			 --exclude CVS --exclude .pc --exclude .hg --exclude .git
 
@@ -693,10 +725,10 @@ export RCS_TAR_IGNORE := --exclude SCCS --exclude BitKeeper --exclude .svn \
 # Basic helpers built in scripts/
 PHONY += scripts_basic
 
-	# build这个变量，定义在scripts/Kbuild.include内
-	# 故可认为scripts_basic规则的命令展开后为@make -f scripts/Makefile.build obj=scripts/basic 
-	# 然后这个规则的命令最终会进入scripts目录，
-	# 执行Makefile.build文件（传说中的Kbuild脚本），并传递参数obj=scripts/basic。
+        # build这个变量，定义在scripts/Kbuild.include内
+        # 故可认为scripts_basic规则的命令展开后为@make -f scripts/Makefile.build obj=scripts/basic 
+        # 然后这个规则的命令最终会进入scripts目录，
+        # 执行Makefile.build文件（传说中的Kbuild脚本），并传递参数obj=scripts/basic。
 
 scripts_basic:
 	$(Q)$(MAKE) $(build)=scripts/basic
@@ -705,18 +737,18 @@ scripts_basic:
 # To avoid any implicit rule to kick in, define an empty command.
 scripts/basic/%: scripts_basic ;
 
-	# 定义了一个规则，依赖关系为scripts/basic/%: scripts_basic
-	# 分号；的作用是定义一个空命令（正如上面解释所说）。
+        # 定义了一个规则，依赖关系为scripts/basic/%: scripts_basic
+        # 分号；的作用是定义一个空命令（正如上面解释所说）。
 
 PHONY += outputmakefile
 # outputmakefile generates a Makefile in the output directory, if using a
 # separate output directory. This allows convenient use of make in the
 # output directory.
 
-    # 当KBUILD_SRC不为空时，则说明是将编译目标文件输出到另外一个目录
-    # 创建一个source目录链接到内核源码目录
-    # 使用脚本mkmakefile在输出目录下构造一个Makefile文件
-    # 参考脚本mkmakefile，传递的4个参数
+        # 当KBUILD_SRC不为空时，则说明是将编译目标文件输出到另外一个目录
+        # 创建一个source目录链接到内核源码目录
+        # 使用脚本mkmakefile在输出目录下构造一个Makefile文件
+        # 参考脚本mkmakefile，传递的4个参数
 
 outputmakefile:
 ifneq ($(KBUILD_SRC),)
@@ -753,18 +785,18 @@ no-dot-config-targets := clean mrproper distclean \
 			 $(version_h) headers_% archheaders archscripts \
 			 kernelversion %src-pkg
 
-	# config-targets置1表示对内核进行配置
-	# mixed-targets置1表示即配置又有其他目标
-	# dot-config置1表示和.config文件有关联
+        # config-targets置1表示对内核进行配置
+        # mixed-targets置1表示即配置又有其他目标
+        # dot-config置1表示和.config文件有关联
 
 config-targets := 0
 mixed-targets  := 0
 dot-config     := 1
 
-	# 如果命令行中含有no-dot-config-targets中的某一个词
-	# 并且不含有no-dot-config-targets中没有的词
-	# 即命令行中有且只含有no-dot-config-targets中的词时
-	# 则将dot-config置0，表明此次make的目标和.config没有关联
+        # 如果命令行中含有no-dot-config-targets中的某一个词
+        # 并且不含有no-dot-config-targets中没有的词
+        # 即命令行中有且只含有no-dot-config-targets中的词时
+        # 则将dot-config置0，表明此次make的目标和.config没有关联
 
 ifneq ($(filter $(no-dot-config-targets), $(MAKECMDGOALS)),)
 	ifeq ($(filter-out $(no-dot-config-targets), $(MAKECMDGOALS)),)
@@ -772,11 +804,11 @@ ifneq ($(filter $(no-dot-config-targets), $(MAKECMDGOALS)),)
 	endif
 endif
 
-	# 不是编译外部模块
-	# 命令行中含有config %config，即是对内核进行配置
-	# 将config-targets置1
-	# 命令行中除了config %config外，还含有其他目标参数
-	# 则将mixed-targets置1
+        # 不是编译外部模块
+        # 命令行中含有config %config，即是对内核进行配置
+        # 将config-targets置1
+        # 命令行中除了config %config外，还含有其他目标参数
+        # 则将mixed-targets置1
 
 ifeq ($(KBUILD_EXTMOD),)
         ifneq ($(filter config %config,$(MAKECMDGOALS)),)
@@ -787,28 +819,28 @@ ifeq ($(KBUILD_EXTMOD),)
         endif
 endif
 
-	# 混合目标
+        # 混合目标
 
 ifeq ($(mixed-targets),1)
 # ===========================================================================
 # We're called with mixed targets (*config and build targets).
 # Handle them one by one.
 
-    # 到这里判断是混合目标
-    # 则一个一个的进行处理
+        # 到这里判断是混合目标
+        # 则一个一个的进行处理
 
-    # 双冒号规则(Double-colon rules)
-    # 逐个make命令行中的参数目标
-    # $@匹配第一个目标
+        # 双冒号规则(Double-colon rules)
+        # 逐个make命令行中的参数目标
+        # $@匹配第一个目标
 
 %:: FORCE
 	$(Q)$(MAKE) -C $(srctree) KBUILD_SRC= $@
 
 else
 
-	# 非混合目标
+        # 非混合目标
 
-	# 对内核进行配置
+        # 对内核进行配置
 
 ifeq ($(config-targets),1)
 # ===========================================================================
@@ -819,7 +851,7 @@ ifeq ($(config-targets),1)
 # KBUILD_DEFCONFIG may point out an alternative default configuration
 # used for 'make defconfig'
 
-	# 包含对应架构目录下的Makefile，以便用于make defconfig
+        # 包含对应架构目录下的Makefile，以便用于make defconfig
 
 include $(srctree)/arch/$(SRCARCH)/Makefile
 export KBUILD_DEFCONFIG KBUILD_KCONFIG
@@ -834,10 +866,10 @@ config: scripts_basic outputmakefile FORCE
 
 else
 
-	# 编译内核
+        # 编译内核
 
-	# 只构建目标，包括vmlinux，架构相关的目标，clean等
-	# 基本上都是*config以外的目标
+        # 只构建目标，包括vmlinux，架构相关的目标，clean等
+        # 基本上都是*config以外的目标
 
 # ===========================================================================
 # Build targets only - this includes vmlinux, arch specific targets, clean
@@ -854,7 +886,7 @@ scripts: scripts_basic include/config/auto.conf include/config/tristate.conf \
 
 # Objects we will link into vmlinux / subdirs we need to visit
 
-    # 需要链接进vmlinux的目标文件所在目录
+        # 需要链接进vmlinux的目标文件所在目录
 
 init-y		:= init/
 drivers-y	:= drivers/ sound/ firmware/
@@ -863,25 +895,25 @@ libs-y		:= lib/
 core-y		:= usr/
 endif # KBUILD_EXTMOD
 
-	# 和.config文件相关联的目标
+        # 和.config文件相关联的目标
 
 ifeq ($(dot-config),1)
 
-	# 关键词include将文件include/config/auto.conf包含进来，
-	# 该文件会原模原样的放在当前文件的包含位置。
-	# 关键词include前面的-减号的作用是让make不理那些无法读取的文件，而继续执行。
-	# 这里即尝试包含include/config/auto.conf文件
+        # 关键词include将文件include/config/auto.conf包含进来，
+        # 该文件会原模原样的放在当前文件的包含位置。
+        # 关键词include前面的-减号的作用是让make不理那些无法读取的文件，而继续执行。
+        # 这里即尝试包含include/config/auto.conf文件
 
 # Read in config
 -include include/config/auto.conf
 
-	# 编译内核
+        # 编译内核
 
 ifeq ($(KBUILD_EXTMOD),)
 
-    # 尝试包含include/config/auto.conf.cmd文件
-    # 该文件内主要包含include/config/auto.conf对所有的*/Kconfig文件的依赖规则
-    # 以确保include/config/auto.conf中的变量定义都是最新的
+        # 尝试包含include/config/auto.conf.cmd文件
+        # 该文件内主要包含include/config/auto.conf对所有的*/Kconfig文件的依赖规则
+        # 以确保include/config/auto.conf中的变量定义都是最新的
 
 # Read in dependencies to all Kconfig* files, make sure to run
 # oldconfig if changes are detected.
@@ -890,22 +922,22 @@ ifeq ($(KBUILD_EXTMOD),)
 # To avoid any implicit rule to kick in, define an empty command
 $(KCONFIG_CONFIG) include/config/auto.conf.cmd: ;
 
-    # tinker : 修补
+        # tinker : 修补
 
 # If .config is newer than include/config/auto.conf, someone tinkered
 # with it and forgot to run make oldconfig.
 # if auto.conf.cmd is missing then we are probably in a cleaned tree so
 # we execute the config step to be sure to catch updated Kconfig files
 
-    # .config有修改，或auto.conf.cmd不存在
-    # 则会执行silentoldconfig
-    # 递归到scripts/kconfig/Makefile中的silentoldconfig目标规则，然后执行conf程序
+        # .config有修改，或auto.conf.cmd不存在
+        # 则会执行silentoldconfig
+        # 递归到scripts/kconfig/Makefile中的silentoldconfig目标规则，然后执行conf程序
 
 include/config/%.conf: $(KCONFIG_CONFIG) include/config/auto.conf.cmd
 	$(Q)$(MAKE) -f $(srctree)/Makefile silentoldconfig
 else
 
-	# 编译外部模块
+        # 编译外部模块
 
 # external modules needs include/generated/autoconf.h and include/config/auto.conf
 # but do not care if they are up-to-date. Use auto.conf to trigger the test
@@ -924,7 +956,7 @@ endif # KBUILD_EXTMOD
 
 else
 
-	# 和.config没有关联的目标
+        # 和.config没有关联的目标
 
 # Dummy target needed, because used as prerequisite
 include/config/auto.conf: ;
@@ -958,14 +990,45 @@ ifneq ($(CONFIG_FRAME_WARN),0)
 KBUILD_CFLAGS += $(call cc-option,-Wframe-larger-than=${CONFIG_FRAME_WARN})
 endif
 
-# Force gcc to behave correct even for buggy distributions
-ifndef CONFIG_CC_STACKPROTECTOR
-KBUILD_CFLAGS += $(call cc-option, -fno-stack-protector)
+# Handle stack protector mode.
+ifdef CONFIG_CC_STACKPROTECTOR_REGULAR
+  stackp-flag := -fstack-protector
+  ifeq ($(call cc-option, $(stackp-flag)),)
+    $(warning Cannot use CONFIG_CC_STACKPROTECTOR_REGULAR: \
+             -fstack-protector not supported by compiler)
+  endif
+else
+ifdef CONFIG_CC_STACKPROTECTOR_STRONG
+  stackp-flag := -fstack-protector-strong
+  ifeq ($(call cc-option, $(stackp-flag)),)
+    $(warning Cannot use CONFIG_CC_STACKPROTECTOR_STRONG: \
+	      -fstack-protector-strong not supported by compiler)
+  endif
+else
+  # Force off for distro compilers that enable stack protector by default.
+  stackp-flag := $(call cc-option, -fno-stack-protector)
 endif
+endif
+KBUILD_CFLAGS += $(stackp-flag)
+
+ifeq ($(COMPILER),clang)
+KBUILD_CPPFLAGS += $(call cc-option,-Qunused-arguments,)
+KBUILD_CPPFLAGS += $(call cc-option,-Wno-unknown-warning-option,)
+KBUILD_CFLAGS += $(call cc-disable-warning, unused-variable)
+KBUILD_CFLAGS += $(call cc-disable-warning, format-invalid-specifier)
+KBUILD_CFLAGS += $(call cc-disable-warning, gnu)
+# Quiet clang warning: comparison of unsigned expression < 0 is always false
+KBUILD_CFLAGS += $(call cc-disable-warning, tautological-compare)
+# CLANG uses a _MergedGlobals as optimization, but this breaks modpost, as the
+# source of a reference will be _MergedGlobals and not on of the whitelisted names.
+# See modpost pattern 2
+KBUILD_CFLAGS += $(call cc-option, -mno-global-merge,)
+else
 
 # This warning generated too much noise in a regular build.
 # Use make W=1 to enable this warning (see scripts/Makefile.build)
 KBUILD_CFLAGS += $(call cc-disable-warning, unused-but-set-variable)
+endif
 
 ifdef CONFIG_FRAME_POINTER
 KBUILD_CFLAGS	+= -fno-omit-frame-pointer -fno-optimize-sibling-calls
@@ -982,7 +1045,7 @@ endif
 
 ifdef CONFIG_DEBUG_INFO
 KBUILD_CFLAGS	+= -g
-KBUILD_AFLAGS	+= -gdwarf-2
+KBUILD_AFLAGS	+= -Wa,--gdwarf-2
 endif
 
 ifdef CONFIG_DEBUG_INFO_REDUCED
@@ -1025,6 +1088,15 @@ KBUILD_CFLAGS	+= $(call cc-option,-fno-strict-overflow)
 # conserve stack if available
 KBUILD_CFLAGS   += $(call cc-option,-fconserve-stack)
 
+# disallow errors like 'EXPORT_GPL(foo);' with missing header
+KBUILD_CFLAGS   += $(call cc-option,-Werror=implicit-int)
+
+# require functions to have arguments in prototypes, not empty 'int foo()'
+KBUILD_CFLAGS   += $(call cc-option,-Werror=strict-prototypes)
+
+# Prohibit date/time macros, which would make the build non-deterministic
+KBUILD_CFLAGS   += $(call cc-option,-Werror=date-time)
+
 # use the deterministic mode of AR if available
 KBUILD_ARFLAGS := $(call ar-option,D)
 
@@ -1061,6 +1133,13 @@ export KBUILD_IMAGE ?= vmlinux
 export	INSTALL_PATH ?= /boot
 
 #
+# INSTALL_DTBS_PATH specifies a prefix for relocations required by build roots.
+# Like INSTALL_MOD_PATH, it isn't defined in the Makefile, but can be passed as
+# an argument if needed. Otherwise it defaults to the kernel install path
+#
+export INSTALL_DTBS_PATH ?= $(INSTALL_PATH)/dtbs/$(KERNELRELEASE)
+
+#
 # INSTALL_MOD_PATH specifies a prefix to MODLIB for module directory
 # relocations required by build roots.  This is not defined in the
 # makefile but the argument can be passed to make if needed.
@@ -1086,6 +1165,18 @@ mod_strip_cmd = true
 endif # INSTALL_MOD_STRIP
 export mod_strip_cmd
 
+# Select initial ramdisk compression format, default is gzip(1).
+# This shall be used by the dracut(8) tool while creating an initramfs image.
+#
+INITRD_COMPRESS-y                  := gzip
+INITRD_COMPRESS-$(CONFIG_RD_BZIP2) := bzip2
+INITRD_COMPRESS-$(CONFIG_RD_LZMA)  := lzma
+INITRD_COMPRESS-$(CONFIG_RD_XZ)    := xz
+INITRD_COMPRESS-$(CONFIG_RD_LZO)   := lzo
+INITRD_COMPRESS-$(CONFIG_RD_LZ4)   := lz4
+# do not export INITRD_COMPRESS, since we didn't actually
+# choose a sane default compression above.
+# export INITRD_COMPRESS := $(INITRD_COMPRESS-y)
 
 ifdef CONFIG_MODULE_SIG_ALL
 MODSECKEY = ./signing_key.priv
@@ -1101,9 +1192,9 @@ export mod_sign_cmd
 ifeq ($(KBUILD_EXTMOD),)
 core-y		+= kernel/ mm/ fs/ ipc/ security/ crypto/ block/
 
-	# 所有要编译的目录
-	# 例如: init usr arch/x86 kernel mm fs ipc security crypto block drivers
-	#       sound firmware arch/x86/pci arch/x86/power arch/x86/video net lib arch/x86/lib
+        # 所有要编译的目录
+        # 例如: init usr arch/x86 kernel mm fs ipc security crypto block drivers
+        #       sound firmware arch/x86/pci arch/x86/power arch/x86/video net lib arch/x86/lib
 
 vmlinux-dirs	:= $(patsubst %/,%,$(filter %/, $(init-y) $(init-m) \
 		     $(core-y) $(core-m) $(drivers-y) $(drivers-m) \
@@ -1162,16 +1253,19 @@ $(sort $(vmlinux-deps)): $(vmlinux-dirs) ;
 
 PHONY += $(vmlinux-dirs)
 
-	# 使用make -f scripts/Makefile.build obj=
-	# 进入各个目录进行代码的编译
+        # 使用make -f scripts/Makefile.build obj=
+        # 进入各个目录进行代码的编译
 
 $(vmlinux-dirs): prepare scripts
 	$(Q)$(MAKE) $(build)=$@
 
+define filechk_kernel.release
+	echo "$(KERNELVERSION)$$($(CONFIG_SHELL) $(srctree)/scripts/setlocalversion $(srctree))"
+endef
+
 # Store (new) KERNELRELEASE string in include/config/kernel.release
 include/config/kernel.release: include/config/auto.conf FORCE
-	$(Q)rm -f $@
-	$(Q)echo "$(KERNELVERSION)$$($(CONFIG_SHELL) $(srctree)/scripts/setlocalversion $(srctree))" > $@
+	$(call filechk,kernel.release)
 
 
 # Things we need to do before we recursively start building the kernel
@@ -1380,10 +1474,10 @@ modules modules_install: FORCE
 
 endif # CONFIG_MODULES
 
-	# 3个内核源码树的清理级别
-	# make clean 		: 删除大多数生成的文件，留下足够的信息以便能够编译外部模块
-	# make mrproper		: Mr. Proper，删除配置文件和所有生成的文件
-	# make distclean	: distribution clean，在mrproper的基础上，再删除备份文件，补丁文件等
+        # 3个内核源码树的清理级别
+        # make clean 		: 删除大多数生成的文件，留下足够的信息以便能够编译外部模块
+        # make mrproper		: Mr. Proper，删除配置文件和所有生成的文件
+        # make distclean	: distribution clean，在mrproper的基础上，再删除备份文件，补丁文件等
 
 ###
 # Cleaning is done on three levels.
@@ -1397,12 +1491,12 @@ CLEAN_DIRS  += $(MODVERDIR)
 
 # Directories & files removed with 'make mrproper'
 MRPROPER_DIRS  += include/config usr/include include/generated          \
-                  arch/*/include/generated
+                  arch/*/include/generated .tmp_objdiff
 MRPROPER_FILES += .config .config.old .version .old_version $(version_h) \
 		  Module.symvers tags TAGS cscope* GPATH GTAGS GRTAGS GSYMS \
 		  signing_key.priv signing_key.x509 x509.genkey		\
 		  extra_certificates signing_key.x509.keyid		\
-		  signing_key.x509.signer
+		  signing_key.x509.signer include/linux/version.h
 
 # clean - Delete most, but leave enough to build external modules
 #
@@ -1441,8 +1535,7 @@ distclean: mrproper
 	@find $(srctree) $(RCS_FIND_IGNORE) \
 		\( -name '*.orig' -o -name '*.rej' -o -name '*~' \
 		-o -name '*.bak' -o -name '#*#' -o -name '.*.orig' \
-		-o -name '.*.rej' \
-		-o -name '*%' -o -name '.*.cmd' -o -name 'core' \) \
+		-o -name '.*.rej' -o -name '*%'  -o -name 'core' \) \
 		-type f -print | xargs rm -f
 
 

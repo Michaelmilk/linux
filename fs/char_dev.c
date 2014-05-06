@@ -380,6 +380,7 @@ void cdev_put(struct cdev *p)
  */
 static int chrdev_open(struct inode *inode, struct file *filp)
 {
+	const struct file_operations *fops;
 	struct cdev *p;
 	struct cdev *new = NULL;
 	int ret = 0;
@@ -420,19 +421,25 @@ static int chrdev_open(struct inode *inode, struct file *filp)
 		return ret;
 
 	ret = -ENXIO;
+
 	/* 注意：这里使用 cdev->file_operations 函数操作集
 	   来填充的 struct file->f_op 这也是我们注册字符设备驱动时所给出的函数集
 	*/
-	filp->f_op = fops_get(p->ops);
+
 	/* 如果 struct file->f_op 无效，那么它所指向的函数集
 	   肯定也无效，这样的话直接返回错误。注意：这里有一
 	   种可能，那就是调用者虽注册了一个字符设备驱动，但是
 	   并没有提供相应的操作集，或许调用者认为没有必要
 	*/
-	if (!filp->f_op)
+
+	fops = fops_get(p->ops);
+	if (!fops)
 		goto out_cdev_put;
 
+	replace_fops(filp, fops);
+
 	/* 调用open函数 */
+
 	if (filp->f_op->open) {
 		ret = filp->f_op->open(inode, filp);
 		if (ret)
@@ -611,7 +618,8 @@ static struct kobject *base_probe(dev_t dev, int *part, void *data)
 void __init chrdev_init(void)
 {
 	cdev_map = kobj_map_init(base_probe, &chrdevs_lock);
-	bdi_init(&directly_mappable_cdev_bdi);
+	if (bdi_init(&directly_mappable_cdev_bdi))
+		panic("Failed to init directly mappable cdev bdi");
 }
 
 

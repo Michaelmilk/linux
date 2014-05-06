@@ -6,6 +6,7 @@
 #include <asm/processor.h>
 #include <asm/alternative.h>
 #include <asm/cmpxchg.h>
+#include <asm/rmwcc.h>
 
 /*
  * Atomic operations that C can't guarantee us.  Useful for
@@ -107,12 +108,7 @@ otherwise sets the operand to 0.
 */
 static inline int atomic_sub_and_test(int i, atomic_t *v)
 {
-	unsigned char c;
-
-	asm volatile(LOCK_PREFIX "subl %2,%0; sete %1"
-		     : "+m" (v->counter), "=qm" (c)
-		     : "ir" (i) : "memory");
-	return c;
+	GEN_BINARY_RMWcc(LOCK_PREFIX "subl", v->counter, "er", i, "%0", "e");
 }
 
 /**
@@ -153,14 +149,10 @@ static inline void atomic_dec(atomic_t *v)
 */
 static inline int atomic_dec_and_test(atomic_t *v)
 {
-	unsigned char c;
-
 	/* 锁总线，然后将@v->counter减1
 	   如果@v->counter变为0了，则将临时变量c置为1 */
-	asm volatile(LOCK_PREFIX "decl %0; sete %1"
-		     : "+m" (v->counter), "=qm" (c)
-		     : : "memory");
-	return c != 0;
+
+	GEN_UNARY_RMWcc(LOCK_PREFIX "decl", v->counter, "%0", "e");
 }
 
 /**
@@ -173,12 +165,7 @@ static inline int atomic_dec_and_test(atomic_t *v)
  */
 static inline int atomic_inc_and_test(atomic_t *v)
 {
-	unsigned char c;
-
-	asm volatile(LOCK_PREFIX "incl %0; sete %1"
-		     : "+m" (v->counter), "=qm" (c)
-		     : : "memory");
-	return c != 0;
+	GEN_UNARY_RMWcc(LOCK_PREFIX "incl", v->counter, "%0", "e");
 }
 
 /**
@@ -192,12 +179,7 @@ static inline int atomic_inc_and_test(atomic_t *v)
  */
 static inline int atomic_add_negative(int i, atomic_t *v)
 {
-	unsigned char c;
-
-	asm volatile(LOCK_PREFIX "addl %2,%0; sets %1"
-		     : "+m" (v->counter), "=qm" (c)
-		     : "ir" (i) : "memory");
-	return c;
+	GEN_BINARY_RMWcc(LOCK_PREFIX "addl", v->counter, "er", i, "%0", "s");
 }
 
 /**

@@ -32,7 +32,8 @@ static int br_pass_frame_up(struct sk_buff *skb)
 {
 	struct net_device *indev, *brdev = BR_INPUT_SKB_CB(skb)->brdev;
 	struct net_bridge *br = netdev_priv(brdev);
-	struct br_cpu_netstats *brstats = this_cpu_ptr(br->stats);
+	struct pcpu_sw_netstats *brstats = this_cpu_ptr(br->stats);
+	struct net_port_vlans *pv;
 
 	u64_stats_update_begin(&brstats->syncp);
 	brstats->rx_packets++;
@@ -43,15 +44,13 @@ static int br_pass_frame_up(struct sk_buff *skb)
 	 * packet is allowed except in promisc modue when someone
 	 * may be running packet capture.
 	 */
+	pv = br_get_vlan_info(br);
 	if (!(brdev->flags & IFF_PROMISC) &&
-	    !br_allowed_egress(br, br_get_vlan_info(br), skb)) {
+	    !br_allowed_egress(br, pv, skb)) {
 		kfree_skb(skb);
 		return NET_RX_DROP;
 	}
 
-	skb = br_handle_vlan(br, br_get_vlan_info(br), skb);
-	if (!skb)
-		return NET_RX_DROP;
 
 	/* 修改接收设备为网桥接口
 	   这样在下面的NF_BR_LOCAL_IN hook后调用netif_receive_skb()时
@@ -62,6 +61,9 @@ static int br_pass_frame_up(struct sk_buff *skb)
 
 	indev = skb->dev;
 	skb->dev = brdev;
+	skb = br_handle_vlan(br, pv, skb);
+	if (!skb)
+		return NET_RX_DROP;
 
 	/* 内核在br_netfilter.c中注册了:
 	   br_nf_local_in() NF_BR_PRI_BRNF
@@ -86,17 +88,17 @@ int br_handle_frame_finish(struct sk_buff *skb)
 		goto drop;
 
 	if (!br_allowed_ingress(p->br, nbp_get_vlan_info(p), skb, &vid))
-		goto drop;
+		goto out;
 
 	/* insert into forwarding database after filtering to avoid spoofing */
 	/* spoofing:欺骗
 	   在netfilter后才记录转发表，以避免记录假报文 */
 	br = p->br;
 	if (p->flags & BR_LEARNING)
-		br_fdb_update(br, p, eth_hdr(skb)->h_source, vid);
+		br_fdb_update(br, p, eth_hdr(skb)->h_source, vid, false);
 
 	if (!is_broadcast_ether_addr(dest) && is_multicast_ether_addr(dest) &&
-	    br_multicast_rcv(br, p, skb))
+	    br_multicast_rcv(br, p, skb, vid))
 		goto drop;
 
 	if (p->state == BR_STATE_LEARNING)
@@ -125,7 +127,7 @@ int br_handle_frame_finish(struct sk_buff *skb)
 	} else if (is_multicast_ether_addr(dest)) {
 		mdst = br_mdb_get(br, skb, vid);
 		if ((mdst || BR_INPUT_SKB_CB_MROUTERS_ONLY(skb)) &&
-		    br_multicast_querier_exists(br)) {
+		    br_multicast_querier_exists(br, eth_hdr(skb))) {
 			if ((mdst && mdst->mglist) ||
 			    br_multicast_is_router(br))
 				skb2 = skb;
@@ -179,7 +181,7 @@ static int br_handle_local_finish(struct sk_buff *skb)
 
 	br_vlan_get_tag(skb, &vid);
 	if (p->flags & BR_LEARNING)
-		br_fdb_update(p->br, p, eth_hdr(skb)->h_source, vid);
+		br_fdb_update(p->br, p, eth_hdr(skb)->h_source, vid, false);
 	return 0;	 /* process further */
 }
 
