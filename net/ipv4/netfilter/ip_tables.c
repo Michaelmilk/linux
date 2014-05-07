@@ -63,6 +63,25 @@ MODULE_DESCRIPTION("IPv4 packet filter");
 #define inline
 #endif
 
+/*
+返回下面的结构体指针
+-----------------------------------
+struct ipt_replace repl
+                                    ...
+                                    ipt_entry entries[0]
+-----------------------------------
+struct ipt_standard entries[nhooks]
+                           [0]      struct ipt_entry entry
+                                    struct xt_standard_target target
+                           [1]      struct ipt_entry entry
+                                    struct xt_standard_target target
+-----------------------------------
+ipt_error
+                                    struct ipt_entry entry
+                                    struct xt_error_target target
+-----------------------------------
+*/
+
 void *ipt_alloc_initial_table(const struct xt_table *info)
 {
 	/*
@@ -73,6 +92,7 @@ void *ipt_alloc_initial_table(const struct xt_table *info)
 	有效hook点个数
 	unsigned int nhooks = hweight32(hook_mask);
 	unsigned int bytes = 0, hooknum = 0, i = 0;
+	结构体定义,各个定义的entries[nhooks]大小不一样
 	struct {
 		struct ipt_replace repl;
 		struct ipt_standard entries[nhooks];
@@ -822,6 +842,12 @@ cleanup_entry(struct ipt_entry *e, struct net *net)
 	module_put(par.target->me);
 }
 
+/*
+
+@entry0: 指向
+		struct ipt_standard entries[nhooks];
+		struct ipt_error term;
+*/
 /* Checks and translates the user-supplied table segment (held in
    newinfo) */
 static int
@@ -2097,6 +2123,14 @@ do_ipt_get_ctl(struct sock *sk, int cmd, void __user *user, int *len)
 	return ret;
 }
 
+/*
+
+@repl: 传入的实际为这样的空间 struct {
+		struct ipt_replace repl;
+		struct ipt_standard entries[nhooks];
+		struct ipt_error term;
+	}
+*/
 struct xt_table *ipt_register_table(struct net *net,
 				    const struct xt_table *table,
 				    const struct ipt_replace *repl)
@@ -2113,10 +2147,12 @@ struct xt_table *ipt_register_table(struct net *net,
 		goto out;
 	}
 
+	/* 复制一份数据到当前CPU的指针指向的空间 */
 	/* choose the copy on our node/cpu, but dont care about preemption */
 	loc_cpu_entry = newinfo->entries[raw_smp_processor_id()];
 	memcpy(loc_cpu_entry, repl->entries, repl->size);
 
+	/* 转换数据,并为每个CPU复制数据 */
 	ret = translate_table(net, newinfo, loc_cpu_entry, repl);
 	if (ret != 0)
 		goto out_free;

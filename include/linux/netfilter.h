@@ -43,7 +43,14 @@ int netfilter_init(void);
 struct sk_buff;
 
 struct nf_hook_ops;
+
 /*
+linux-2.6.23中的定义
+typedef unsigned int nf_hookfn(unsigned int hooknum,
+			       struct sk_buff **skb,
+			       const struct net_device *in,
+			       const struct net_device *out,
+			       int (*okfn)(struct sk_buff *));
 
 linux-2.6.30.9中的定义
 typedef unsigned int nf_hookfn(unsigned int hooknum,
@@ -51,7 +58,11 @@ typedef unsigned int nf_hookfn(unsigned int hooknum,
                                const struct net_device *in,
                                const struct net_device *out,
                                int (*okfn)(struct sk_buff *));
+*/
 
+/*
+第一个参数变了
+第二个参数由二级指针变成了一级指针
 */
 typedef unsigned int nf_hookfn(const struct nf_hook_ops *ops,
 			       struct sk_buff *skb,

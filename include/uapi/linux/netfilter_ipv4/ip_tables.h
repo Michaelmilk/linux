@@ -120,6 +120,8 @@ struct ipt_entry {
 
 	/* The matches (if any), then the target. */
 	unsigned char elems[0];
+
+	/* 后面为1个struct xt_standard_target */
 };
 
 /*
@@ -182,15 +184,24 @@ struct ipt_replace {
            change this. */
 	unsigned int valid_hooks;
 
+	/* 最后0长度数组的个数(nhooks + 1)
+	   nhooks个struct ipt_standard
+	   1个struct ipt_error
+	*/
 	/* Number of entries */
 	unsigned int num_entries;
 
+	/* 看宏xt_alloc_initial_table为size的赋值
+	   为最后0长度数组entries[0]字段后面数据的空间大小
+	*/
 	/* Total size of new entries */
 	unsigned int size;
 
+	/* 指向最后entries[0]中的偏移 */
 	/* Hook entry points. */
 	unsigned int hook_entry[NF_INET_NUMHOOKS];
 
+	/* 指向最后entries[0]中的偏移 */
 	/* Underflow points. */
 	unsigned int underflow[NF_INET_NUMHOOKS];
 
@@ -202,6 +213,11 @@ struct ipt_replace {
 
 	/* The entries (hang off end: not really an array). */
 	struct ipt_entry entries[0];
+
+	/* 0长度数组后面指向
+	   struct ipt_standard entries[nhooks];
+	   struct ipt_error term;
+	*/
 };
 
 /* The argument to IPT_SO_GET_ENTRIES. */

@@ -229,6 +229,9 @@ struct xt_table_info {
 	/* ipt_entry tables: one per CPU */
 	/* Note : this field MUST be the last one, see XT_TABLE_INFO_SZ */
 	void *entries[1];
+	/* 每CPU一个指针,各指向@size大小字段的一个空间
+	   见xt_alloc_table_info
+	*/
 };
 
 #define XT_TABLE_INFO_SZ (offsetof(struct xt_table_info, entries) \
