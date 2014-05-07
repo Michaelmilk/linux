@@ -75,6 +75,7 @@ struct ipt_standard entries[nhooks]
                                     struct xt_standard_target target
                            [1]      struct ipt_entry entry
                                     struct xt_standard_target target
+                           [...]
 -----------------------------------
 ipt_error
                                     struct ipt_entry entry
@@ -339,6 +340,10 @@ struct ipt_entry *ipt_next_entry(const struct ipt_entry *entry)
 	return (void *)entry + entry->next_offset;
 }
 
+/*
+
+@hook: 5¸öhookµã NF_INET_PRE_ROUTING NF_INET_LOCAL_IN ...
+*/
 /* Returns one of the generic firewall policies, like NF_ACCEPT. */
 unsigned int
 ipt_do_table(struct sk_buff *skb,

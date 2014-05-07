@@ -120,8 +120,11 @@ struct ipt_entry {
 
 	/* The matches (if any), then the target. */
 	unsigned char elems[0];
+	/* elems[0]后面为struct xt_entry_match数组
+	   见xt_ematch_foreach
+	*/
 
-	/* 后面为1个struct xt_standard_target */
+	/* 最后面为1个struct xt_standard_target */
 };
 
 /*
