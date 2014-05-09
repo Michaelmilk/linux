@@ -438,6 +438,7 @@ static struct ctl_table ipv4_table[] = {
 	},
 	{
 		.procname	= "ip_local_reserved_ports",
+		/* 在sysctl_ipv4_init中初始化为sysctl_local_reserved_ports */
 		.data		= NULL, /* initialized in sysctl_ipv4_init */
 		.maxlen		= 65536,
 		.mode		= 0644,
@@ -913,10 +914,12 @@ static __init int sysctl_ipv4_init(void)
 	if (!i->procname)
 		return -EINVAL;
 
+	/* 注册/proc/sys/net/ipv4目录下的参数 */
 	hdr = register_net_sysctl(&init_net, "net/ipv4", ipv4_table);
 	if (hdr == NULL)
 		return -ENOMEM;
 
+	/* 注册初始化和net命名空间相关的参数 */
 	if (register_pernet_subsys(&ipv4_sysctl_ops)) {
 		unregister_net_sysctl_table(hdr);
 		return -ENOMEM;
