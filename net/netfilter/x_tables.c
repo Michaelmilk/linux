@@ -49,6 +49,7 @@ struct xt_af {
 	struct mutex mutex;
 	/* 通过xt_register_match注册进该链表 */
 	struct list_head match;
+	/* 通过xt_register_target注册进该链表 */
 	struct list_head target;
 #ifdef CONFIG_COMPAT
 	struct mutex compat_mutex;
@@ -1294,6 +1295,9 @@ void xt_hook_unlink(const struct xt_table *table, struct nf_hook_ops *ops)
 }
 EXPORT_SYMBOL_GPL(xt_hook_unlink);
 
+/*
+根据协议在/pro/net/目录下创建FORMAT_TABLES FORMAT_MATCHES FORMAT_TARGETS对应的文件
+*/
 int xt_proto_init(struct net *net, u_int8_t af)
 {
 #ifdef CONFIG_PROC_FS
@@ -1306,6 +1310,9 @@ int xt_proto_init(struct net *net, u_int8_t af)
 
 
 #ifdef CONFIG_PROC_FS
+	/* /proc/net/ip_tables_names
+	   /proc/net/ip6_tables_names
+	*/
 	strlcpy(buf, xt_prefix[af], sizeof(buf));
 	strlcat(buf, FORMAT_TABLES, sizeof(buf));
 	proc = proc_create_data(buf, 0440, net->proc_net, &xt_table_ops,
@@ -1313,6 +1320,9 @@ int xt_proto_init(struct net *net, u_int8_t af)
 	if (!proc)
 		goto out;
 
+	/* /proc/net/ip_tables_matches
+	   /proc/net/ip6_tables_matches
+	*/
 	strlcpy(buf, xt_prefix[af], sizeof(buf));
 	strlcat(buf, FORMAT_MATCHES, sizeof(buf));
 	proc = proc_create_data(buf, 0440, net->proc_net, &xt_match_ops,
@@ -1320,6 +1330,9 @@ int xt_proto_init(struct net *net, u_int8_t af)
 	if (!proc)
 		goto out_remove_tables;
 
+	/* /proc/net/ip_tables_targets
+	   /proc/net/ip6_tables_targets
+	*/
 	strlcpy(buf, xt_prefix[af], sizeof(buf));
 	strlcat(buf, FORMAT_TARGETS, sizeof(buf));
 	proc = proc_create_data(buf, 0440, net->proc_net, &xt_target_ops,

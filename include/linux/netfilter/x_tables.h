@@ -145,6 +145,7 @@ struct xt_match {
 
 /* Registration hooks for targets. */
 struct xt_target {
+	/* Á´Èëstruct xt_afµÄtargetÁ´±í */
 	struct list_head list;
 
 	const char name[XT_EXTENSION_MAXNAMELEN];

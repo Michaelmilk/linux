@@ -2307,6 +2307,10 @@ static int __init ip_tables_init(void)
 {
 	int ret;
 
+	/* ´´½¨/proc/net/ip_tables_names
+	       /proc/net/ip_tables_matches
+	       /proc/net/ip_tables_targets
+	*/
 	ret = register_pernet_subsys(&ip_tables_net_ops);
 	if (ret < 0)
 		goto err1;
