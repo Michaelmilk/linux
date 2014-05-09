@@ -103,6 +103,7 @@ struct xt_tgdtor_param {
 };
 
 struct xt_match {
+	/* Á´Èëstruct xt_afµÄmatchÁ´±í */
 	struct list_head list;
 
 	const char name[XT_EXTENSION_MAXNAMELEN];
@@ -135,8 +136,10 @@ struct xt_match {
 	unsigned int compatsize;
 #endif
 	unsigned int hooks;
+	/* IPPROTO_TCP IPPROTO_UDP ... */
 	unsigned short proto;
 
+	/* NFPROTO_IPV4 NFPROTO_IPV6 ... */
 	unsigned short family;
 };
 

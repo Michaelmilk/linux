@@ -47,6 +47,7 @@ struct compat_delta {
 
 struct xt_af {
 	struct mutex mutex;
+	/* 通过xt_register_match注册进该链表 */
 	struct list_head match;
 	struct list_head target;
 #ifdef CONFIG_COMPAT
