@@ -59,6 +59,7 @@ struct xt_af {
 #endif
 };
 
+/* 该xt[NFPROTO_NUMPROTO]数组空间在xt_init中分配初始化 */
 static struct xt_af *xt;
 
 static const char *const xt_prefix[NFPROTO_NUMPROTO] = {
@@ -891,6 +892,11 @@ struct xt_table *xt_register_table(struct net *net,
 	struct xt_table_info *private;
 	struct xt_table *t, *table;
 
+	/* 每命名空间的初始化
+	   iptable_filter_net_init => ipt_register_table => xt_register_table
+	   过来的话,不能将packet_filter重复加入链表
+	   所以需要分配新的xt_table空间
+	*/
 	/* Don't add one object to multiple lists. */
 	table = kmemdup(input_table, sizeof(struct xt_table), GFP_KERNEL);
 	if (!table) {
@@ -1249,11 +1255,13 @@ struct nf_hook_ops *xt_hook_link(const struct xt_table *table, nf_hookfn *fn)
 {
 	/* packet_filter packet_mangler packet_raw */
 	unsigned int hook_mask = table->valid_hooks;
+	/* hook点个数 */
 	uint8_t i, num_hooks = hweight32(hook_mask);
 	uint8_t hooknum;
 	struct nf_hook_ops *ops;
 	int ret;
 
+	/* 分配nf_hook_ops空间 */
 	ops = kmalloc(sizeof(*ops) * num_hooks, GFP_KERNEL);
 	if (ops == NULL)
 		return ERR_PTR(-ENOMEM);
@@ -1279,6 +1287,7 @@ struct nf_hook_ops *xt_hook_link(const struct xt_table *table, nf_hookfn *fn)
 		return ERR_PTR(ret);
 	}
 
+	/* 返回nf_hook_ops空间 */
 	return ops;
 }
 EXPORT_SYMBOL_GPL(xt_hook_link);

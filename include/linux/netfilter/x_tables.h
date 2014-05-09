@@ -186,6 +186,9 @@ struct xt_target {
 
 /* Furniture shopping... */
 struct xt_table {
+	/* 链入net命名空间net->xt.tables[table->af]
+	   struct netns_xt
+	*/
 	struct list_head list;
 
 	/* What hooks you will enter on */
@@ -204,7 +207,7 @@ struct xt_table {
 	int priority;		/* hook order */
 
 	/* A unique name... */
-	/* 表名,如 filter */
+	/* 表名,如 filter mangle raw */
 	const char name[XT_TABLE_MAXNAMELEN];
 };
 
@@ -212,13 +215,21 @@ struct xt_table {
 
 /* The table itself */
 struct xt_table_info {
+	/* 同ipt_replace->size */
 	/* Size per table */
 	unsigned int size;
+	/* 同ipt_replace->num_entries */
 	/* Number of entries: FIXME. --RR */
 	unsigned int number;
 	/* Initial number of entries. Needed for module usage count */
 	unsigned int initial_entries;
 
+	/* 初始值0xFFFFFFFF
+	   对应hook点的下标值与
+	   ipt_replace->hook_entry
+	   ipt_replace->underflow
+	   一致
+	*/
 	/* Entry points and underflows */
 	unsigned int hook_entry[NF_INET_NUMHOOKS];
 	unsigned int underflow[NF_INET_NUMHOOKS];
@@ -234,7 +245,7 @@ struct xt_table_info {
 	/* Note : this field MUST be the last one, see XT_TABLE_INFO_SZ */
 	void *entries[1];
 	/* 每CPU一个指针,各指向@size大小字段的一个空间
-	   见xt_alloc_table_info
+	   见函数xt_alloc_table_info和宏XT_TABLE_INFO_SZ
 	*/
 };
 

@@ -107,6 +107,7 @@ struct ipt_entry {
 	/* Mark with fields that we care about. */
 	unsigned int nfcache;
 
+	/* 参考下宏IPT_ENTRY_INIT */
 	/* Size of ipt_entry + matches */
 	__u16 target_offset;
 	/* Size of ipt_entry + matches + target */
@@ -196,6 +197,8 @@ struct ipt_replace {
 
 	/* 看宏xt_alloc_initial_table为size的赋值
 	   为最后0长度数组entries[0]字段后面数据的空间大小
+		struct ipt_standard entries[nhooks];
+		struct ipt_error term;
 	*/
 	/* Total size of new entries */
 	unsigned int size;

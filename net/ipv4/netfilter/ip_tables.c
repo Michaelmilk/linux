@@ -874,6 +874,10 @@ translate_table(struct net *net, struct xt_table_info *newinfo, void *entry0,
 
 	duprintf("translate_table: size %u\n", newinfo->size);
 	i = 0;
+	/* 遍历ipt_alloc_initial_table中分配的
+	   struct ipt_standard entries[nhooks];
+	   struct ipt_error term;
+	*/
 	/* Walk through entries, checking offsets. */
 	xt_entry_foreach(iter, entry0, newinfo->size) {
 		ret = check_entry_size_and_hooks(iter, newinfo, entry0,

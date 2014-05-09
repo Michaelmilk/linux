@@ -98,6 +98,7 @@ static int __init iptable_filter_init(void)
 	if (ret < 0)
 		return ret;
 
+	/* ·ÖÅä,×¢²á¹³×Óº¯Êý */
 	/* Register hooks */
 	filter_ops = xt_hook_link(&packet_filter, iptable_filter_hook);
 	if (IS_ERR(filter_ops)) {
