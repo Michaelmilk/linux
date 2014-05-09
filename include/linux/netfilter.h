@@ -274,6 +274,7 @@ struct flowi;
 struct nf_queue_entry;
 
 struct nf_afinfo {
+	/* Á½¸öÖµ AF_INET AF_INET6 */
 	unsigned short	family;
 	__sum16		(*checksum)(struct sk_buff *skb, unsigned int hook,
 				    unsigned int dataoff, u_int8_t protocol);

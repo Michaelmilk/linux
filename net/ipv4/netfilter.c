@@ -196,6 +196,7 @@ static const struct nf_afinfo nf_ip_afinfo = {
 
 static int __init ipv4_netfilter_init(void)
 {
+	/* 注册进指针数组nf_afinfo */
 	return nf_register_afinfo(&nf_ip_afinfo);
 }
 

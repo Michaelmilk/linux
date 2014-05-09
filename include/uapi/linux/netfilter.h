@@ -52,6 +52,14 @@ enum nf_inet_hooks {
 	NF_INET_NUMHOOKS
 };
 
+/*
+枚举值与
+AF_INET		2
+AF_BRIDGE	7
+AF_INET6	10
+AF_DECnet	12
+一致
+*/
 enum {
 	NFPROTO_UNSPEC =  0,
 	NFPROTO_INET   =  1,
