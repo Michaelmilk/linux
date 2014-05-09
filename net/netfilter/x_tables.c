@@ -1383,14 +1383,17 @@ static int __init xt_init(void)
 	unsigned int i;
 	int rv;
 
+	/* 初始化顺序锁 */
 	for_each_possible_cpu(i) {
 		seqcount_init(&per_cpu(xt_recseq, i));
 	}
 
+	/* 该数组用于挂载各个协议的match和target资源 */
 	xt = kmalloc(sizeof(struct xt_af) * NFPROTO_NUMPROTO, GFP_KERNEL);
 	if (!xt)
 		return -ENOMEM;
 
+	/* 初始化信号量,链表头 */
 	for (i = 0; i < NFPROTO_NUMPROTO; i++) {
 		mutex_init(&xt[i].mutex);
 #ifdef CONFIG_COMPAT
@@ -1400,6 +1403,7 @@ static int __init xt_init(void)
 		INIT_LIST_HEAD(&xt[i].target);
 		INIT_LIST_HEAD(&xt[i].match);
 	}
+	/* 初始化各个命名空间下xt的链表头 */
 	rv = register_pernet_subsys(&xt_net_ops);
 	if (rv < 0)
 		kfree(xt);
