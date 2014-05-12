@@ -138,6 +138,7 @@ ip_packet_match(const struct iphdr *ip,
 
 #define FWINV(bool, invflg) ((bool) ^ !!(ipinfo->invflags & (invflg)))
 
+	/* 源IP或目的IP判断 */
 	if (FWINV((ip->saddr&ipinfo->smsk.s_addr) != ipinfo->src.s_addr,
 		  IPT_INV_SRCIP) ||
 	    FWINV((ip->daddr&ipinfo->dmsk.s_addr) != ipinfo->dst.s_addr,
@@ -153,6 +154,7 @@ ip_packet_match(const struct iphdr *ip,
 		return false;
 	}
 
+	/* 入接口判断 */
 	ret = ifname_compare_aligned(indev, ipinfo->iniface, ipinfo->iniface_mask);
 
 	if (FWINV(ret != 0, IPT_INV_VIA_IN)) {
@@ -171,6 +173,7 @@ ip_packet_match(const struct iphdr *ip,
 		return false;
 	}
 
+	/* 协议判断 */
 	/* Check specific protocol */
 	if (ipinfo->proto &&
 	    FWINV(ip->protocol != ipinfo->proto, IPT_INV_PROTO)) {
@@ -180,6 +183,7 @@ ip_packet_match(const struct iphdr *ip,
 		return false;
 	}
 
+	/* 针对分片报文的判断 */
 	/* If we have a fragment rule but the packet is not a fragment
 	 * then we return zero */
 	if (FWINV((ipinfo->flags&IPT_F_FRAG) && !isfrag, IPT_INV_FRAG)) {
@@ -188,6 +192,7 @@ ip_packet_match(const struct iphdr *ip,
 		return false;
 	}
 
+	/* 条件都符合 */
 	return true;
 }
 
@@ -418,12 +423,14 @@ ipt_do_table(struct sk_buff *skb,
 		xt_ematch_foreach(ematch, e) {
 			acpar.match     = ematch->u.kernel.match;
 			acpar.matchinfo = ematch->data;
+			/* icmp_match tcp_mt udp_mt ... */
 			if (!acpar.match->match(skb, &acpar))
 				goto no_match;
 		}
 
 		ADD_COUNTER(e->counters, skb->len, 1);
 
+		/* 条件判断都满足了,取目标 */
 		t = ipt_get_target(e);
 		IP_NF_ASSERT(t->u.kernel.target);
 
@@ -433,6 +440,7 @@ ipt_do_table(struct sk_buff *skb,
 			trace_packet(skb, hook, in, out,
 				     table->name, private, e);
 #endif
+		/* 标准目标 -j ACCEPT DROP ... */
 		/* Standard target? */
 		if (!t->u.kernel.target->target) {
 			int v;
@@ -441,6 +449,7 @@ ipt_do_table(struct sk_buff *skb,
 			if (v < 0) {
 				/* Pop from stack? */
 				if (v != XT_RETURN) {
+					/* 裁决 */
 					verdict = (unsigned int)(-v) - 1;
 					break;
 				}
@@ -493,8 +502,10 @@ ipt_do_table(struct sk_buff *skb,
 #ifdef DEBUG_ALLOW_ALL
 	return NF_ACCEPT;
 #else
+	/* 丢弃一些非法报文 */
 	if (acpar.hotdrop)
 		return NF_DROP;
+	/* 返回裁决结果 NF_ACCEPT NF_DROP ... */
 	else return verdict;
 #endif
 }

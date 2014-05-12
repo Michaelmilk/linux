@@ -115,6 +115,7 @@ struct iphdr {
 	/* 唯一标识一个ip报文 */
 	__be16	id;
 	/* 分片偏移，均为8字节的倍数
+	   偏移值为((ntohs(ip->frag_off) & IP_OFFSET) * 8)
 	   除最后一个分片外，其他分片的长度都是8的倍数
 	   IP_CE IP_DF IP_MF IP_OFFSET
 	   第一个分片IP_MF置1,IP_OFFSET为0;最后一个分片IP_MF置0

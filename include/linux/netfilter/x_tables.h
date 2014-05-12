@@ -34,9 +34,13 @@ struct xt_action_param {
 		const void *matchinfo, *targinfo;
 	};
 	const struct net_device *in, *out;
+	/* 分片偏移 */
 	int fragoff;
+	/* IP头后数据偏移,tcphdr udphdr ... 的偏移,ip_hdrlen(skb) */
 	unsigned int thoff;
+	/* hook点,NF_INET_PRE_ROUTING NF_INET_LOCAL_IN ... */
 	unsigned int hooknum;
+	/* 协议族 NFPROTO_IPV4 */
 	u_int8_t family;
 	bool hotdrop;
 };
@@ -114,6 +118,7 @@ struct xt_match {
 	/* Arguments changed since 2.6.9, as this must now handle
 	   non-linear skb, using skb_header_pointer and
 	   skb_ip_make_writable. */
+	/* icmp_match tcp_mt udp_mt ... */
 	bool (*match)(const struct sk_buff *skb,
 		      struct xt_action_param *);
 
@@ -350,6 +355,9 @@ static inline void xt_write_recseq_end(unsigned int addend)
 	__this_cpu_add(xt_recseq.sequence, addend);
 }
 
+/*
+@return: 0 - 接口名称相同
+*/
 /*
  * This helper is performance critical and must be inlined
  */

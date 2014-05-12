@@ -85,6 +85,7 @@ static bool tcp_mt(const struct sk_buff *skb, struct xt_action_param *par)
 
 #define FWINVTCP(bool, invflg) ((bool) ^ !!(tcpinfo->invflags & (invflg)))
 
+	/* 取TCP头指针 */
 	th = skb_header_pointer(skb, par->thoff, sizeof(_tcph), &_tcph);
 	if (th == NULL) {
 		/* We've been asked to examine this packet, and we
@@ -94,18 +95,22 @@ static bool tcp_mt(const struct sk_buff *skb, struct xt_action_param *par)
 		return false;
 	}
 
+	/* 源端口 */
 	if (!port_match(tcpinfo->spts[0], tcpinfo->spts[1],
 			ntohs(th->source),
 			!!(tcpinfo->invflags & XT_TCP_INV_SRCPT)))
 		return false;
+	/* 目的端口 */
 	if (!port_match(tcpinfo->dpts[0], tcpinfo->dpts[1],
 			ntohs(th->dest),
 			!!(tcpinfo->invflags & XT_TCP_INV_DSTPT)))
 		return false;
+	/* TCP标志 */
 	if (!FWINVTCP((((unsigned char *)th)[13] & tcpinfo->flg_mask)
 		      == tcpinfo->flg_cmp,
 		      XT_TCP_INV_FLAGS))
 		return false;
+	/* TCP选项 */
 	if (tcpinfo->option) {
 		if (th->doff * 4 < sizeof(_tcph)) {
 			par->hotdrop = true;
@@ -117,6 +122,8 @@ static bool tcp_mt(const struct sk_buff *skb, struct xt_action_param *par)
 				     &par->hotdrop))
 			return false;
 	}
+
+	/* 条件都符合 */
 	return true;
 }
 
@@ -147,6 +154,7 @@ static bool udp_mt(const struct sk_buff *skb, struct xt_action_param *par)
 		return false;
 	}
 
+	/* UDP只判断源端口和目的端口 */
 	return port_match(udpinfo->spts[0], udpinfo->spts[1],
 			  ntohs(uh->source),
 			  !!(udpinfo->invflags & XT_UDP_INV_SRCPT))
