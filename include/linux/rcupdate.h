@@ -779,6 +779,16 @@ static inline void rcu_preempt_sleep_check(void)
  */
 #define rcu_dereference_sched(p) rcu_dereference_sched_check(p, 0)
 
+/*
+标记RCU读者临界区的开始
+
+禁止抢占
+不允许发生上下文切换
+
+defer: 推迟
+
+*/
+
 /**
  * rcu_read_lock() - mark the beginning of an RCU read-side critical section
  *
@@ -821,13 +831,6 @@ static inline void rcu_preempt_sleep_check(void)
  * block, but only when acquiring spinlocks that are subject to priority
  * inheritance.
  */
-/*
-标记rcu读者临界区的开始
-
-禁止抢占
-不允许发生上下文切换
-
-*/
 static inline void rcu_read_lock(void)
 {
 	__rcu_read_lock();
