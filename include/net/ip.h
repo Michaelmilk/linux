@@ -79,8 +79,11 @@ extern struct ip_ra_chain __rcu *ip_ra_chain;
 
 /* IP flags. */
 #define IP_CE		0x8000		/* Flag: "Congestion"		*/
+/* 只有当 DF=0 时才允许分片 */
 #define IP_DF		0x4000		/* Flag: "Don't Fragment"	*/
+/* MF=1 表示后面“还有分片”。MF=0 表示最后一个分片。 */
 #define IP_MF		0x2000		/* Flag: "More Fragments"	*/
+/* 偏移占13个bit,表示8字节的倍数 */
 #define IP_OFFSET	0x1FFF		/* "Fragment Offset" part	*/
 
 #define IP_FRAG_TIME	(30 * HZ)		/* fragment lifetime	*/

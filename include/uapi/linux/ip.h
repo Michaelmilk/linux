@@ -116,6 +116,7 @@ struct iphdr {
 	__be16	id;
 	/* 分片偏移，均为8字节的倍数
 	   除最后一个分片外，其他分片的长度都是8的倍数
+	   IP_CE IP_DF IP_MF IP_OFFSET
 	*/
 	__be16	frag_off;
 	/* time to live */
