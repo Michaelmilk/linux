@@ -699,9 +699,9 @@ struct sk_buff {
 	__u16			inner_transport_header;
 	__u16			inner_network_header;
 	__u16			inner_mac_header;
-	/* L4传输层头部指针，ip_local_deliver_finish() 里初始化 */
+	/* L4传输层头部指针，ip_rcv() 里初始化 */
 	__u16			transport_header;
-	/* L3网络层头部指针，netif_receive_skb() 里初始化 */
+	/* L3网络层头部指针，__netif_receive_skb_core() 里初始化 */
 	__u16			network_header;
 	/* L2链路层头部指针，eth_type_trans() 里初始化 */
 	__u16			mac_header;
