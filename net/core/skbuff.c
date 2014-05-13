@@ -177,6 +177,12 @@ out:
 	return skb;
 }
 
+/*
+@size : 申请的线性区长度
+@gfp_mask: 分配标志 GFP_ATOMIC等
+
+*/
+
 /**
  *	__alloc_skb	-	allocate a network buffer
  *	@size: size to allocate
@@ -194,10 +200,6 @@ out:
  *	Buffers may only be allocated from interrupts using a @gfp_mask of
  *	%GFP_ATOMIC.
  */
-/*
-@size	: 申请的线性区长度
-@fclone : fast clone标志
-*/
 struct sk_buff *__alloc_skb(unsigned int size, gfp_t gfp_mask,
 			    int flags, int node)
 {

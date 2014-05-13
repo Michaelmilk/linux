@@ -699,11 +699,15 @@ struct sk_buff {
 	__u16			inner_transport_header;
 	__u16			inner_network_header;
 	__u16			inner_mac_header;
-	/* L4传输层头部指针，ip_rcv() 里初始化 */
+	/* L4传输层头部偏移, 相对于skb->head指针, ip_rcv() 里初始化
+	   默认值为(typeof(skb->transport_header))~0U, __alloc_skb()
+	*/
 	__u16			transport_header;
-	/* L3网络层头部指针，__netif_receive_skb_core() 里初始化 */
+	/* L3网络层头部偏移, 相对于skb->head指针, __netif_receive_skb_core() 里初始化 */
 	__u16			network_header;
-	/* L2链路层头部指针，eth_type_trans() 里初始化 */
+	/* L2链路层头部偏移, 相对于skb->head指针，eth_type_trans() 里初始化
+	   默认值为(typeof(skb->mac_header))~0U, __alloc_skb()
+	*/
 	__u16			mac_header;
 	/* These elements must be at the end, see alloc_skb() for details.  */
 	/* head和end指针则在skb内存空间分配后就固定不变，指向的是线性区的开头和结尾
@@ -1203,6 +1207,14 @@ static inline int skb_shared(const struct sk_buff *skb)
 	return atomic_read(&skb->users) != 1;
 }
 
+/*
+如果@skb指向的sk_buff结构实例是共享的
+则进行clone，分配一个新的sk_buff实例
+然后将原@skb的引用计数减1，返回新的skb，clone失败的话会返回NULL
+
+否则返回原@skb
+*/
+
 /**
  *	skb_share_check - check if buffer is shared and if so clone it
  *	@skb: buffer to check
@@ -1216,13 +1228,6 @@ static inline int skb_shared(const struct sk_buff *skb)
  *
  *	NULL is returned on a memory allocation failure.
  */
-/*
-如果@skb指向的sk_buff结构实例是共享的
-则进行clone，分配一个新的sk_buff实例
-然后将原@skb的引用计数减1，返回新的skb，clone失败的话会返回NULL
-
-否则返回原@skb
-*/
 static inline struct sk_buff *skb_share_check(struct sk_buff *skb, gfp_t pri)
 {
 	might_sleep_if(pri & __GFP_WAIT);
@@ -2023,6 +2028,7 @@ static inline int skb_mac_header_was_set(const struct sk_buff *skb)
 	return skb->mac_header != (typeof(skb->mac_header))~0U;
 }
 
+/* 计算mac_header的偏移 */
 static inline void skb_reset_mac_header(struct sk_buff *skb)
 {
 	skb->mac_header = skb->data - skb->head;
@@ -2918,6 +2924,7 @@ static inline void skb_copy_from_linear_data_offset(const struct sk_buff *skb,
 	memcpy(to, skb->data + offset, len);
 }
 
+/* 复制数据到skb->data */
 static inline void skb_copy_to_linear_data(struct sk_buff *skb,
 					   const void *from,
 					   const unsigned int len)
@@ -2925,6 +2932,7 @@ static inline void skb_copy_to_linear_data(struct sk_buff *skb,
 	memcpy(skb->data, from, len);
 }
 
+/* 复制数据到skb->data的指定偏移@offset处 */
 static inline void skb_copy_to_linear_data_offset(struct sk_buff *skb,
 						  const int offset,
 						  const void *from,

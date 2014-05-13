@@ -150,15 +150,6 @@ int eth_rebuild_header(struct sk_buff *skb)
 }
 EXPORT_SYMBOL(eth_rebuild_header);
 
-/**
- * eth_type_trans - determine the packet's protocol ID.
- * @skb: received socket data
- * @dev: receiving network device
- *
- * The rule here is that we
- * assume 802.3 if the type field is short enough to be a length.
- * This is normal practice and works for any 'now in use' protocol.
- */
 /*
 返回协议类型，网络字节序
 
@@ -170,12 +161,22 @@ EXPORT_SYMBOL(eth_rebuild_header);
 4 移动skb->data指针到ip层，即指向了ip头部，network_header
   如果是带vlan的帧的话，skb->data这里指向的还不是ip头
 
-    ... |  ethhdr  | ...
-                   ^
-                   |
-          input skb->data
-
+     ... |  ethhdr  | ...
+         ^ 14 bytes ^
+         |          |
+  input skb->data   |
+            output skb->data
 */
+
+/**
+ * eth_type_trans - determine the packet's protocol ID.
+ * @skb: received socket data
+ * @dev: receiving network device
+ *
+ * The rule here is that we
+ * assume 802.3 if the type field is short enough to be a length.
+ * This is normal practice and works for any 'now in use' protocol.
+ */
 __be16 eth_type_trans(struct sk_buff *skb, struct net_device *dev)
 {
 	unsigned short _service_access_point;

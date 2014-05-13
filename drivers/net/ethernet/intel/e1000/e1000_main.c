@@ -4222,6 +4222,7 @@ next_desc:
 	return cleaned;
 }
 
+/* 对于小包,新申请一个skb交给协议栈处理,以改善性能 */
 /* this should improve performance for small packets with large amounts
  * of reassembly being done in the stack
  */
