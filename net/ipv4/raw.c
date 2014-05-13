@@ -433,6 +433,13 @@ static int raw_send_hdrinc(struct sock *sk, struct flowi4 *fl4,
 		icmp_out_count(net, ((struct icmphdr *)
 			skb_transport_header(skb))->type);
 
+	/* iptable_raw_hook() NF_IP_PRI_RAW
+	   selinux_ipv4_output() NF_IP_PRI_SELINUX_FIRST
+	   iptable_mangle_hook() NF_IP_PRI_MANGLE
+	   nf_nat_ipv4_local_fn() NF_IP_PRI_NAT_DST
+	   iptable_filter_hook() NF_IP_PRI_FILTER
+	   iptable_security_hook() NF_IP_PRI_SECURITY
+	*/
 	err = NF_HOOK(NFPROTO_IPV4, NF_INET_LOCAL_OUT, skb, NULL,
 		      rt->dst.dev, dst_output);
 	if (err > 0)
