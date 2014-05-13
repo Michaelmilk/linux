@@ -284,6 +284,16 @@ int ip_local_deliver(struct sk_buff *skb)
 			return 0;
 	}
 
+	/* iptable_mangle_hook() NF_IP_PRI_MANGLE
+	   iptable_security_hook() NF_IP_PRI_SECURITY
+	   iptable_filter_hook() NF_IP_PRI_FILTER
+	   ip_vs_reply4() NF_IP_PRI_NAT_SRC - 2
+	   ip_vs_remote_request4() NF_IP_PRI_NAT_SRC - 1
+	   nf_nat_ipv4_fn() NF_IP_PRI_NAT_SRC
+	   ipv4_helper() NF_IP_PRI_CONNTRACK_HELPER
+	   ipv4_synproxy_hook() NF_IP_PRI_CONNTRACK_CONFIRM - 1
+	   ipv4_confirm() NF_IP_PRI_CONNTRACK_CONFIRM
+	*/
 	return NF_HOOK(NFPROTO_IPV4, NF_INET_LOCAL_IN, skb, skb->dev, NULL,
 		       ip_local_deliver_finish);
 }
