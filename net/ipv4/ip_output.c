@@ -98,6 +98,13 @@ int __ip_local_out(struct sk_buff *skb)
 
 	iph->tot_len = htons(skb->len);
 	ip_send_check(iph);
+	/* iptable_raw_hook() NF_IP_PRI_RAW
+	   selinux_ipv4_output() NF_IP_PRI_SELINUX_FIRST
+	   iptable_mangle_hook() NF_IP_PRI_MANGLE
+	   nf_nat_ipv4_local_fn() NF_IP_PRI_NAT_DST
+	   iptable_filter_hook() NF_IP_PRI_FILTER
+	   iptable_security_hook() NF_IP_PRI_SECURITY
+	*/
 	return nf_hook(NFPROTO_IPV4, NF_INET_LOCAL_OUT, skb, NULL,
 		       skb_dst(skb)->dev, dst_output);
 }
