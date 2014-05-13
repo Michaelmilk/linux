@@ -199,6 +199,10 @@ int ip_forward(struct sk_buff *skb)
 	/* ÓÅÏÈ¼¶ */
 	skb->priority = rt_tos2priority(iph->tos);
 
+	/* iptable_mangle_hook() NF_IP_PRI_MANGLE
+	   iptable_filter_hook() NF_IP_PRI_FILTER
+	   iptable_security_hook() NF_IP_PRI_SECURITY
+	*/
 	return NF_HOOK(NFPROTO_IPV4, NF_INET_FORWARD, skb, skb->dev,
 		       rt->dst.dev, ip_forward_finish);
 
