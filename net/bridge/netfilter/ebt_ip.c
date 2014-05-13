@@ -24,6 +24,9 @@ struct tcpudphdr {
 	__be16 dst;
 };
 
+/*
+@return: true - 条件符合; false - 不符合
+*/
 static bool
 ebt_ip_mt(const struct sk_buff *skb, struct xt_action_param *par)
 {

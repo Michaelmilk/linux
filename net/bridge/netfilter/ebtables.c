@@ -101,9 +101,24 @@ ebt_do_match(struct ebt_entry_match *m, const struct sk_buff *skb,
 {
 	par->match     = m->u.match;
 	par->matchinfo = m->data;
+	/*
+	   ebt_limit_mt
+	   ebt_stp_mt
+	   ebt_arp_mt
+	   ebt_among_mt
+	   ebt_ip_mt
+	   ebt_pkttype_mt
+	   ebt_ip6_mt
+	   ebt_vlan_mt
+	   ebt_802_3_mt
+	   ebt_mark_mt
+	*/
 	return m->u.match->match(skb, par) ? EBT_MATCH : EBT_NOMATCH;
 }
 
+/*
+@return: 0 - 接口名称相同,或不比较接口名称,或通配; 1 - 接口名称不同,或@device为NULL
+*/
 static inline int
 ebt_dev_check(const char *entry, const struct net_device *device)
 {
@@ -123,6 +138,9 @@ ebt_dev_check(const char *entry, const struct net_device *device)
 
 #define FWINV2(bool, invflg) ((bool) ^ !!(e->invflags & invflg))
 /* process standard matches */
+/*
+@return: 0 - 条件匹配; 1 - 不匹配
+*/
 static inline int
 ebt_basic_match(const struct ebt_entry *e, const struct sk_buff *skb,
                 const struct net_device *in, const struct net_device *out)
@@ -137,6 +155,7 @@ ebt_basic_match(const struct ebt_entry *e, const struct sk_buff *skb,
 	else
 		ethproto = h->h_proto;
 
+	/* 协议 */
 	if (e->bitmask & EBT_802_3) {
 		if (FWINV2(ntohs(ethproto) >= ETH_P_802_3_MIN, EBT_IPROTO))
 			return 1;
@@ -144,6 +163,7 @@ ebt_basic_match(const struct ebt_entry *e, const struct sk_buff *skb,
 	   FWINV2(e->ethproto != ethproto, EBT_IPROTO))
 		return 1;
 
+	/* 接口 */
 	if (FWINV2(ebt_dev_check(e->in, in), EBT_IIN))
 		return 1;
 	if (FWINV2(ebt_dev_check(e->out, out), EBT_IOUT))
@@ -156,6 +176,7 @@ ebt_basic_match(const struct ebt_entry *e, const struct sk_buff *skb,
 	    FWINV2(ebt_dev_check(e->logical_out, p->br->dev), EBT_ILOGICALOUT))
 		return 1;
 
+	/* 源MAC */
 	if (e->bitmask & EBT_SOURCEMAC) {
 		verdict = 0;
 		for (i = 0; i < 6; i++)
@@ -164,6 +185,7 @@ ebt_basic_match(const struct ebt_entry *e, const struct sk_buff *skb,
 		if (FWINV2(verdict != 0, EBT_ISOURCE) )
 			return 1;
 	}
+	/* 目的MAC */
 	if (e->bitmask & EBT_DESTMAC) {
 		verdict = 0;
 		for (i = 0; i < 6; i++)
@@ -172,6 +194,8 @@ ebt_basic_match(const struct ebt_entry *e, const struct sk_buff *skb,
 		if (FWINV2(verdict != 0, EBT_IDEST) )
 			return 1;
 	}
+
+	/* 条件匹配 */
 	return 0;
 }
 
@@ -181,6 +205,13 @@ struct ebt_entry *ebt_next_entry(const struct ebt_entry *entry)
 	return (void *)entry + entry->next_offset;
 }
 
+/*
+ebt_broute
+ebt_in_hook
+ebt_out_hook
+ebt_nat_in
+ebt_nat_out
+*/
 /* Do some firewalling */
 unsigned int ebt_do_table (unsigned int hook, struct sk_buff *skb,
    const struct net_device *in, const struct net_device *out,
@@ -222,6 +253,7 @@ unsigned int ebt_do_table (unsigned int hook, struct sk_buff *skb,
 		if (ebt_basic_match(point, skb, in, out))
 			goto letscontinue;
 
+		/* 根据match函数匹配对应的ebt_entry */
 		if (EBT_MATCH_ITERATE(point, ebt_do_match, skb, &acpar) != 0)
 			goto letscontinue;
 		if (acpar.hotdrop) {
@@ -237,6 +269,7 @@ unsigned int ebt_do_table (unsigned int hook, struct sk_buff *skb,
 		   what to do with the packet */
 		EBT_WATCHER_ITERATE(point, ebt_do_watcher, skb, &acpar);
 
+		/* 取ebt_entry对应的target */
 		t = (struct ebt_entry_target *)
 		   (((char *)point) + point->target_offset);
 		/* standard target */
@@ -245,6 +278,10 @@ unsigned int ebt_do_table (unsigned int hook, struct sk_buff *skb,
 		else {
 			acpar.target   = t->u.target;
 			acpar.targinfo = t->data;
+			/* ebt_snat_tg ebt_nflog_tg ebt_arpreply_tg
+			   ebt_ulog_tg ebt_mark_tg ebt_log_tg
+			   ebt_dnat_tg ebt_redirect_tg 
+			*/
 			verdict = t->u.target->target(skb, &acpar);
 		}
 		if (verdict == EBT_ACCEPT) {
