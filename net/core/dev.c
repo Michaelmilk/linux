@@ -3763,7 +3763,9 @@ static int __netif_receive_skb_core(struct sk_buff *skb, bool pfmemalloc)
 
 	rcu_read_lock();
 
-	/* 记录最初接收该skb的接口的ifindex，该字段在内核随后的处理中不会改变 */
+	/* 记录最初接收该skb的接口的ifindex，该字段在内核随后的处理中不会改变
+	   如果是vlan报文的话,会goto another_round回到这里,skb_iif字段会变掉
+	*/
 
 another_round:
 	skb->skb_iif = skb->dev->ifindex;
