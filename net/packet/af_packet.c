@@ -2819,6 +2819,7 @@ static int packet_create(struct net *net, struct socket *sock, int protocol,
 
 	spin_lock_init(&po->bind_lock);
 	mutex_init(&po->pg_vec_lock);
+	/* ÉèÖÃÄÚÇ¶µÄstruct packet_type */
 	po->prot_hook.func = packet_rcv;
 
 	if (sock->type == SOCK_PACKET)
