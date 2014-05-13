@@ -74,6 +74,7 @@
 #include <trace/events/skb.h>
 #include <linux/highmem.h>
 
+/* skb_init()中初始化 */
 struct kmem_cache *skbuff_head_cache __read_mostly;
 static struct kmem_cache *skbuff_fclone_cache __read_mostly;
 
@@ -152,6 +153,9 @@ out:
  *
  */
 
+/*
+分配一个struct sk_buff结构体实例
+*/
 struct sk_buff *__alloc_skb_head(gfp_t gfp_mask, int node)
 {
 	struct sk_buff *skb;
@@ -178,7 +182,7 @@ out:
 }
 
 /*
-@size : 申请的线性区长度
+@size: 申请的线性区长度
 @gfp_mask: 分配标志 GFP_ATOMIC等
 
 */
