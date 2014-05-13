@@ -1016,6 +1016,12 @@ static unsigned int br_nf_post_routing(const struct nf_hook_ops *ops,
 	else
 		skb->protocol = htons(ETH_P_IPV6);
 
+	/* NFPROTO_IPV4
+
+	   iptable_mangle_hook() NF_IP_PRI_MANGLE
+	   nf_nat_ipv4_out() NF_IP_PRI_NAT_SRC
+	   selinux_ipv4_postroute() NF_IP_PRI_SELINUX_LAST
+	*/
 	NF_HOOK(pf, NF_INET_POST_ROUTING, skb, NULL, realoutdev,
 		br_nf_dev_queue_xmit);
 
