@@ -8,6 +8,9 @@
 /*
 由vlan接口接收此skb
 参数为2级指针，因为共享性检查中和插入vlanid时可能会分配新的skb
+
+根据vlanid查找所属的vlan虚接口
+将skb->dev改为vlan虚接口后,重进协议栈
 */
 bool vlan_do_receive(struct sk_buff **skbp)
 {

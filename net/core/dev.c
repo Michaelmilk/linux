@@ -3790,6 +3790,8 @@ another_round:
 		goto skip_taps;
 
 	/* 遍历ptype_all链表，注册协议类型为ETH_P_ALL
+	   比如int sock = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+	   packet_create()会调用dev_add_pack()创建
 	   一些抓包软件会使用此类型，应用层也可以用来实现对这个帧的处理
 	   参考文档(Documentation\networking\packet_mmap.txt) */
 
