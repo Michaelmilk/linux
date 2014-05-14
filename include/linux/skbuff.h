@@ -45,6 +45,20 @@ CHECKSUM_UNNECESSARY	：网卡已经计算并校验过整个包的校验，包括伪头，
 			  软件无需再次计算，一般用于 loopback device
 */
 
+/*
+A. 接收报文
+CHECKSUM_NONE: 设备未进行校验,skb->csum未设置
+CHECKSUM_UNNECESSARY: 硬件进行了部分校验,skb->csum未设置
+CHECKSUM_COMPLETE: 硬件进行了校验,skb->csum有值
+CHECKSUM_PARTIAL: 
+
+B. 发送报文
+CHECKSUM_NONE: 已校验,或无需校验
+CHECKSUM_PARTIAL: 在hard_start_xmit()中需计算校验,从skb->csum_start开始
+CHECKSUM_UNNECESSARY: 告诉硬件不要计算校验和
+
+*/
+
 /* A. Checksumming of received packets by device.
  *
  * CHECKSUM_NONE:
@@ -139,6 +153,7 @@ L1_CACHE_SHIFT => CONFIG_X86_L1_CACHE_SHIFT
 */
 #define SKB_DATA_ALIGN(X)	(((X) + (SMP_CACHE_BYTES - 1)) & \
 				 ~(SMP_CACHE_BYTES - 1))
+/* 线性数据区大小 */
 #define SKB_WITH_OVERHEAD(X)	\
 	((X) - SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
 #define SKB_MAX_ORDER(X, ORDER) \
@@ -719,8 +734,8 @@ struct sk_buff {
 				*data;
 	/* 分配到的内存空间大小。一个skb消耗的所有内存空间。
 	   linear_len = skb->end - skb->head
-	   truesize = sizeof(struct sk_buff) + linear_len + data_len
-	   并不包含struct skb_shared_info */
+	   truesize = sizeof(struct sk_buff) + linear_len + data_len + skb_shared_info
+	   见宏SKB_TRUESIZE */
 	unsigned int		truesize;
 	/* sk_buff 结构本身的引用计数 */
 	atomic_t		users;
@@ -1107,6 +1122,8 @@ static inline struct sk_buff *skb_queue_prev(const struct sk_buff_head *list,
 	return skb->prev;
 }
 
+/* skb使用计数+1，返回一个指向skb的指针，获取数据。 */
+
 /**
  *	skb_get - reference buffer
  *	@skb: buffer to reference
@@ -1114,7 +1131,6 @@ static inline struct sk_buff *skb_queue_prev(const struct sk_buff_head *list,
  *	Makes another reference to a socket buffer and returns a pointer
  *	to the buffer.
  */
-/* skb使用计数+1，返回一个指向skb的指针，获取数据。 */
 static inline struct sk_buff *skb_get(struct sk_buff *skb)
 {
 	atomic_inc(&skb->users);
@@ -1151,6 +1167,10 @@ static inline int skb_unclone(struct sk_buff *skb, gfp_t pri)
 	return 0;
 }
 
+/*
+判断@skb的线性数据区是否被多个skb引用
+*/
+
 /**
  *	skb_header_cloned - is the header a clone
  *	@skb: buffer to check
@@ -1158,9 +1178,6 @@ static inline int skb_unclone(struct sk_buff *skb, gfp_t pri)
  *	Returns true if modifying the header part of the buffer requires
  *	the data to be copied.
  */
-/*
-判断@skb的线性数据区是否被多个skb引用
-*/
 static inline int skb_header_cloned(const struct sk_buff *skb)
 {
 	int dataref;
@@ -1192,6 +1209,10 @@ static inline void skb_header_release(struct sk_buff *skb)
 	atomic_add(1 << SKB_DATAREF_SHIFT, &skb_shinfo(skb)->dataref);
 }
 
+/*
+判断@skb指向的sk_buff结构实例是否有多个引用
+*/
+
 /**
  *	skb_shared - is the buffer shared
  *	@skb: buffer to check
@@ -1199,9 +1220,6 @@ static inline void skb_header_release(struct sk_buff *skb)
  *	Returns true if more than one person has a reference to this
  *	buffer.
  */
-/*
-判断@skb指向的sk_buff结构实例是否有多个引用
-*/
 static inline int skb_shared(const struct sk_buff *skb)
 {
 	return atomic_read(&skb->users) != 1;
@@ -1471,6 +1489,13 @@ static inline void skb_queue_splice_tail(const struct sk_buff_head *list,
 	}
 }
 
+/*
+splice: 拼接
+
+把链表头@list下的skb节点转移到链表头@head下面去
+链表头@list会被重新初始化
+*/
+
 /**
  *	skb_queue_splice_tail_init - join two skb lists and reinitialise the emptied list
  *	@list: the new list to add
@@ -1479,12 +1504,6 @@ static inline void skb_queue_splice_tail(const struct sk_buff_head *list,
  *	Each of the lists is a queue.
  *	The list at @list is reinitialised
  */
-/*
-splice: 拼接
-
-把链表头@list下的skb节点转移到链表头@head下面去
-链表头@list会被重新初始化
-*/
 static inline void skb_queue_splice_tail_init(struct sk_buff_head *list,
 					      struct sk_buff_head *head)
 {
@@ -1852,19 +1871,24 @@ static inline int pskb_may_pull(struct sk_buff *skb, unsigned int len)
 	return __pskb_pull_tail(skb, len - skb_headlen(skb)) != NULL;
 }
 
+/*
+该函数返回@skb可以push的空间大小，即首部剩余空间大小。
+*/
+
 /**
  *	skb_headroom - bytes at buffer head
  *	@skb: buffer to check
  *
  *	Return the number of bytes of free space at the head of an &sk_buff.
  */
-/*
-该函数返回@skb可以push的空间大小，即首部剩余空间大小。
-*/
 static inline unsigned int skb_headroom(const struct sk_buff *skb)
 {
 	return skb->data - skb->head;
 }
+
+/*
+该函数返回在sk_buff中可用于put的空间大小（尾部剩余空间）。
+*/
 
 /**
  *	skb_tailroom - bytes at buffer end
@@ -1872,9 +1896,6 @@ static inline unsigned int skb_headroom(const struct sk_buff *skb)
  *
  *	Return the number of bytes of free space at the tail of an sk_buff
  */
-/*
-该函数返回在sk_buff中可用于put的空间大小（尾部剩余空间）。
-*/
 static inline int skb_tailroom(const struct sk_buff *skb)
 {
     /* 非线性化的skb则返回0
@@ -1897,6 +1918,13 @@ static inline int skb_availroom(const struct sk_buff *skb)
 	return skb->end - skb->tail - skb->reserved_tailroom;
 }
 
+/*
+该函数既增加skb->data又增加skb->tail，即在首部留出@len大小的空间。
+在填充缓冲区之前，可用该函数保留一部分首部空间。
+许多以太网卡在首部保留2字节空间，
+这样在14字节的以太网头的后面，IP头就能以16字节对齐了。
+*/
+
 /**
  *	skb_reserve - adjust headroom
  *	@skb: buffer to alter
@@ -1905,12 +1933,6 @@ static inline int skb_availroom(const struct sk_buff *skb)
  *	Increase the headroom of an empty &sk_buff by reducing the tail
  *	room. This is only allowed for an empty buffer.
  */
-/*
-该函数既增加skb->data又增加skb->tail，即在首部留出@len大小的空间。
-在填充缓冲区之前，可用该函数保留一部分首部空间。
-许多以太网卡在首部保留2字节空间，
-这样在14字节的以太网头的后面，IP头就能以16字节对齐了。
-*/
 static inline void skb_reserve(struct sk_buff *skb, int len)
 {
 	skb->data += len;
@@ -2196,6 +2218,11 @@ static inline int pskb_trim(struct sk_buff *skb, unsigned int len)
 	return (len < skb->len) ? __pskb_trim(skb, len) : 0;
 }
 
+/*
+就是 pskb_trim，由调用者保证 skb 没被 clone，
+则不会出现需要重新分配数据区导致 out-of-memory 而造成pskb_trim 返回错误
+*/
+
 /**
  *	pskb_trim_unique - remove end from a paged unique (not cloned) buffer
  *	@skb: buffer to alter
@@ -2205,10 +2232,6 @@ static inline int pskb_trim(struct sk_buff *skb, unsigned int len)
  *	the skb is not cloned so we should never get an error due to out-
  *	of-memory.
  */
-/*
-就是 pskb_trim，由调用者保证 skb 没被 clone，
-则不会出现需要重新分配数据区导致 out-of-memory 而造成pskb_trim 返回错误
-*/
 static inline void pskb_trim_unique(struct sk_buff *skb, unsigned int len)
 {
 	int err = pskb_trim(skb, len);
@@ -2216,6 +2239,7 @@ static inline void pskb_trim_unique(struct sk_buff *skb, unsigned int len)
 }
 
 /* 使该@skb脱离sock */
+
 /**
  *	skb_orphan - orphan a buffer
  *	@skb: buffer to orphan
@@ -2667,6 +2691,13 @@ static inline int __skb_linearize(struct sk_buff *skb)
 	return __pskb_pull_tail(skb, skb->data_len) ? 0 : -ENOMEM;
 }
 
+/*
+使@skb线性化
+
+返回0，说明skb是线性化的(原来就是线性化的，或已经成功线性化了)
+如果新的线性区申请失败，将返回-ENOMEM
+*/
+
 /**
  *	skb_linearize - convert paged skb to linear one
  *	@skb: buffer to linarize
@@ -2674,12 +2705,6 @@ static inline int __skb_linearize(struct sk_buff *skb)
  *	If there is no free memory -ENOMEM is returned, otherwise zero
  *	is returned and the old skb data released.
  */
-/*
-使@skb线性化
-
-返回0，说明skb是线性化的(原来就是线性化的，或已经成功线性化了)
-如果新的线性区申请失败，将返回-ENOMEM
-*/
 static inline int skb_linearize(struct sk_buff *skb)
 {
 	return skb_is_nonlinear(skb) ? __skb_linearize(skb) : 0;
@@ -2698,6 +2723,11 @@ static inline bool skb_has_shared_frag(const struct sk_buff *skb)
 	       skb_shinfo(skb)->tx_flags & SKBTX_SHARED_FRAG;
 }
 
+/*
+skb_linearize_cow() 除了把 skb 线性化，而且保证 skb 的数据区可写
+（被 clone 了就调用 pskb_expand_head()复制一份数据区）
+*/
+
 /**
  *	skb_linearize_cow - make sure skb is linear and writable
  *	@skb: buffer to process
@@ -2705,10 +2735,6 @@ static inline bool skb_has_shared_frag(const struct sk_buff *skb)
  *	If there is no free memory -ENOMEM is returned, otherwise zero
  *	is returned and the old skb data released.
  */
-/*
-skb_linearize_cow() 除了把 skb 线性化，而且保证 skb 的数据区可写
-（被 clone 了就调用 pskb_expand_head()复制一份数据区）
-*/
 static inline int skb_linearize_cow(struct sk_buff *skb)
 {
 	return skb_is_nonlinear(skb) || skb_cloned(skb) ?
