@@ -25,11 +25,12 @@
 typedef ssize_t (*io_fn_t)(struct file *, char __user *, size_t, loff_t *);
 typedef ssize_t (*iov_fn_t)(struct kiocb *, const struct iovec *,
 		unsigned long, loff_t);
+typedef ssize_t (*iter_fn_t)(struct kiocb *, struct iov_iter *);
 
 const struct file_operations generic_ro_fops = {
 	.llseek		= generic_file_llseek,
-	.read		= do_sync_read,
-	.aio_read	= generic_file_aio_read,
+	.read		= new_sync_read,
+	.read_iter	= generic_file_read_iter,
 	.mmap		= generic_file_readonly_mmap,
 	.splice_read	= generic_file_splice_read,
 };
@@ -397,12 +398,34 @@ ssize_t do_sync_read(struct file *filp, char __user *buf, size_t len, loff_t *pp
 
 EXPORT_SYMBOL(do_sync_read);
 
+ssize_t new_sync_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
+{
+	struct iovec iov = { .iov_base = buf, .iov_len = len };
+	struct kiocb kiocb;
+	struct iov_iter iter;
+	ssize_t ret;
+
+	init_sync_kiocb(&kiocb, filp);
+	kiocb.ki_pos = *ppos;
+	kiocb.ki_nbytes = len;
+	iov_iter_init(&iter, READ, &iov, 1, len);
+
+	ret = filp->f_op->read_iter(&kiocb, &iter);
+	if (-EIOCBQUEUED == ret)
+		ret = wait_on_sync_kiocb(&kiocb);
+	*ppos = kiocb.ki_pos;
+	return ret;
+}
+
+EXPORT_SYMBOL(new_sync_read);
+
 /*
 @file	: 文件指针
 @buf	: 保存数据的buf
 @count	: 需要读取的字符数
 @pos	: 保存读取完成后的位置偏移
 */
+
 ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 {
 	ssize_t ret;
@@ -413,7 +436,7 @@ ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 	/* 没有文件操作函数
 	   或者没有读函数
 	*/
-	if (!file->f_op->read && !file->f_op->aio_read)
+	if (!(file->f_mode & FMODE_CAN_READ))
 		return -EINVAL;
 	/* 确认@buf在用户进程虚拟地址空间 */
 	if (unlikely(!access_ok(VERIFY_WRITE, buf, count)))
@@ -426,8 +449,10 @@ ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 		/* 读数据 */
 		if (file->f_op->read)
 			ret = file->f_op->read(file, buf, count, pos);
-		else
+		else if (file->f_op->aio_read)
 			ret = do_sync_read(file, buf, count, pos);
+		else
+			ret = new_sync_read(file, buf, count, pos);
 		if (ret > 0) {
 			fsnotify_access(file);
 			add_rchar(current, ret);
@@ -460,13 +485,34 @@ ssize_t do_sync_write(struct file *filp, const char __user *buf, size_t len, lof
 
 EXPORT_SYMBOL(do_sync_write);
 
+ssize_t new_sync_write(struct file *filp, const char __user *buf, size_t len, loff_t *ppos)
+{
+	struct iovec iov = { .iov_base = (void __user *)buf, .iov_len = len };
+	struct kiocb kiocb;
+	struct iov_iter iter;
+	ssize_t ret;
+
+	init_sync_kiocb(&kiocb, filp);
+	kiocb.ki_pos = *ppos;
+	kiocb.ki_nbytes = len;
+	iov_iter_init(&iter, WRITE, &iov, 1, len);
+
+	ret = filp->f_op->write_iter(&kiocb, &iter);
+	if (-EIOCBQUEUED == ret)
+		ret = wait_on_sync_kiocb(&kiocb);
+	*ppos = kiocb.ki_pos;
+	return ret;
+}
+
+EXPORT_SYMBOL(new_sync_write);
+
 ssize_t __kernel_write(struct file *file, const char *buf, size_t count, loff_t *pos)
 {
 	mm_segment_t old_fs;
 	const char __user *p;
 	ssize_t ret;
 
-	if (!file->f_op->write && !file->f_op->aio_write)
+	if (!(file->f_mode & FMODE_CAN_WRITE))
 		return -EINVAL;
 
 	old_fs = get_fs();
@@ -476,8 +522,10 @@ ssize_t __kernel_write(struct file *file, const char *buf, size_t count, loff_t 
 		count =  MAX_RW_COUNT;
 	if (file->f_op->write)
 		ret = file->f_op->write(file, p, count, pos);
-	else
+	else if (file->f_op->aio_write)
 		ret = do_sync_write(file, p, count, pos);
+	else
+		ret = new_sync_write(file, p, count, pos);
 	set_fs(old_fs);
 	if (ret > 0) {
 		fsnotify_modify(file);
@@ -495,7 +543,7 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 	if (!(file->f_mode & FMODE_WRITE))
 		return -EBADF;
 	/* 没有写函数 */
-	if (!file->f_op->write && !file->f_op->aio_write)
+	if (!(file->f_mode & FMODE_CAN_WRITE))
 		return -EINVAL;
 	/* 检查用户传递的@buf地址空间是否有效 */
 	if (unlikely(!access_ok(VERIFY_READ, buf, count)))
@@ -508,8 +556,10 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 		file_start_write(file);
 		if (file->f_op->write)
 			ret = file->f_op->write(file, buf, count, pos);
-		else
+		else if (file->f_op->aio_write)
 			ret = do_sync_write(file, buf, count, pos);
+		else
+			ret = new_sync_write(file, buf, count, pos);
 		if (ret > 0) {
 			fsnotify_modify(file);
 			add_wchar(current, ret);
@@ -642,6 +692,25 @@ unsigned long iov_shorten(struct iovec *iov, unsigned long nr_segs, size_t to)
 	return seg;
 }
 EXPORT_SYMBOL(iov_shorten);
+
+static ssize_t do_iter_readv_writev(struct file *filp, int rw, const struct iovec *iov,
+		unsigned long nr_segs, size_t len, loff_t *ppos, iter_fn_t fn)
+{
+	struct kiocb kiocb;
+	struct iov_iter iter;
+	ssize_t ret;
+
+	init_sync_kiocb(&kiocb, filp);
+	kiocb.ki_pos = *ppos;
+	kiocb.ki_nbytes = len;
+
+	iov_iter_init(&iter, rw, iov, nr_segs, len);
+	ret = fn(&kiocb, &iter);
+	if (ret == -EIOCBQUEUED)
+		ret = wait_on_sync_kiocb(&kiocb);
+	*ppos = kiocb.ki_pos;
+	return ret;
+}
 
 static ssize_t do_sync_readv_writev(struct file *filp, const struct iovec *iov,
 		unsigned long nr_segs, size_t len, loff_t *ppos, iov_fn_t fn)
@@ -780,6 +849,7 @@ static ssize_t do_readv_writev(int type, struct file *file,
 	ssize_t ret;
 	io_fn_t fn;
 	iov_fn_t fnv;
+	iter_fn_t iter_fn;
 
 	ret = rw_copy_check_uvector(type, uvector, nr_segs,
 				    ARRAY_SIZE(iovstack), iovstack, &iov);
@@ -795,13 +865,18 @@ static ssize_t do_readv_writev(int type, struct file *file,
 	if (type == READ) {
 		fn = file->f_op->read;
 		fnv = file->f_op->aio_read;
+		iter_fn = file->f_op->read_iter;
 	} else {
 		fn = (io_fn_t)file->f_op->write;
 		fnv = file->f_op->aio_write;
+		iter_fn = file->f_op->write_iter;
 		file_start_write(file);
 	}
 
-	if (fnv)
+	if (iter_fn)
+		ret = do_iter_readv_writev(file, type, iov, nr_segs, tot_len,
+						pos, iter_fn);
+	else if (fnv)
 		ret = do_sync_readv_writev(file, iov, nr_segs, tot_len,
 						pos, fnv);
 	else
@@ -827,7 +902,7 @@ ssize_t vfs_readv(struct file *file, const struct iovec __user *vec,
 {
 	if (!(file->f_mode & FMODE_READ))
 		return -EBADF;
-	if (!file->f_op->aio_read && !file->f_op->read)
+	if (!(file->f_mode & FMODE_CAN_READ))
 		return -EINVAL;
 
 	return do_readv_writev(READ, file, vec, vlen, pos);
@@ -840,7 +915,7 @@ ssize_t vfs_writev(struct file *file, const struct iovec __user *vec,
 {
 	if (!(file->f_mode & FMODE_WRITE))
 		return -EBADF;
-	if (!file->f_op->aio_write && !file->f_op->write)
+	if (!(file->f_mode & FMODE_CAN_WRITE))
 		return -EINVAL;
 
 	return do_readv_writev(WRITE, file, vec, vlen, pos);
@@ -954,6 +1029,7 @@ static ssize_t compat_do_readv_writev(int type, struct file *file,
 	ssize_t ret;
 	io_fn_t fn;
 	iov_fn_t fnv;
+	iter_fn_t iter_fn;
 
 	ret = compat_rw_copy_check_uvector(type, uvector, nr_segs,
 					       UIO_FASTIOV, iovstack, &iov);
@@ -969,13 +1045,18 @@ static ssize_t compat_do_readv_writev(int type, struct file *file,
 	if (type == READ) {
 		fn = file->f_op->read;
 		fnv = file->f_op->aio_read;
+		iter_fn = file->f_op->read_iter;
 	} else {
 		fn = (io_fn_t)file->f_op->write;
 		fnv = file->f_op->aio_write;
+		iter_fn = file->f_op->write_iter;
 		file_start_write(file);
 	}
 
-	if (fnv)
+	if (iter_fn)
+		ret = do_iter_readv_writev(file, type, iov, nr_segs, tot_len,
+						pos, iter_fn);
+	else if (fnv)
 		ret = do_sync_readv_writev(file, iov, nr_segs, tot_len,
 						pos, fnv);
 	else
@@ -1006,7 +1087,7 @@ static size_t compat_readv(struct file *file,
 		goto out;
 
 	ret = -EINVAL;
-	if (!file->f_op->aio_read && !file->f_op->read)
+	if (!(file->f_mode & FMODE_CAN_READ))
 		goto out;
 
 	ret = compat_do_readv_writev(READ, file, vec, vlen, pos);
@@ -1083,7 +1164,7 @@ static size_t compat_writev(struct file *file,
 		goto out;
 
 	ret = -EINVAL;
-	if (!file->f_op->aio_write && !file->f_op->write)
+	if (!(file->f_mode & FMODE_CAN_WRITE))
 		goto out;
 
 	ret = compat_do_readv_writev(WRITE, file, vec, vlen, pos);

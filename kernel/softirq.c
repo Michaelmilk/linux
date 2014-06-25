@@ -229,7 +229,7 @@ static inline bool lockdep_softirq_start(void) { return false; }
 static inline void lockdep_softirq_end(bool in_hardirq) { }
 #endif
 
-asmlinkage void __do_softirq(void)
+asmlinkage __visible void __do_softirq(void)
 {
 	unsigned long end = jiffies + MAX_SOFTIRQ_TIME;
 	unsigned long old_flags = current->flags;
@@ -239,7 +239,6 @@ asmlinkage void __do_softirq(void)
 	bool in_hardirq;
 	__u32 pending;
 	int softirq_bit;
-	int cpu;
 
 	/*
 	 * Mask out PF_MEMALLOC s current task context is borrowed for the
@@ -256,8 +255,6 @@ asmlinkage void __do_softirq(void)
 	__local_bh_disable_ip(_RET_IP_, SOFTIRQ_OFFSET);
 	in_hardirq = lockdep_softirq_start();
 
-	/* 针对SMP得到当前正在处理的CPU */
-	cpu = smp_processor_id();
 restart:
 	/* Reset the pending bitmask before enabling irqs */
 	/* 每次循环在允许硬件ISR抢占前，首先重置软中断的标志位 */
@@ -307,18 +304,22 @@ restart:
 			       prev_count, preempt_count());
 			preempt_count_set(prev_count);
 		}
+
 		/* 继续找，直到把软中断向量表中所有pending的软中断处理完成 */
 		/* 从代码里可以看出按位操作，表明一次循环只处理32个软中断的回调函数 */
-	/* pending是32位无符号整数
-	   对应softirq_vec的32项，softirq_vec数组大小就是32 */
-		rcu_bh_qs(cpu);
+		/* pending是32位无符号整数
+		   对应softirq_vec的32项，softirq_vec数组大小就是32 */
+
 		h++;
 		pending >>= softirq_bit;
 	}
 
+	rcu_bh_qs(smp_processor_id());
+
 	/* 关中断执行以下代码。
 	   注意：这里又关中断了，下面的代码执行过程中硬件中断无法抢占。
 	*/
+
 	local_irq_disable();
 
 	/* 前面提到过，在刚才开硬件中断执行环境时只能被硬件中断抢占，
@@ -345,7 +346,7 @@ restart:
 	tsk_restore_flags(current, old_flags, PF_MEMALLOC);
 }
 
-asmlinkage void do_softirq(void)
+asmlinkage __visible void do_softirq(void)
 {
 	__u32 pending;
 	unsigned long flags;

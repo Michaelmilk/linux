@@ -203,13 +203,13 @@ static char *next_arg(char *args, char **param, char **val)
 @num	: @params的个数
 */
 
-int parse_args(const char *doing,
-	       char *args,
-	       const struct kernel_param *params,
-	       unsigned num,
-	       s16 min_level,
-	       s16 max_level,
-	       int (*unknown)(char *param, char *val, const char *doing))
+char *parse_args(const char *doing,
+		 char *args,
+		 const struct kernel_param *params,
+		 unsigned num,
+		 s16 min_level,
+		 s16 max_level,
+		 int (*unknown)(char *param, char *val, const char *doing))
 {
 	char *param, *val;
 
@@ -225,7 +225,12 @@ int parse_args(const char *doing,
 
 		/* 取下一项参数 */
 		args = next_arg(args, &param, &val);
+		/* Stop at -- */
+		if (!val && strcmp(param, "--") == 0)
+			return args;
+
 		/* 取当前中断关闭状态 */
+
 		irq_was_disabled = irqs_disabled();
 		/* 解析命令行参数 */
 		ret = parse_one(param, val, doing, params, num,
@@ -238,22 +243,22 @@ int parse_args(const char *doing,
 		switch (ret) {
 		case -ENOENT:
 			pr_err("%s: Unknown parameter `%s'\n", doing, param);
-			return ret;
+			return ERR_PTR(ret);
 		case -ENOSPC:
 			pr_err("%s: `%s' too large for parameter `%s'\n",
 			       doing, val ?: "", param);
-			return ret;
+			return ERR_PTR(ret);
 		case 0:
 			break;
 		default:
 			pr_err("%s: `%s' invalid for parameter `%s'\n",
 			       doing, val ?: "", param);
-			return ret;
+			return ERR_PTR(ret);
 		}
 	}
 
 	/* All parsed OK. */
-	return 0;
+	return NULL;
 }
 
 /* Lazy bastard, eh? */

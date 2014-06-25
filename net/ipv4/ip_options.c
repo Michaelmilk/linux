@@ -375,7 +375,7 @@ int ip_options_compile(struct net *net,
 			}
 			if (optptr[2] <= optlen) {
 				unsigned char *timeptr = NULL;
-				if (optptr[2]+3 > optptr[1]) {
+				if (optptr[2]+3 > optlen) {
 					pp_ptr = optptr + 2;
 					goto error;
 				}
@@ -387,7 +387,7 @@ int ip_options_compile(struct net *net,
 					optptr[2] += 4;
 					break;
 				case IPOPT_TS_TSANDADDR:
-					if (optptr[2]+7 > optptr[1]) {
+					if (optptr[2]+7 > optlen) {
 						pp_ptr = optptr + 2;
 						goto error;
 					}
@@ -401,7 +401,7 @@ int ip_options_compile(struct net *net,
 					optptr[2] += 8;
 					break;
 				case IPOPT_TS_PRESPEC:
-					if (optptr[2]+7 > optptr[1]) {
+					if (optptr[2]+7 > optlen) {
 						pp_ptr = optptr + 2;
 						goto error;
 					}

@@ -364,6 +364,8 @@ struct usb_bus {
 	/* 双向链表指针，USB内核用一个双向链表来维护系统中所有USB总线系统 */
 	struct list_head bus_list;	/* list of busses */
 
+	struct mutex usb_address0_mutex; /* unaddressed device mutex */
+
 	int bandwidth_allocated;	/* on this bus: how much of the time
 					 * reserved for periodic (intr/iso)
 					 * requests is used, on average?

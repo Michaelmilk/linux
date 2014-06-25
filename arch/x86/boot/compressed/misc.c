@@ -370,7 +370,8 @@ asmlinkage通过堆栈传递参数
 @input_len	: 压缩文件的长度
 @output		: 解压后文件的输出地址
 */
-asmlinkage void *decompress_kernel(void *rmode, memptr heap,
+
+asmlinkage __visible void *decompress_kernel(void *rmode, memptr heap,
 				  unsigned char *input_data,
 				  unsigned long input_len,
 				  unsigned char *output,

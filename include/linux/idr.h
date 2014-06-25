@@ -29,24 +29,29 @@
 
 struct idr_layer {
 	int			prefix;	/* the ID prefix of this idr_layer */
-	/* 与ary[]使用情况对应的位图 */
-	DECLARE_BITMAP(bitmap, IDR_SIZE); /* A zero bit means "space here" */
+	/* 从叶子算起的层数 */
+	int			layer;	/* distance from leaf */
 	struct idr_layer __rcu	*ary[1<<IDR_BITS];
 	/* ary[]使用中的个数 */
 	int			count;	/* When zero, we can release it */
-	/* 从叶子算起的层数 */
-	int			layer;	/* distance from leaf */
-	struct rcu_head		rcu_head;
+
+	/* 与ary[]使用情况对应的位图 */
+
+	union {
+		/* A zero bit means "space here" */
+		DECLARE_BITMAP(bitmap, IDR_SIZE);
+		struct rcu_head		rcu_head;
+	};
 };
 
 struct idr {
 	struct idr_layer __rcu	*hint;	/* the last layer allocated from */
 	struct idr_layer __rcu	*top;
-	struct idr_layer	*id_free;
 	int			layers;	/* only valid w/o concurrent changes */
-	int			id_free_cnt;
 	int			cur;	/* current pos for cyclic allocation */
 	spinlock_t		lock;
+	int			id_free_cnt;
+	struct idr_layer	*id_free;
 };
 
 /* 初始化idr结构@name */

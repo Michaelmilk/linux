@@ -29,7 +29,7 @@ first_device指针指向链表中的第一个设备的pernet_operations.list
 在第一次调用register_pernet_device()时将其指向第一个设备的pernet_operations.list
 */
 static struct list_head *first_device = &pernet_list;
-static DEFINE_MUTEX(net_mutex);
+DEFINE_MUTEX(net_mutex);
 
 /*
 struct net命名空间链表头
@@ -291,7 +291,7 @@ static void cleanup_net(struct work_struct *work)
 {
 	const struct pernet_operations *ops;
 	struct net *net, *tmp;
-	LIST_HEAD(net_kill_list);
+	struct list_head net_kill_list;
 	LIST_HEAD(net_exit_list);
 
 	/* Atomically snapshot the list of namespaces to cleanup */

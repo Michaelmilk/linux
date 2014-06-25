@@ -207,8 +207,8 @@ acpi_status
 acpi_get_table_header(char *signature,
 		      u32 instance, struct acpi_table_header *out_table_header)
 {
-       u32 i;
-       u32 j;
+	u32 i;
+	u32 j;
 	struct acpi_table_header *header;
 
 	/* Parameter validation */
@@ -234,7 +234,7 @@ acpi_get_table_header(char *signature,
 		if (!acpi_gbl_root_table_list.tables[i].pointer) {
 			if ((acpi_gbl_root_table_list.tables[i].flags &
 			     ACPI_TABLE_ORIGIN_MASK) ==
-			    ACPI_TABLE_ORIGIN_MAPPED) {
+			    ACPI_TABLE_ORIGIN_INTERNAL_PHYSICAL) {
 				header =
 				    acpi_os_map_memory(acpi_gbl_root_table_list.
 						       tables[i].address,
@@ -324,8 +324,8 @@ acpi_get_table_with_size(char *signature,
 	       u32 instance, struct acpi_table_header **out_table,
 	       acpi_size *tbl_size)
 {
-       u32 i;
-       u32 j;
+	u32 i;
+	u32 j;
 	acpi_status status;
 
 	/* Parameter validation */
@@ -349,7 +349,7 @@ acpi_get_table_with_size(char *signature,
 		}
 
 		status =
-		    acpi_tb_verify_table(&acpi_gbl_root_table_list.tables[i]);
+		    acpi_tb_validate_table(&acpi_gbl_root_table_list.tables[i]);
 		if (ACPI_SUCCESS(status)) {
 			*out_table = acpi_gbl_root_table_list.tables[i].pointer;
 			*tbl_size = acpi_gbl_root_table_list.tables[i].length;
@@ -394,7 +394,7 @@ ACPI_EXPORT_SYMBOL(acpi_get_table)
  *
  ******************************************************************************/
 acpi_status
-acpi_get_table_by_index(u32 table_index, struct acpi_table_header **table)
+acpi_get_table_by_index(u32 table_index, struct acpi_table_header ** table)
 {
 	acpi_status status;
 
@@ -420,8 +420,8 @@ acpi_get_table_by_index(u32 table_index, struct acpi_table_header **table)
 		/* Table is not mapped, map it */
 
 		status =
-		    acpi_tb_verify_table(&acpi_gbl_root_table_list.
-					 tables[table_index]);
+		    acpi_tb_validate_table(&acpi_gbl_root_table_list.
+					   tables[table_index]);
 		if (ACPI_FAILURE(status)) {
 			(void)acpi_ut_release_mutex(ACPI_MTX_TABLES);
 			return_ACPI_STATUS(status);
