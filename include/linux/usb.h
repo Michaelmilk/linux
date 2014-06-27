@@ -326,12 +326,13 @@ struct usb_devmap {
 };
 
 /*
- * Allocated per bus (tree of devices) we have:
- */
-/*
 保存了一个USB总线系统的信息，包括总线上设备地址信息，根集线器，带宽使用情况等。
 一个USB总线系统肯定有一个主机控制器和一个根集线器。
 */
+
+/*
+ * Allocated per bus (tree of devices) we have:
+ */
 struct usb_bus {
 	struct device *controller;	/* host/master side hardware */
 	/* 当前总线系统的序列号，Linux支持多总线系统并为它们编号 */
@@ -527,10 +528,12 @@ struct usb3_lpm_parameters {
  * Usbcore drivers should not set usbdev->state directly.  Instead use
  * usb_set_device_state().
  */
-/* 代表一个usb设备 */
 struct usb_device {
+/* 代表一个usb设备 */
+
 	/* 设备号，分配的设备地址，1-127 */
 	int		devnum;
+	/* usb树中的路径 */
 	char		devpath[16];
 	u32		route;
 	enum usb_device_state	state;
@@ -568,8 +571,11 @@ struct usb_device {
 
 	char **rawdescriptors;
 
+	/* 总线电流阈值 */
 	unsigned short bus_mA;
+	/* 端口数 */
 	u8 portnum;
+	/* 所处的hub层数 */
 	u8 level;
 
 	unsigned can_submit:1;
@@ -587,12 +593,15 @@ struct usb_device {
 	int string_langid;
 
 	/* static strings from the device */
+	/* 产品id */
 	char *product;
+	/* 厂商id */
 	char *manufacturer;
 	char *serial;
 
 	struct list_head filelist;
 
+	/* 最大子设备个数 */
 	int maxchild;
 
 	u32 quirks;
@@ -1097,13 +1106,17 @@ struct usb_driver {
 	int (*unlocked_ioctl) (struct usb_interface *intf, unsigned int code,
 			void *buf);
 
+	/* 挂起 */
 	int (*suspend) (struct usb_interface *intf, pm_message_t message);
+	/* 唤醒 */
 	int (*resume) (struct usb_interface *intf);
+	/* 复位唤醒 */
 	int (*reset_resume)(struct usb_interface *intf);
 
 	int (*pre_reset)(struct usb_interface *intf);
 	int (*post_reset)(struct usb_interface *intf);
 
+	/* 支持的设备id列表 */
 	const struct usb_device_id *id_table;
 
 	struct usb_dynids dynids;
@@ -1450,12 +1463,14 @@ typedef void (*usb_complete_t)(struct urb *);
  * when the urb is owned by the hcd, that is, since the call to
  * usb_submit_urb() till the entry into the completion routine.
  */
+struct urb {
+
 /*
 （USB Request Block）urb，是进行USB通信的数据结构。
 Linux的USB子系统只使用这么一种数据结构来进行USB通信，
 urb包含了建立任何 USB传输所需的所有信息，并贯穿于USB协议栈对数据处理的整个过程。
 */
-struct urb {
+
 	/* private: usb core and host controller only fields in the urb */
 	struct kref kref;		/* reference count of the URB */
 	/* 与主机控制器相关数据，对USB内核层是透明 */

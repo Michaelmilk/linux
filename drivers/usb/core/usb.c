@@ -1018,10 +1018,14 @@ static struct dentry *usb_debug_devices;
 
 static int usb_debugfs_init(void)
 {
+	/* 创建"$(debugfs)/usb"
+	   /sys/kernel/debug/usb
+	*/
 	usb_debug_root = debugfs_create_dir("usb", NULL);
 	if (!usb_debug_root)
 		return -ENOENT;
 
+	/* /sys/kernel/debug/usb/devices */
 	usb_debug_devices = debugfs_create_file("devices", 0444,
 						usb_debug_root, NULL,
 						&usbfs_devices_fops);
@@ -1051,29 +1055,37 @@ static int __init usb_init(void)
 		return 0;
 	}
 
+	/* usb debugfs初始化 */
 	retval = usb_debugfs_init();
 	if (retval)
 		goto out;
 
 	usb_acpi_register();
+	/* usb总线注册 */
 	retval = bus_register(&usb_bus_type);
 	if (retval)
 		goto bus_register_failed;
+	/* usb总线通知链注册 */
 	retval = bus_register_notifier(&usb_bus_type, &usb_bus_nb);
 	if (retval)
 		goto bus_notifier_failed;
+	/* 注册usb主控器字符设备 */
 	retval = usb_major_init();
 	if (retval)
 		goto major_init_failed;
+	/* 注册usbfs驱动 */
 	retval = usb_register(&usbfs_driver);
 	if (retval)
 		goto driver_register_failed;
+	/* usb设备字符设备初始化 */
 	retval = usb_devio_init();
 	if (retval)
 		goto usb_devio_init_failed;
+	/* usb hub初始化 */
 	retval = usb_hub_init();
 	if (retval)
 		goto hub_init_failed;
+	/* usb注册通用设备驱动 */
 	retval = usb_register_device_driver(&usb_generic_driver, THIS_MODULE);
 	if (!retval)
 		goto out;

@@ -76,6 +76,20 @@ struct giveback_urb_bh {
 	struct usb_host_endpoint *completing_ep;
 };
 
+/* hcd: 主机控制器设备
+USB具有简单、标准的连接方式、支持热插拔等诸多优点，因此已成为流行的接口技术。
+USB是典型的主／从结构的总线标准，即只有USB主机才能与USB设备连接。
+USB总线与计算机系统的接口部分是主机控制器，它可以被看作一个硬件、固件和软件的综合体。
+主机控制器实现主机与设备之间的电气和协议层匹配，主要包括：
+串并转换、帧起始、数据处理、协议使用、传输错误处理、远程唤醒、根Hub、主机系统接口等功能。
+USB设备之间通过USB Hub连接，主机控制器和USB设备之间一般通过根Hub相连。
+通常主机控制器提供与根Hub相关的状态查询和控制单元。
+当有设备插入时，在枚举过程中，主机控制器驱动通过查询和控制单元应答设备伪装成一个Hub，
+所以通常称此Hub为虚拟根Hub。
+
+USB主机控制器的驱动(HCD)在USB子系统中的功能主要有：
+硬件初始化，为上层(USBD)提供调用接口，管理根Hub，完成数据传输以及中断处理。
+*/
 struct usb_hcd {
 
 	/*
@@ -91,6 +105,7 @@ struct usb_hcd {
 						 */
 	char			irq_descr[24];	/* driver + bus # */
 
+	/* 轮询定时器 */
 	struct timer_list	rh_timer;	/* drives root-hub polling */
 	struct urb		*status_urb;	/* the current status urb */
 #ifdef CONFIG_PM_RUNTIME

@@ -100,10 +100,15 @@ struct ieee1394_device_id {
  */
 struct usb_device_id {
 	/* which fields to match against? */
+	/* 匹配标志
+	   例如USB_DEVICE_ID_MATCH_DEVICE,只需要匹配厂商id和产品id即可
+	*/
 	__u16		match_flags;
 
 	/* Used for product specific matches; range is inclusive */
+	/* 厂商id */
 	__u16		idVendor;
+	/* 产品id */
 	__u16		idProduct;
 	__u16		bcdDevice_lo;
 	__u16		bcdDevice_hi;
