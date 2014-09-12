@@ -162,7 +162,6 @@ extern u64 timecounter_cyc2time(struct timecounter *tc,
  * @archdata:		arch-specific data
  * @suspend:		suspend function for the clocksource, if necessary
  * @resume:		resume function for the clocksource, if necessary
- * @cycle_last:		most recent cycle counter value seen by ::read()
  * @owner:		module reference, must be set by clocksource in modules
  */
 /*
@@ -178,7 +177,6 @@ struct clocksource {
 	   例如clocksource_hpet的read_hpet()函数
 	*/
 	cycle_t (*read)(struct clocksource *cs);
-	cycle_t cycle_last;
 	/* 计数器掩码 */
 	cycle_t mask;
 	/* 参考clocks_calc_mult_shift()注释 */

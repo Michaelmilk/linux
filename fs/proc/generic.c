@@ -27,7 +27,7 @@
 
 #include "internal.h"
 
-DEFINE_SPINLOCK(proc_subdir_lock);
+static DEFINE_SPINLOCK(proc_subdir_lock);
 
 static int proc_match(unsigned int len, const char *name, struct proc_dir_entry *de)
 {
@@ -351,35 +351,33 @@ static struct proc_dir_entry *__proc_create(struct proc_dir_entry **parent,
 					  nlink_t nlink)
 {
 	struct proc_dir_entry *ent = NULL;
-	const char *fn = name;
-	unsigned int len;
-
-	/* make sure name is valid */
-	if (!name || !strlen(name))
-		goto out;
+	const char *fn;
+	struct qstr qstr;
 
 	if (xlate_proc_name(name, parent, &fn) != 0)
 		goto out;
-
-	/* At this point there must not be any '/' characters beyond *fn */
-	/* 在xlate_proc_name()中对于fn进行了处理
-	   此时fn为不带'/'的文件名称 */
-	if (strchr(fn, '/'))
-		goto out;
-
-	len = strlen(fn);
+	qstr.name = fn;
+	qstr.len = strlen(fn);
+	if (qstr.len == 0 || qstr.len >= 256) {
+		WARN(1, "name len %u\n", qstr.len);
+		return NULL;
+	}
+	if (*parent == &proc_root && name_to_int(&qstr) != ~0U) {
+		WARN(1, "create '/proc/%s' by hand\n", qstr.name);
+		return NULL;
+	}
 
 	/* 结构struct proc_dir_entry最后一个字段name[]为0长度数组占位符
 	   这里分配空间的时候额外加上文件名称的长度，1为字符串结束符'\0' */
 
-	ent = kzalloc(sizeof(struct proc_dir_entry) + len + 1, GFP_KERNEL);
+	ent = kzalloc(sizeof(struct proc_dir_entry) + qstr.len + 1, GFP_KERNEL);
 	if (!ent)
 		goto out;
 
 	/* 复制文件名称 */
-	memcpy(ent->name, fn, len + 1);
+	memcpy(ent->name, fn, qstr.len + 1);
 	/* 记录文件名称长度 */
-	ent->namelen = len;
+	ent->namelen = qstr.len;
 	ent->mode = mode;
 	ent->nlink = nlink;
 	/* 引用计数置为1 */

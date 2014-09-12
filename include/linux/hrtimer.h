@@ -171,6 +171,7 @@ enum  hrtimer_base_type {
  * struct hrtimer_cpu_base - the per cpu clock bases
  * @lock:		lock protecting the base and associated clock bases
  *			and timers
+ * @cpu:		cpu number
  * @active_bases:	Bitfield to mark bases with active timers
  * @clock_was_set:	Indicates that clock was set from irq context.
  * @expires_next:	absolute time of the next event which was scheduled
@@ -188,6 +189,7 @@ enum  hrtimer_base_type {
 */
 struct hrtimer_cpu_base {
 	raw_spinlock_t			lock;
+	unsigned int			cpu;
 	/* 标志位来标记字段clock_base[]数组中哪个下标内有定时器 */
 	unsigned int			active_bases;
 	unsigned int			clock_was_set;
@@ -336,14 +338,6 @@ static inline void timerfd_clock_was_set(void) { }
 #endif
 extern void hrtimers_resume(void);
 
-extern ktime_t ktime_get(void);
-extern ktime_t ktime_get_real(void);
-extern ktime_t ktime_get_boottime(void);
-extern ktime_t ktime_get_monotonic_offset(void);
-extern ktime_t ktime_get_clocktai(void);
-extern ktime_t ktime_get_update_offsets(ktime_t *offs_real, ktime_t *offs_boot,
-					 ktime_t *offs_tai);
-
 DECLARE_PER_CPU(struct tick_device, tick_cpu_device);
 
 
@@ -463,12 +457,6 @@ extern void hrtimer_run_pending(void);
 
 /* Bootup initialization: */
 extern void __init hrtimers_init(void);
-
-#if BITS_PER_LONG < 64
-extern u64 ktime_divns(const ktime_t kt, s64 div);
-#else /* BITS_PER_LONG < 64 */
-# define ktime_divns(kt, div)		(u64)((kt).tv64 / (div))
-#endif
 
 /* Show pending timers: */
 extern void sysrq_timer_list_show(void);

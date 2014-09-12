@@ -206,7 +206,7 @@ static __net_init int loopback_net_init(struct net *net)
 
 	err = -ENOMEM;
 	/* 创建回环接口 */
-	dev = alloc_netdev(0, "lo", loopback_setup);
+	dev = alloc_netdev(0, "lo", NET_NAME_UNKNOWN, loopback_setup);
 	if (!dev)
 		goto out;
 

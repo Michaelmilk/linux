@@ -121,11 +121,7 @@ EXPORT_SYMBOL(get_options);
  *	@retptr: (output) Optional pointer to next char after parse completes
  *
  *	Parses a string into a number.  The number stored at @ptr is
- *	potentially suffixed with %K (for kilobytes, or 1024 bytes),
- *	%M (for megabytes, or 1048576 bytes), or %G (for gigabytes, or
- *	1073741824).  If the number is suffixed with K, M, or G, then
- *	the return value is the number multiplied by one kilobyte, one
- *	megabyte, or one gigabyte, respectively.
+ *	potentially suffixed with K, M, G, T, P, E.
  */
 
 /*
@@ -141,7 +137,18 @@ unsigned long long memparse(const char *ptr, char **retptr)
 
 	/* 根据单位进行移位 */
 	switch (*endptr) {
+
 	/* 这里的case都是没有break的 */
+
+	case 'E':
+	case 'e':
+		ret <<= 10;
+	case 'P':
+	case 'p':
+		ret <<= 10;
+	case 'T':
+	case 't':
+		ret <<= 10;
 	case 'G':
 	case 'g':
 		ret <<= 10;

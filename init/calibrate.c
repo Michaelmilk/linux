@@ -270,6 +270,15 @@ unsigned long __attribute__((weak)) calibrate_delay_is_known(void)
 º∆À„loops_per_jiffy
 */
 
+/*
+ * Indicate the cpu delay calibration is done. This can be used by
+ * architectures to stop accepting delay timer registrations after this point.
+ */
+
+void __attribute__((weak)) calibration_delay_done(void)
+{
+}
+
 void calibrate_delay(void)
 {
 	unsigned long lpj;
@@ -316,4 +325,6 @@ void calibrate_delay(void)
 
 	loops_per_jiffy = lpj;
 	printed = true;
+
+	calibration_delay_done();
 }
