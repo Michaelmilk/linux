@@ -1025,24 +1025,20 @@ F:	arch/arm/mach-pxa/colibri-pxa270-income.c
 
 ARM/INTEL IOP32X ARM ARCHITECTURE
 M:	Lennert Buytenhek <kernel@wantstofly.org>
-M:	Dan Williams <dan.j.williams@intel.com>
 L:	linux-arm-kernel@lists.infradead.org (moderated for non-subscribers)
 S:	Maintained
 
 ARM/INTEL IOP33X ARM ARCHITECTURE
-M:	Dan Williams <dan.j.williams@intel.com>
 L:	linux-arm-kernel@lists.infradead.org (moderated for non-subscribers)
-S:	Maintained
+S:	Orphan
 
 ARM/INTEL IOP13XX ARM ARCHITECTURE
 M:	Lennert Buytenhek <kernel@wantstofly.org>
-M:	Dan Williams <dan.j.williams@intel.com>
 L:	linux-arm-kernel@lists.infradead.org (moderated for non-subscribers)
 S:	Maintained
 
 ARM/INTEL IQ81342EX MACHINE SUPPORT
 M:	Lennert Buytenhek <kernel@wantstofly.org>
-M:	Dan Williams <dan.j.williams@intel.com>
 L:	linux-arm-kernel@lists.infradead.org (moderated for non-subscribers)
 S:	Maintained
 
@@ -1067,7 +1063,6 @@ F:	drivers/pcmcia/pxa2xx_stargate2.c
 
 ARM/INTEL XSC3 (MANZANO) ARM CORE
 M:	Lennert Buytenhek <kernel@wantstofly.org>
-M:	Dan Williams <dan.j.williams@intel.com>
 L:	linux-arm-kernel@lists.infradead.org (moderated for non-subscribers)
 S:	Maintained
 
@@ -1562,9 +1557,9 @@ F:	drivers/platform/x86/asus*.c
 F:	drivers/platform/x86/eeepc*.c
 
 ASYNCHRONOUS TRANSFERS/TRANSFORMS (IOAT) API
-M:	Dan Williams <dan.j.williams@intel.com>
+R:	Dan Williams <dan.j.williams@intel.com>
 W:	http://sourceforge.net/projects/xscaleiop
-S:	Maintained
+S:	Odd fixes
 F:	Documentation/crypto/async-tx-api.txt
 F:	crypto/async_tx/
 F:	drivers/dma/
@@ -1664,6 +1659,12 @@ ATMEL AT91 / AT32 SERIAL DRIVER
 M:	Nicolas Ferre <nicolas.ferre@atmel.com>
 S:	Supported
 F:	drivers/tty/serial/atmel_serial.c
+
+ATMEL Audio ALSA driver
+M:	Bo Shen <voice.shen@atmel.com>
+L:	alsa-devel@alsa-project.org (moderated for non-subscribers)
+S:	Supported
+F:	sound/soc/atmel
 
 ATMEL DMA DRIVER
 M:	Nicolas Ferre <nicolas.ferre@atmel.com>
@@ -2098,7 +2099,7 @@ S:	Supported
 F:	drivers/scsi/bfa/
 
 BROCADE BNA 10 GIGABIT ETHERNET DRIVER
-M:	Rasesh Mody <rmody@brocade.com>
+M:	Rasesh Mody <rasesh.mody@qlogic.com>
 L:	netdev@vger.kernel.org
 S:	Supported
 F:	drivers/net/ethernet/brocade/bna/
@@ -2989,13 +2990,11 @@ T:	git git://git.linaro.org/people/sumitsemwal/linux-dma-buf.git
 
 DMA GENERIC OFFLOAD ENGINE SUBSYSTEM
 M:	Vinod Koul <vinod.koul@intel.com>
-M:	Dan Williams <dan.j.williams@intel.com>
 L:	dmaengine@vger.kernel.org
 Q:	https://patchwork.kernel.org/project/linux-dmaengine/list/
-S:	Supported
+S:	Maintained
 F:	drivers/dma/
 F:	include/linux/dma*
-T:	git git://git.kernel.org/pub/scm/linux/kernel/git/djbw/async_tx.git
 T:	git git://git.infradead.org/users/vkoul/slave-dma.git (slave-dma)
 
 DME1737 HARDWARE MONITOR DRIVER
@@ -3012,14 +3011,14 @@ S:	Supported
 F:	drivers/acpi/dock.c
 
 DOCUMENTATION
-M:	Randy Dunlap <rdunlap@infradead.org>
+M:	Jiri Kosina <jkosina@suse.cz>
 L:	linux-doc@vger.kernel.org
-T:	quilt http://www.infradead.org/~rdunlap/Doc/patches/
 S:	Maintained
 F:	Documentation/
 X:	Documentation/ABI/
 X:	Documentation/devicetree/
 X:	Documentation/[a-z][a-z]_[A-Z][A-Z]/
+T:	git git://git.kernel.org/pub/scm/linux/kernel/git/jikos/doc.git
 
 DOUBLETALK DRIVER
 M:	"James R. Van Zandt" <jrv@vanzandt.mv.com>
@@ -4477,7 +4476,6 @@ M:	Mika Westerberg <mika.westerberg@linux.intel.com>
 L:	linux-i2c@vger.kernel.org
 L:	linux-acpi@vger.kernel.org
 S:	Maintained
-F:	drivers/i2c/i2c-acpi.c
 
 I2C-TAOS-EVM DRIVER
 M:	Jean Delvare <jdelvare@suse.de>
@@ -4750,8 +4748,8 @@ F:	arch/x86/kernel/cpu/microcode/core*
 F:	arch/x86/kernel/cpu/microcode/intel*
 
 INTEL I/OAT DMA DRIVER
-M:	Dan Williams <dan.j.williams@intel.com>
 M:	Dave Jiang <dave.jiang@intel.com>
+R:	Dan Williams <dan.j.williams@intel.com>
 L:	dmaengine@vger.kernel.org
 Q:	https://patchwork.kernel.org/project/linux-dmaengine/list/
 S:	Supported
@@ -4766,7 +4764,7 @@ F:	drivers/iommu/intel-iommu.c
 F:	include/linux/intel-iommu.h
 
 INTEL IOP-ADMA DMA DRIVER
-M:	Dan Williams <dan.j.williams@intel.com>
+R:	Dan Williams <dan.j.williams@intel.com>
 S:	Odd fixes
 F:	drivers/dma/iop-adma.c
 
@@ -5480,7 +5478,7 @@ F:	drivers/macintosh/
 LINUX FOR POWERPC EMBEDDED MPC5XXX
 M:	Anatolij Gustschin <agust@denx.de>
 L:	linuxppc-dev@lists.ozlabs.org
-T:	git git://git.denx.de/linux-2.6-agust.git
+T:	git git://git.denx.de/linux-denx-agust.git
 S:	Maintained
 F:	arch/powerpc/platforms/512x/
 F:	arch/powerpc/platforms/52xx/
@@ -6424,7 +6422,8 @@ F:	Documentation/scsi/NinjaSCSI.txt
 F:	drivers/scsi/nsp32*
 
 NTB DRIVER
-M:	Jon Mason <jon.mason@intel.com>
+M:	Jon Mason <jdmason@kudzu.us>
+M:	Dave Jiang <dave.jiang@intel.com>
 S:	Supported
 W:	https://github.com/jonmason/ntb/wiki
 T:	git git://github.com/jonmason/ntb.git
@@ -6875,7 +6874,7 @@ F:	arch/x86/kernel/quirks.c
 
 PCI DRIVER FOR IMX6
 M:	Richard Zhu <r65037@freescale.com>
-M:	Shawn Guo <shawn.guo@freescale.com>
+M:	Lucas Stach <l.stach@pengutronix.de>
 L:	linux-pci@vger.kernel.org
 L:	linux-arm-kernel@lists.infradead.org (moderated for non-subscribers)
 S:	Maintained
@@ -7597,6 +7596,7 @@ F:	fs/reiserfs/
 
 REGISTER MAP ABSTRACTION
 M:	Mark Brown <broonie@kernel.org>
+L:	linux-kernel@vger.kernel.org
 T:	git git://git.kernel.org/pub/scm/linux/kernel/git/broonie/regmap.git
 S:	Supported
 F:	drivers/base/regmap/
@@ -7912,6 +7912,19 @@ M:	Vipul Pandya <vipul.pandya@samsung.com>
 S:	Supported
 L:	netdev@vger.kernel.org
 F:	drivers/net/ethernet/samsung/sxgbe/
+
+SAMSUNG USB2 PHY DRIVER
+M:	Kamil Debski <k.debski@samsung.com>
+L:	linux-kernel@vger.kernel.org
+S:	Supported
+F:	Documentation/devicetree/bindings/phy/samsung-phy.txt
+F:	Documentation/phy/samsung-usb2.txt
+F:	drivers/phy/phy-exynos4210-usb2.c
+F:	drivers/phy/phy-exynos4x12-usb2.c
+F:	drivers/phy/phy-exynos5250-usb2.c
+F:	drivers/phy/phy-s5pv210-usb2.c
+F:	drivers/phy/phy-samsung-usb2.c
+F:	drivers/phy/phy-samsung-usb2.h
 
 SERIAL DRIVERS
 M:	Greg Kroah-Hartman <gregkh@linuxfoundation.org>
@@ -9883,6 +9896,7 @@ F:	drivers/scsi/vmw_pvscsi.h
 VOLTAGE AND CURRENT REGULATOR FRAMEWORK
 M:	Liam Girdwood <lgirdwood@gmail.com>
 M:	Mark Brown <broonie@kernel.org>
+L:	linux-kernel@vger.kernel.org
 W:	http://opensource.wolfsonmicro.com/node/15
 W:	http://www.slimlogic.co.uk/?p=48
 T:	git git://git.kernel.org/pub/scm/linux/kernel/git/broonie/regulator.git

@@ -1,7 +1,7 @@
 VERSION = 3
 PATCHLEVEL = 17
 SUBLEVEL = 0
-EXTRAVERSION = -rc4
+EXTRAVERSION =
 NAME = Shuffling Zombie Juror
 
         # 内核版本信息
@@ -1210,6 +1210,21 @@ mod_strip_cmd = true
 endif # INSTALL_MOD_STRIP
 export mod_strip_cmd
 
+# CONFIG_MODULE_COMPRESS, if defined, will cause module to be compressed
+# after they are installed in agreement with CONFIG_MODULE_COMPRESS_GZIP
+# or CONFIG_MODULE_COMPRESS_XZ.
+
+mod_compress_cmd = true
+ifdef CONFIG_MODULE_COMPRESS
+  ifdef CONFIG_MODULE_COMPRESS_GZIP
+    mod_compress_cmd = gzip -n
+  endif # CONFIG_MODULE_COMPRESS_GZIP
+  ifdef CONFIG_MODULE_COMPRESS_XZ
+    mod_compress_cmd = xz
+  endif # CONFIG_MODULE_COMPRESS_XZ
+endif # CONFIG_MODULE_COMPRESS
+export mod_compress_cmd
+
 # Select initial ramdisk compression format, default is gzip(1).
 # This shall be used by the dracut(8) tool while creating an initramfs image.
 #
@@ -1913,6 +1928,8 @@ endif
 	$(cmd_crmodverdir)
 	$(Q)$(MAKE) KBUILD_MODULES=$(if $(CONFIG_MODULES),1) \
 	$(build)=$(build-dir)
+# Make sure the latest headers are built for Documentation
+Documentation/: headers_install
 %/: prepare scripts FORCE
 	$(cmd_crmodverdir)
 	$(Q)$(MAKE) KBUILD_MODULES=$(if $(CONFIG_MODULES),1) \

@@ -1508,9 +1508,6 @@ struct sock *sk_clone_lock(const struct sock *sk, const gfp_t priority)
 		atomic_set(&newsk->sk_omem_alloc, 0);
 		skb_queue_head_init(&newsk->sk_receive_queue);
 		skb_queue_head_init(&newsk->sk_write_queue);
-#ifdef CONFIG_NET_DMA
-		skb_queue_head_init(&newsk->sk_async_wait_queue);
-#endif
 
 		spin_lock_init(&newsk->sk_dst_lock);
 		rwlock_init(&newsk->sk_callback_lock);
@@ -1888,7 +1885,7 @@ EXPORT_SYMBOL(sock_alloc_send_skb);
  * skb_page_frag_refill - check that a page_frag contains enough room
  * @sz: minimum size of the fragment we want to get
  * @pfrag: pointer to page_frag
- * @prio: priority for memory allocation
+ * @gfp: priority for memory allocation
  *
  * Note: While this allocator tries to use high order pages, there is
  * no guarantee that allocations succeed. Therefore, @sz MUST be
@@ -2334,9 +2331,6 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 	skb_queue_head_init(&sk->sk_receive_queue);
 	skb_queue_head_init(&sk->sk_write_queue);
 	skb_queue_head_init(&sk->sk_error_queue);
-#ifdef CONFIG_NET_DMA
-	skb_queue_head_init(&sk->sk_async_wait_queue);
-#endif
 
 	sk->sk_send_head	=	NULL;
 

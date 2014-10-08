@@ -42,7 +42,7 @@ struct kernel_param;
  * NOARG - the parameter allows for no argument (foo instead of foo=1)
  */
 enum {
-	KERNEL_PARAM_FL_NOARG = (1 << 0)
+	KERNEL_PARAM_OPS_FL_NOARG = (1 << 0)
 };
 
 struct kernel_param_ops {
@@ -58,6 +58,15 @@ struct kernel_param_ops {
 	void (*free)(void *arg);
 };
 
+/*
+ * Flags available for kernel_param
+ *
+ * UNSAFE - the parameter is dangerous and setting it will taint the kernel
+ */
+enum {
+	KERNEL_PARAM_FL_UNSAFE = (1 << 0)
+};
+
 struct kernel_param {
 	/* 参数名称 */
 	const char *name;
@@ -65,7 +74,8 @@ struct kernel_param {
 	const struct kernel_param_ops *ops;
 	/* 参数出现在/sys目录下的文件权限 */
 	u16 perm;
-	s16 level;
+	s8 level;
+	u8 flags;
 	/* 传递给操作函数指针的参数 */
 	union {
 		void *arg;
@@ -119,6 +129,12 @@ struct kparam_array
 	module_param_named(name, name, type, perm)
 
 /**
+ * module_param_unsafe - same as module_param but taints kernel
+ */
+#define module_param_unsafe(name, type, perm)			\
+	module_param_named_unsafe(name, name, type, perm)
+
+/**
  * module_param_named - typesafe helper for a renamed module/cmdline parameter
  * @name: a valid C identifier which is the parameter name.
  * @value: the actual lvalue to alter.
@@ -141,6 +157,14 @@ param_check_##type()展开后为一个静态内联函数，没有调用处，会被编译器优化掉
 	__MODULE_PARM_TYPE(name, #type)
 
 /**
+ * module_param_named_unsafe - same as module_param_named but taints kernel
+ */
+#define module_param_named_unsafe(name, value, type, perm)		\
+	param_check_##type(name, &(value));				\
+	module_param_cb_unsafe(name, &param_ops_##type, &value, perm);	\
+	__MODULE_PARM_TYPE(name, #type)
+
+/**
  * module_param_cb - general callback for a module/cmdline parameter
  * @name: a valid C identifier which is the parameter name.
  * @ops: the set & get operations for this parameter.
@@ -149,7 +173,11 @@ param_check_##type()展开后为一个静态内联函数，没有调用处，会被编译器优化掉
  * The ops can have NULL set or get functions.
  */
 #define module_param_cb(name, ops, arg, perm)				      \
-	__module_param_call(MODULE_PARAM_PREFIX, name, ops, arg, perm, -1)
+	__module_param_call(MODULE_PARAM_PREFIX, name, ops, arg, perm, -1, 0)
+
+#define module_param_cb_unsafe(name, ops, arg, perm)			      \
+	__module_param_call(MODULE_PARAM_PREFIX, name, ops, arg, perm, -1,    \
+			    KERNEL_PARAM_FL_UNSAFE)
 
 /**
  * <level>_param_cb - general callback for a module/cmdline parameter
@@ -161,7 +189,7 @@ param_check_##type()展开后为一个静态内联函数，没有调用处，会被编译器优化掉
  * The ops can have NULL set or get functions.
  */
 #define __level_param_cb(name, ops, arg, perm, level)			\
-	__module_param_call(MODULE_PARAM_PREFIX, name, ops, arg, perm, level)
+	__module_param_call(MODULE_PARAM_PREFIX, name, ops, arg, perm, level, 0)
 
 #define core_param_cb(name, ops, arg, perm)		\
 	__level_param_cb(name, ops, arg, perm, 1)
@@ -207,22 +235,22 @@ param_check_##type()展开后为一个静态内联函数，没有调用处，会被编译器优化掉
 并初始化其中的字段
 */
 
-#define __module_param_call(prefix, name, ops, arg, perm, level)	\
+#define __module_param_call(prefix, name, ops, arg, perm, level, flags)	\
 	/* Default value instead of permissions? */			\
 	static const char __param_str_##name[] = prefix #name; \
 	static struct kernel_param __moduleparam_const __param_##name	\
 	__used								\
     __attribute__ ((unused,__section__ ("__param"),aligned(sizeof(void *)))) \
 	= { __param_str_##name, ops, VERIFY_OCTAL_PERMISSIONS(perm),	\
-	    level, { arg } }
+	    level, flags, { arg } }
 
 /* Obsolete - use module_param_cb() */
 #define module_param_call(name, set, get, arg, perm)			\
 	static struct kernel_param_ops __param_ops_##name =		\
-		{ 0, (void *)set, (void *)get };			\
+		{ .flags = 0, (void *)set, (void *)get };		\
 	__module_param_call(MODULE_PARAM_PREFIX,			\
 			    name, &__param_ops_##name, arg,		\
-			    (perm) + sizeof(__check_old_set_param(set))*0, -1)
+			    (perm) + sizeof(__check_old_set_param(set))*0, -1, 0)
 
 /* We don't get oldget: it's often a new-style param_get_uint, etc. */
 static inline int
@@ -302,7 +330,7 @@ static inline void __kernel_param_unlock(void)
  */
 #define core_param(name, var, type, perm)				\
 	param_check_##type(name, &(var));				\
-	__module_param_call("", name, &param_ops_##type, &var, perm, -1)
+	__module_param_call("", name, &param_ops_##type, &var, perm, -1, 0)
 #endif /* !MODULE */
 
 /**
@@ -320,7 +348,7 @@ static inline void __kernel_param_unlock(void)
 		= { len, string };					\
 	__module_param_call(MODULE_PARAM_PREFIX, name,			\
 			    &param_ops_string,				\
-			    .str = &__param_string_##name, perm, -1);	\
+			    .str = &__param_string_##name, perm, -1, 0);\
 	__MODULE_PARM_TYPE(name, "string")
 
 /**
@@ -477,7 +505,7 @@ extern int param_set_bint(const char *val, const struct kernel_param *kp);
 	__module_param_call(MODULE_PARAM_PREFIX, name,			\
 			    &param_array_ops,				\
 			    .arr = &__param_arr_##name,			\
-			    perm, -1);					\
+			    perm, -1, 0);				\
 	__MODULE_PARM_TYPE(name, "array of " #type)
 
 extern struct kernel_param_ops param_array_ops;
