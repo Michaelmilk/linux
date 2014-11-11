@@ -1208,8 +1208,11 @@ void __init tsc_init(void)
 	x86_init.timers.tsc_pre_init();
 
 	/* 检查是否支持tsc */
-	if (!cpu_has_tsc)
+
+	if (!cpu_has_tsc) {
+		setup_clear_cpu_cap(X86_FEATURE_TSC_DEADLINE_TIMER);
 		return;
+	}
 
 	/* 调用native_calibrate_tsc() */
 	tsc_khz = x86_platform.calibrate_tsc();
@@ -1219,6 +1222,7 @@ void __init tsc_init(void)
 
 	if (!tsc_khz) {
 		mark_tsc_unstable("could not calculate TSC khz");
+		setup_clear_cpu_cap(X86_FEATURE_TSC_DEADLINE_TIMER);
 		return;
 	}
 

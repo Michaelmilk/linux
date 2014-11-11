@@ -149,20 +149,29 @@ struct e1000_adapter;
 /* wrapper around a pointer to a socket buffer,
  * so a DMA handle can be stored along with the buffer
  */
-struct e1000_buffer {
+
 	/* 环中分配的skb */
+
+struct e1000_tx_buffer {
 	struct sk_buff *skb;
 	/* 内存中映射的skb->data字段指向的物理地址*/
 	dma_addr_t dma;
-	struct page *page;
 	unsigned long time_stamp;
 	/* 数据长度 */
 	u16 length;
 	/* 所有的缓冲块用next_to_match连接成一个环 */
 	u16 next_to_watch;
-	unsigned int segs;
+	bool mapped_as_page;
+	unsigned short segs;
 	unsigned int bytecount;
-	u16 mapped_as_page;
+};
+
+struct e1000_rx_buffer {
+	union {
+		struct page *page; /* jumbo: alloc_page */
+		u8 *data; /* else, netdev_alloc_frag */
+	} rxbuf;
+	dma_addr_t dma;
 };
 
 /*
@@ -187,8 +196,10 @@ struct e1000_tx_ring {
 	/* next descriptor to check for DD status bit */
 	unsigned int next_to_clean;
 	/* array of buffer information structs */
+
 	/* 256个(struct e1000_buffer)空间的虚拟地址 */
-	struct e1000_buffer *buffer_info;
+
+	struct e1000_tx_buffer *buffer_info;
 
 	/* TX Descriptor Head */
 	u16 tdh;
@@ -216,8 +227,10 @@ struct e1000_rx_ring {
 	/* 环中接收数据的位置 */
 	unsigned int next_to_clean;
 	/* array of buffer information structs */
+
 	/* 256个(struct e1000_buffer)空间的虚拟地址 */
-	struct e1000_buffer *buffer_info;
+
+	struct e1000_rx_buffer *buffer_info;
 	struct sk_buff *rx_skb_top;
 
 	/* cpu for rx queue */

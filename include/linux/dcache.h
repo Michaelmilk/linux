@@ -11,7 +11,6 @@
 #include <linux/rcupdate.h>
 #include <linux/lockref.h>
 
-struct nameidata;
 struct path;
 struct vfsmount;
 
@@ -278,11 +277,6 @@ struct dentry_operations中含有对应函数的标志位
 
 extern seqlock_t rename_lock;
 
-static inline int dname_external(const struct dentry *dentry)
-{
-	return dentry->d_name.name != dentry->d_iname;
-}
-
 /*
  * These are the low-level FS interfaces to the dcache..
  */
@@ -306,7 +300,7 @@ extern struct dentry * d_obtain_root(struct inode *);
 extern void shrink_dcache_sb(struct super_block *);
 extern void shrink_dcache_parent(struct dentry *);
 extern void shrink_dcache_for_umount(struct super_block *);
-extern int d_invalidate(struct dentry *);
+extern void d_invalidate(struct dentry *);
 
 /* only used at mount-time */
 extern struct dentry * d_make_root(struct inode *);
@@ -321,7 +315,6 @@ extern void d_prune_aliases(struct inode *);
 
 /* test whether we have any submounts in a subdir tree */
 extern int have_submounts(struct dentry *);
-extern int check_submounts_and_drop(struct dentry *);
 
 /*
  * This adds the entry to the hash queues.

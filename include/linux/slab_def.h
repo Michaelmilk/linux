@@ -9,6 +9,8 @@
 
 /* 管理一个高速缓存 */
 struct kmem_cache {
+	struct array_cache __percpu *cpu_cache;
+
 /* 1) Cache tunables. Protected by slab_mutex */
 
 	/* 要转移本地高速缓存的大批对象的数量 */
@@ -84,26 +86,9 @@ struct kmem_cache {
 	struct memcg_cache_params *memcg_params;
 #endif
 
-/* 6) per-cpu/per-node data, touched during every alloc/free */
-	/*
-	 * We put array[] at the end of kmem_cache, because we want to size
-	 * this array to nr_cpu_ids slots instead of NR_CPUS
-	 * (see kmem_cache_init())
-	 * We still use [NR_CPUS] and not [1] or [0] because cache_cache
-	 * is statically defined, so we reserve the max number of cpus.
-	 *
-	 * We also need to guarantee that the list is able to accomodate a
-	 * pointer for each node since "nodelists" uses the remainder of
-	 * available pointers.
-	 */
-
 	/* 高速缓存中的slab链表 */
 
-	struct kmem_cache_node **node;
-	struct array_cache *array[NR_CPUS + MAX_NUMNODES];
-	/*
-	 * Do not add fields after array[]
-	 */
+	struct kmem_cache_node *node[MAX_NUMNODES];
 };
 
 #endif	/* _LINUX_SLAB_DEF_H */

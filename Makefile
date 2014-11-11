@@ -1,8 +1,8 @@
 VERSION = 3
-PATCHLEVEL = 17
+PATCHLEVEL = 18
 SUBLEVEL = 0
-EXTRAVERSION =
-NAME = Shuffling Zombie Juror
+EXTRAVERSION = -rc4
+NAME = Diseased Newt
 
         # 内核版本信息
 
@@ -12,11 +12,9 @@ NAME = Shuffling Zombie Juror
 # Comments in this file are targeted only to the developer, do not
 # expect to learn how to build the kernel reading this file.
 
-# Do not:
-# o  use make's built-in rules and variables
-#    (this increases performance and avoids hard-to-debug behaviour);
-# o  print "Entering directory ...";
-MAKEFLAGS += -rR --no-print-directory
+# Do not use make's built-in rules and variables
+# (this increases performance and avoids hard-to-debug behaviour);
+MAKEFLAGS += -rR
 
         # 在执行make时的命令行选项参数通过变量 “MAKEFLAGS”传递给子目录下的make程序。
         #
@@ -145,49 +143,6 @@ endif
 
 export quiet Q KBUILD_VERBOSE
 
-# Call a source code checker (by default, "sparse") as part of the
-# C compilation.
-#
-# Use 'make C=1' to enable checking of only re-compiled files.
-# Use 'make C=2' to enable checking of *all* source files, regardless
-# of whether they are re-compiled or not.
-#
-# See the file "Documentation/sparse.txt" for more details, including
-# where to get the "sparse" utility.
-
-        # 命令行中定义了C变量，则使用其值
-        # make C=1只检查需要重编译的文件
-        # make C=2检查所有的源文件
-
-ifeq ("$(origin C)", "command line")
-  KBUILD_CHECKSRC = $(C)
-endif
-ifndef KBUILD_CHECKSRC
-  KBUILD_CHECKSRC = 0
-endif
-
-# Use make M=dir to specify directory of external module to build
-# Old syntax make ... SUBDIRS=$PWD is still supported
-# Setting the environment variable KBUILD_EXTMOD take precedence
-
-        # 使用?=为KBUILD_EXTMOD，如果KBUILD_EXTMOD已经有值的话，则不会将SUBDIRS的值赋给它
-        # 所以环境变量KBUILD_EXTMOD中设置的值优先级高于SUBDIRS
-
-ifdef SUBDIRS
-  KBUILD_EXTMOD ?= $(SUBDIRS)
-endif
-
-        # KBUILD_EXTMOD用于编译外部模块时指定模块代码所在目录绝对路径
-        # 参考Documentation/kbuild/kbuild.txt
-        # 编译外部模块时，其命令中通常使用M=`pwd`取模块代码所在目录
-
-ifeq ("$(origin M)", "command line")
-  KBUILD_EXTMOD := $(M)
-endif
-
-        # 内核编译的时候可以将输出文件保存到另外的目录
-        # 使用O=或者设置环境变量KBUILD_OUTPUT
-
 # kbuild supports saving output files in a separate directory.
 # To locate output files in a separate directory two syntaxes are supported.
 # In both cases the working directory must be the root of the kernel src.
@@ -304,31 +259,9 @@ PHONY += $(MAKECMDGOALS) sub-make
 $(filter-out _all sub-make $(CURDIR)/Makefile, $(MAKECMDGOALS)) _all: sub-make
 	@:
 
-        # 反过滤函数——filter-out，语法是：$(filter-out <pattern...>;,<text>;)
-        # 函数filter-out的功能是：去掉$(MAKECMDGOALS）中符合规则_all的所有字符串后，剩下的作为返回值。
-        # 函数filter-out调用与伪目标_all在同一行。
-        # 伪目标_all下面的以tab开头的三行是命令，因为每行最后都有"\"，
-        # 所以这三行命令应该是写在同一行的，即后面的命令要受到处于它之前的那些命令的影响。
-        #
-        # 执行命令KBUILD_SRC=$(CURDIR)的结果是把变量CURDIR的值赋给变量KBUILD_SRC。
-        # CURDIR这个变量是Makefile提供的,代表了make当前的工作路径。
-
-        # 使用FORCE，该规则下的命令总是会被执行。
-        # make使用-C进入KBUILD_OUTPUT目录，-f依然使用当前这个顶层的Makefile。
-        # 命令行中KBUILD_SRC为当前目录，即再使用该Makefile时，不会再进入这个块了。
-        # 目标为除了_all和sub-make以外的目标。
-
-# Fake the "Entering directory" message once, so that IDEs/editors are
-# able to understand relative filenames.
-       echodir := @echo
- quiet_echodir := @echo
-silent_echodir := @:
 sub-make: FORCE
-	$($(quiet)echodir) "make[1]: Entering directory \`$(KBUILD_OUTPUT)'"
-	$(if $(KBUILD_VERBOSE:1=),@)$(MAKE) -C $(KBUILD_OUTPUT) \
-	KBUILD_SRC=$(CURDIR) \
-	KBUILD_EXTMOD="$(KBUILD_EXTMOD)" -f $(CURDIR)/Makefile \
-	$(filter-out _all sub-make,$(MAKECMDGOALS))
+	$(Q)$(MAKE) -C $(KBUILD_OUTPUT) KBUILD_SRC=$(CURDIR) \
+	-f $(CURDIR)/Makefile $(filter-out _all sub-make,$(MAKECMDGOALS))
 
         # $(if $(KBUILD_VERBOSE:1=),@) 含义是:
         # $(VAR:x=y) 这种语法相当于 $(patsubst x,y,$(VAR)) 的缩写。
@@ -367,6 +300,39 @@ endif # ifeq ($(KBUILD_SRC),)
 
 # We process the rest of the Makefile if this is the final invocation of make
 ifeq ($(skip-makefile),)
+
+# Do not print "Entering directory ...",
+# but we want to display it when entering to the output directory
+# so that IDEs/editors are able to understand relative filenames.
+MAKEFLAGS += --no-print-directory
+
+# Call a source code checker (by default, "sparse") as part of the
+# C compilation.
+#
+# Use 'make C=1' to enable checking of only re-compiled files.
+# Use 'make C=2' to enable checking of *all* source files, regardless
+# of whether they are re-compiled or not.
+#
+# See the file "Documentation/sparse.txt" for more details, including
+# where to get the "sparse" utility.
+
+ifeq ("$(origin C)", "command line")
+  KBUILD_CHECKSRC = $(C)
+endif
+ifndef KBUILD_CHECKSRC
+  KBUILD_CHECKSRC = 0
+endif
+
+# Use make M=dir to specify directory of external module to build
+# Old syntax make ... SUBDIRS=$PWD is still supported
+# Setting the environment variable KBUILD_EXTMOD take precedence
+ifdef SUBDIRS
+  KBUILD_EXTMOD ?= $(SUBDIRS)
+endif
+
+ifeq ("$(origin M)", "command line")
+  KBUILD_EXTMOD := $(M)
+endif
 
 # If building an external module we do not care about the all: rule
 # but instead _all depend on modules
@@ -1261,9 +1227,7 @@ vmlinux-dirs	:= $(patsubst %/,%,$(filter %/, $(init-y) $(init-m) \
 		     $(net-y) $(net-m) $(libs-y) $(libs-m)))
 
 vmlinux-alldirs	:= $(sort $(vmlinux-dirs) $(patsubst %/,%,$(filter %/, \
-		     $(init-n) $(init-) \
-		     $(core-n) $(core-) $(drivers-n) $(drivers-) \
-		     $(net-n)  $(net-)  $(libs-n)    $(libs-))))
+		     $(init-) $(core-) $(drivers-) $(net-) $(libs-))))
 
 init-y		:= $(patsubst %/, %/built-in.o, $(init-y))
 core-y		:= $(patsubst %/, %/built-in.o, $(core-y))
@@ -1972,7 +1936,7 @@ endif
 # Shorthand for $(Q)$(MAKE) -f scripts/Makefile.clean obj=dir
 # Usage:
 # $(Q)$(MAKE) $(clean)=dir
-clean := -f $(if $(KBUILD_SRC),$(srctree)/)scripts/Makefile.clean obj
+clean := -f $(srctree)/scripts/Makefile.clean obj
 
 endif	# skip-makefile
 

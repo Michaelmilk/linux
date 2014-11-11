@@ -563,13 +563,13 @@ asmlinkage __visible void __init start_kernel(void)
 	   头文件include/asm-generic/vmlinux.lds.h中定义的内核参数起始地址 */
 	char *command_line;
 	char *after_dashes;
-	extern const struct kernel_param __start___param[], __stop___param[];
 
 	/*
 	 * Need to run as early as possible, to initialize the
 	 * lockdep hash:
 	 */
 	lockdep_init();
+	set_task_stack_end_magic(&init_task);
 	smp_setup_processor_id();
 	debug_objects_early_init();
 
@@ -663,7 +663,6 @@ asmlinkage __visible void __init start_kernel(void)
 	idr_init_cache();
 	/* 初始化RCU(Read-Copy Update)机制 */
 	rcu_init();
-	tick_nohz_init();
 	context_tracking_init();
 	/* 基数树初始化 */
 	radix_tree_init();
@@ -672,6 +671,7 @@ asmlinkage __visible void __init start_kernel(void)
 	/* init_IRQ()函数则完成其余中断向量(外部中断)的初始化 */
 	init_IRQ();
 	tick_init();
+	rcu_init_nohz();
 	/* 初始化定时器相关的数据结构 */
 	init_timers();
 	/* 对高精度时钟进行初始化 */
@@ -948,7 +948,6 @@ static char *initcall_level_names[] __initdata = {
 
 static void __init do_initcall_level(int level)
 {
-	extern const struct kernel_param __start___param[], __stop___param[];
 	initcall_t *fn;
 
 	strcpy(initcall_command_line, saved_command_line);

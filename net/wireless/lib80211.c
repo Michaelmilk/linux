@@ -49,47 +49,11 @@ static void lib80211_crypt_deinit_entries(struct lib80211_crypt_info *info,
 static void lib80211_crypt_quiescing(struct lib80211_crypt_info *info);
 static void lib80211_crypt_deinit_handler(unsigned long data);
 
-const char *print_ssid(char *buf, const char *ssid, u8 ssid_len)
-{
-	/* 源 */
-	const char *s = ssid;
-	/* 目的 */
-	char *d = buf;
-
-	/* 不能超过ssid的最大长度 */
-	ssid_len = min_t(u8, ssid_len, IEEE80211_MAX_SSID_LEN);
-	while (ssid_len--) {
-		/* 可打印字符 */
-		if (isprint(*s)) {
-			*d++ = *s++;
-			continue;
-		}
-
-		/* 反斜杠 */
-		*d++ = '\\';
-		if (*s == '\0')
-			*d++ = '0';
-		else if (*s == '\n')
-			*d++ = 'n';
-		else if (*s == '\r')
-			*d++ = 'r';
-		else if (*s == '\t')
-			*d++ = 't';
-		else if (*s == '\\')
-			*d++ = '\\';
-		else
-			d += snprintf(d, 3, "%03o", *s);
-		s++;
-	}
-	/* 字符串结束符 */
-	*d = '\0';
-	return buf;
-}
-EXPORT_SYMBOL(print_ssid);
 
 /*
 初始化一个@info结构实例
 */
+
 int lib80211_crypt_info_init(struct lib80211_crypt_info *info, char *name,
 				spinlock_t *lock)
 {

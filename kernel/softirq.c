@@ -314,12 +314,10 @@ restart:
 		pending >>= softirq_bit;
 	}
 
-	rcu_bh_qs(smp_processor_id());
-
+	rcu_bh_qs();
 	/* 关中断执行以下代码。
 	   注意：这里又关中断了，下面的代码执行过程中硬件中断无法抢占。
 	*/
-
 	local_irq_disable();
 
 	/* 前面提到过，在刚才开硬件中断执行环境时只能被硬件中断抢占，
@@ -552,7 +550,7 @@ static void tasklet_action(struct softirq_action *a)
 	local_irq_disable();
 	list = __this_cpu_read(tasklet_vec.head);
 	__this_cpu_write(tasklet_vec.head, NULL);
-	__this_cpu_write(tasklet_vec.tail, &__get_cpu_var(tasklet_vec).head);
+	__this_cpu_write(tasklet_vec.tail, this_cpu_ptr(&tasklet_vec.head));
 	local_irq_enable();
 
 	while (list) {
@@ -588,7 +586,7 @@ static void tasklet_hi_action(struct softirq_action *a)
 	local_irq_disable();
 	list = __this_cpu_read(tasklet_hi_vec.head);
 	__this_cpu_write(tasklet_hi_vec.head, NULL);
-	__this_cpu_write(tasklet_hi_vec.tail, &__get_cpu_var(tasklet_hi_vec).head);
+	__this_cpu_write(tasklet_hi_vec.tail, this_cpu_ptr(&tasklet_hi_vec.head));
 	local_irq_enable();
 
 	while (list) {
