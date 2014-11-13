@@ -129,6 +129,7 @@ static int dwc2_driver_probe(struct pci_dev *dev,
 		return -ENOMEM;
 
 	hsotg->dev = &dev->dev;
+	/* Ó³ÉäµØÖ· */
 	hsotg->regs = devm_ioremap_resource(&dev->dev, &dev->resource[0]);
 	if (IS_ERR(hsotg->regs))
 		return PTR_ERR(hsotg->regs);
@@ -171,6 +172,10 @@ static struct pci_driver dwc2_pci_driver = {
 	.remove = dwc2_driver_remove,
 };
 
+/* module_init() and module_exit()
+pci_register_driver
+pci_unregister_driver
+*/
 module_pci_driver(dwc2_pci_driver);
 
 MODULE_DESCRIPTION("DESIGNWARE HS OTG PCI Bus Glue");

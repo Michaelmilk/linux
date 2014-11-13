@@ -2769,6 +2769,9 @@ EXPORT_SYMBOL_GPL(dwc2_set_all_params);
  * USB bus with the core and calls the hc_driver->start() function. It returns
  * a negative error on failure.
  */
+/*
+dwc2_driver_probe() => dwc2_hcd_init()
+*/
 int dwc2_hcd_init(struct dwc2_hsotg *hsotg, int irq,
 		  const struct dwc2_core_params *params)
 {
@@ -2808,9 +2811,11 @@ int dwc2_hcd_init(struct dwc2_hsotg *hsotg, int irq,
 	if (!hsotg->core_params)
 		goto error1;
 
+	/* 初始化core_params的所有字段为-1 */
 	dwc2_set_all_params(hsotg->core_params, -1);
 
 	/* Validate parameter values */
+	/* 根据@params设置hsotg->core_params中的参数值 */
 	dwc2_set_parameters(hsotg, params);
 
 	/* Check if the bus driver or platform code has setup a dma_mask */

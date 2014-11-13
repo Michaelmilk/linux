@@ -174,6 +174,7 @@ static const struct kset_uevent_ops bus_uevent_ops = {
 	.filter = bus_uevent_filter,
 };
 
+/* buses_init中初始化 */
 static struct kset *bus_kset;
 
 /* Manually detach a device from its associated driver. */
@@ -888,13 +889,12 @@ static BUS_ATTR(uevent, S_IWUSR, NULL, bus_uevent_store);
  * infrastructure, then register the children subsystems it has:
  * the devices and drivers that belong to the subsystem.
  */
-
+int bus_register(struct bus_type *bus)
+{
 /*
 对应目录/sys/bus/XXX
 */
 
-int bus_register(struct bus_type *bus)
-{
 	int retval;
 	struct subsys_private *priv;
 	struct lock_class_key *key = &bus->lock_key;
@@ -1293,10 +1293,12 @@ EXPORT_SYMBOL_GPL(subsys_virtual_register);
 
 int __init buses_init(void)
 {
+	/* /sys/bus */
 	bus_kset = kset_create_and_add("bus", &bus_uevent_ops, NULL);
 	if (!bus_kset)
 		return -ENOMEM;
 
+	/* /sys/devices/system */
 	system_kset = kset_create_and_add("system", NULL, &devices_kset->kobj);
 	if (!system_kset)
 		return -ENOMEM;

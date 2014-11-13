@@ -95,6 +95,9 @@ struct usb_hcd {
 	/*
 	 * housekeeping
 	 */
+	/* 一个主机控制器连出一条usb总线
+	   内嵌结构
+	*/
 	struct usb_bus		self;		/* hcd is-a bus */
 	struct kref		kref;		/* reference counter */
 

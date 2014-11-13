@@ -611,6 +611,8 @@ EXPORT_SYMBOL_GPL(usb_driver_release_interface);
 /* returns 0 if no match, 1 if match */
 int usb_match_device(struct usb_device *dev, const struct usb_device_id *id)
 {
+	/* 根据match_flags中标出的标记,判断需要判断的字段 */
+
 	if ((id->match_flags & USB_DEVICE_ID_MATCH_VENDOR) &&
 	    id->idVendor != le16_to_cpu(dev->descriptor.idVendor))
 		return 0;
@@ -795,6 +797,10 @@ const struct usb_device_id *usb_match_id(struct usb_interface *interface,
 }
 EXPORT_SYMBOL_GPL(usb_match_id);
 
+/*
+@dev: 内嵌在struct usb_device或struct usb_interface中
+@drv: 内嵌在struct usbdrv_wrap => struct usb_driver中
+*/
 static int usb_device_match(struct device *dev, struct device_driver *drv)
 {
 	/* devices and interfaces are handled separately */

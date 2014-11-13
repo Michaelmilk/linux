@@ -1342,6 +1342,9 @@ int __must_check __pci_register_driver(struct pci_driver *, struct module *,
 
 void pci_unregister_driver(struct pci_driver *dev);
 
+/*
+Ìæ´úmodule_init() and module_exit()µÄ·â×°
+*/
 /**
  * module_pci_driver() - Helper macro for registering a PCI driver
  * @__pci_driver: pci_driver struct

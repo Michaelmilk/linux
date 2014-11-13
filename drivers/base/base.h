@@ -34,6 +34,10 @@ struct subsys_private {
 	struct kset *drivers_kset;
 	struct klist klist_devices;
 	struct klist klist_drivers;
+	/* 通过bus_register_notifier注册到该链表,比如usb_bus_nb
+	   使用blocking_notifier_call_chain调用注册到该链表下notifier_block中的函数
+	   比如device_add中调用blocking_notifier_call_chain => usb_bus_notify
+	*/
 	struct blocking_notifier_head bus_notifier;
 	/* 驱动自动探测
 	   当置为1时，在驱动或设备加入时，会自动遍历设备或驱动链表为二者进行匹配 */

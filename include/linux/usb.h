@@ -191,6 +191,9 @@ struct usb_interface {
 	atomic_t pm_usage_cnt;		/* usage counter for autosuspend */
 	struct work_struct reset_ws;	/* for resets in atomic context */
 };
+/* struct usb_interface结构中内嵌了一个struct device结构
+通过struct device指针获取struct usb_interface指针
+*/
 #define	to_usb_interface(d) container_of(d, struct usb_interface, dev)
 
 static inline void *usb_get_intfdata(struct usb_interface *intf)
@@ -335,7 +338,9 @@ struct usb_devmap {
  */
 struct usb_bus {
 	struct device *controller;	/* host/master side hardware */
-	/* 当前总线系统的序列号，Linux支持多总线系统并为它们编号 */
+	/* 当前总线系统的序列号，Linux支持多总线系统并为它们编号
+	   计算机可以含有多个主机控制器
+	*/
 	int busnum;			/* Bus number (in order of reg) */
 	const char *bus_name;		/* stable id (PCI slot_name etc) */
 	u8 uses_dma;			/* Does the host controller use DMA? */
@@ -624,8 +629,13 @@ struct usb_device {
 	struct usb3_lpm_parameters u2_params;
 	unsigned lpm_disable_count;
 };
+/*
+@d: struct device指针
+获取struct device的容器结构struct usb_device的指针
+*/
 #define	to_usb_device(d) container_of(d, struct usb_device, dev)
 
+/* 获取struct usb_interface指针所属的struct usb_device指针 */
 static inline struct usb_device *interface_to_usbdev(struct usb_interface *intf)
 {
 	return to_usb_device(intf->dev.parent);
@@ -1126,6 +1136,7 @@ struct usb_driver {
 	unsigned int disable_hub_initiated_lpm:1;
 	unsigned int soft_unbind:1;
 };
+/* 通过struct device_driver指针获取struct usb_driver指针 */
 #define	to_usb_driver(d) container_of(d, struct usb_driver, drvwrap.driver)
 
 /**
