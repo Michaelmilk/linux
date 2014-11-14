@@ -967,11 +967,12 @@ int device_private_init(struct device *dev)
  * if it returned an error! Always use put_device() to give up your
  * reference instead.
  */
+int device_add(struct device *dev)
+{
 /*
 将@dev加入设备模型，在/sys/devices下创建一个对应的目录
 */
-int device_add(struct device *dev)
-{
+
 	struct device *parent = NULL;
 	struct kobject *kobj;
 	struct class_interface *class_intf;

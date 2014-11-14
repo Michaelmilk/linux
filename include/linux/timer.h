@@ -135,6 +135,11 @@ static inline void init_timer_on_stack_key(struct timer_list *timer,
 #define init_timer_on_stack(timer)					\
 	__init_timer_on_stack((timer), 0)
 
+/*
+@timer: struct timer_list指针
+@fn: 定时器要执行的函数
+@data: 定时器函数的参数
+*/
 #define __setup_timer(_timer, _fn, _data, _flags)			\
 	do {								\
 		__init_timer((_timer), (_flags));			\
@@ -149,6 +154,11 @@ static inline void init_timer_on_stack_key(struct timer_list *timer,
 		(_timer)->data = (_data);				\
 	} while (0)
 
+/*
+@timer: struct timer_list指针
+@fn: 定时器要执行的函数
+@data: 定时器函数的参数
+*/
 #define setup_timer(timer, fn, data)					\
 	__setup_timer((timer), (fn), (data), 0)
 #define setup_timer_on_stack(timer, fn, data)				\
