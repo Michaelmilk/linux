@@ -63,6 +63,10 @@ EXPORT_SYMBOL_GPL(usb_init_urb);
  */
 struct urb *usb_alloc_urb(int iso_packets, gfp_t mem_flags)
 {
+/*
+@iso_packets: 等时传输时urb变长数组iso_frame_desc[0]的个数;中断,控制,批量传输时为0
+@mem_flags: 
+*/
 	struct urb *urb;
 
 	urb = kmalloc(sizeof(struct urb) +

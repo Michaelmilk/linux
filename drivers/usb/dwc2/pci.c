@@ -59,6 +59,7 @@
 
 static const char dwc2_driver_name[] = "dwc2";
 
+/* 一些默认的参数配置,值为-1的会在dwc2_set_parameters中根据硬件读取到的值进行设置 */
 static const struct dwc2_core_params dwc2_module_params = {
 	.otg_cap			= -1,
 	.otg_ver			= -1,

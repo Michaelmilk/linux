@@ -594,8 +594,10 @@ struct dwc2_hw_params {
 struct dwc2_hsotg {
 	struct device *dev;
 	void __iomem *regs;
+	/* 寄存器中读取到的值 */
 	/** Params detected from hardware */
 	struct dwc2_hw_params hw_params;
+	/* 实际配置使用的值 */
 	/** Params to actually use */
 	struct dwc2_core_params *core_params;
 	enum usb_otg_state op_state;

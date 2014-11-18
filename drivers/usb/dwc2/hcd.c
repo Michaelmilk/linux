@@ -2815,7 +2815,9 @@ int dwc2_hcd_init(struct dwc2_hsotg *hsotg, int irq,
 	dwc2_set_all_params(hsotg->core_params, -1);
 
 	/* Validate parameter values */
-	/* 根据@params设置hsotg->core_params中的参数值 */
+	/* 根据@params设置hsotg->core_params中的参数值
+	   dwc2_module_params
+	*/
 	dwc2_set_parameters(hsotg, params);
 
 	/* Check if the bus driver or platform code has setup a dma_mask */

@@ -156,6 +156,7 @@ struct bus_type {
 
 	/* 在bus_register的时候分配空间
 	   如pci总线初始化的时候pci_driver_init调用bus_register(&pci_bus_type)
+	   USB总线usb_init => bus_register(&usb_bus_type);
 	*/
 	struct subsys_private *p;
 	struct lock_class_key lock_key;
@@ -263,7 +264,9 @@ device_driver 代表一个设备驱动程序，对应于/sys/bus/XXX/drivers/下的一个目录
 struct device_driver {
 	/* 驱动程序的名字 */
 	const char		*name;
-	/* 驱动程序所在的总线类型，如:pci_bus_type */
+	/* 驱动程序所在的总线类型
+	   如:pci_bus_type usb_bus_type
+	*/
 	struct bus_type		*bus;
 
 	struct module		*owner;
@@ -797,13 +800,15 @@ device 代表一个设备，对应于/sys/devices/下的一个目录。
 */
 struct device {
 	/* 父设备，一般一个bus也对应一个设备
-       比如USB设备都有父设备 */
+	   比如USB设备都有父设备
+	*/
 	struct device		*parent;
 
 	struct device_private	*p;
 
 	/* 表示该设备并把它连接到结构体系中的kobject.
-       请注意，作为一个通用规则，device.kobj->parent 与 device->parent.kobj是相同的 */
+	   请注意，作为一个通用规则，device.kobj->parent 与 device->parent.kobj是相同的
+	*/
 	struct kobject kobj;
 	const char		*init_name; /* initial name of the device */
 	const struct device_type *type;
@@ -813,10 +818,12 @@ struct device {
 					 */
 
 	/* 指向所连接总线的指针
-       标识了这个设备连接在何种类型的总线上 */
+	   标识了这个设备连接在何种类型的总线上
+	*/
 	struct bus_type	*bus;		/* type of bus device is on */
 	/* 指向被分配到该设备的设备驱动
-       管理该设备的驱动程序，一个设备只能有一个驱动程序 */
+	   管理该设备的驱动程序，一个设备只能有一个驱动程序
+	*/
 	struct device_driver *driver;	/* which driver has allocated this
 					   device */
 	void		*platform_data;	/* Platform specific data, device

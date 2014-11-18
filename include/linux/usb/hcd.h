@@ -242,6 +242,9 @@ struct hcd_timeout {	/* timeouts we allocate */
 struct hc_driver {
 	const char	*description;	/* "ehci-hcd" etc */
 	const char	*product_desc;	/* product/vendor string */
+	/* 具体的主机控制器的私有结构大小
+	   例如dwc2_hc_driver的.hcd_priv_size = sizeof(struct wrapper_priv_data)
+	*/
 	size_t		hcd_priv_size;	/* size of private data */
 
 	/* irq handler */

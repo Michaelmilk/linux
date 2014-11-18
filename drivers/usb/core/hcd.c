@@ -1595,6 +1595,9 @@ int usb_hcd_submit_urb (struct urb *urb, gfp_t mem_flags)
  */
 static int unlink1(struct usb_hcd *hcd, struct urb *urb, int status)
 {
+/*
+调用hcd的出队函数
+*/
 	int		value;
 
 	if (is_root_hub(urb->dev))

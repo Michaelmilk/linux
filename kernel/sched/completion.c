@@ -150,6 +150,11 @@ void __sched wait_for_completion(struct completion *x)
 }
 EXPORT_SYMBOL(wait_for_completion);
 
+/*
+返回0,表示时间用完,超时了
+大于0的值,表示剩余的超时时间
+*/
+
 /**
  * wait_for_completion_timeout: - waits for completion of a task (w/timeout)
  * @x:  holds the state of this particular completion

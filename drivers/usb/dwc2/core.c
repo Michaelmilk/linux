@@ -2619,6 +2619,9 @@ static void dwc2_set_param_uframe_sched(struct dwc2_hsotg *hsotg, int val)
 void dwc2_set_parameters(struct dwc2_hsotg *hsotg,
 			 const struct dwc2_core_params *params)
 {
+	/* 传进来的参数来自变量dwc2_module_params
+	   检查其有效性,并根据硬件读取到的值进行修正
+	*/
 	dev_dbg(hsotg->dev, "%s()\n", __func__);
 
 	dwc2_set_param_otg_cap(hsotg, params->otg_cap);
@@ -2658,6 +2661,10 @@ void dwc2_set_parameters(struct dwc2_hsotg *hsotg,
 	dwc2_set_param_uframe_sched(hsotg, params->uframe_sched);
 }
 
+/*
+读取硬件寄存器中的一些信息
+保存到hsotg->hw_params字段中
+*/
 /**
  * During device initialization, read various hardware configuration
  * registers and interpret the contents.

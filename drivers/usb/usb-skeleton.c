@@ -661,4 +661,20 @@ static struct usb_driver skel_driver = {
 
 module_usb_driver(skel_driver);
 
+#if 0
+module_usb_driver(skel_driver);展开后即如下两个函数
+分别调用usb_register和usb_deregister
+
+static int __init skel_driver_init(void)
+{
+	return usb_register(&(skel_driver));
+}
+module_init(skel_driver_init);
+static void __exit skel_driver_exit(void)
+{
+	usb_deregister(&(skel_driver));
+}
+module_exit(skel_driver_exit);
+#endif
+
 MODULE_LICENSE("GPL");

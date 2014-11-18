@@ -763,6 +763,15 @@ static inline void ftrace_dump(enum ftrace_dump_mode oops_dump_mode) { }
 	typeof(y) __y = (y);			\
 	__x == 0 ? __y : ((__y == 0) ? __x : min(__x, __y)); })
 
+/*
+clamp: 夹紧
+
+返回一个在[@lo, @hi]之间的值
+
+如果@val在@lo和@hi之间,则返回@val
+如果@val小于@lo,则返回@lo
+如果@val大于@hi,则返回@hi
+*/
 /**
  * clamp - return a value clamped to a given range with strict typechecking
  * @val: current value

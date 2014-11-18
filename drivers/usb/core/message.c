@@ -54,6 +54,7 @@ static int usb_start_wait_urb(struct urb *urb, int timeout, int *actual_length)
 		goto out;
 
 	expire = timeout ? msecs_to_jiffies(timeout) : MAX_SCHEDULE_TIMEOUT;
+	/* 超时了 */
 	if (!wait_for_completion_timeout(&ctx.done, expire)) {
 		usb_kill_urb(urb);
 		retval = (ctx.status == -ENOENT ? -ETIMEDOUT : ctx.status);
@@ -132,6 +133,13 @@ int usb_control_msg(struct usb_device *dev, unsigned int pipe, __u8 request,
 		    __u8 requesttype, __u16 value, __u16 index, void *data,
 		    __u16 size, int timeout)
 {
+/*
+
+@requesttype: USB_VENDOR_REQUEST_IN USB_VENDOR_REQUEST_OUT
+
+发送成功,返回发送的字节数
+出错返回一个负值
+*/
 	struct usb_ctrlrequest *dr;
 	int ret;
 

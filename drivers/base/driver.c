@@ -144,26 +144,34 @@ void driver_remove_groups(struct device_driver *drv,
  * since most of the things we have to do deal with the bus
  * structures.
  */
+int driver_register(struct device_driver *drv)
+{
 /*
+将驱动注册到对应总线的驱动模型中
+
 对设备驱动程序进行注册和初始化是两件不同的事情。
 设备驱动程序应当尽快被注册，以便用户应用程序通过相应的设备文件使用它。
 相反，设备驱动程序在最后可能的时刻才被初始化。
 事实上，初始化驱动程序意味着分配系统宝贵的资源，
 这些资源因此就对其他驱动程序不能用。
 */
-int driver_register(struct device_driver *drv)
-{
+
 	int ret;
 	struct device_driver *other;
 
 	BUG_ON(!drv->bus->p);
 
+	/* 总线与驱动不同时设置probe,remove,shutdown函数
+	   如pci_bus_type中实现了probe,remove,shutdown函数
+	   而usb_bus_type则没有,USB的在usb_register_driver中设置
+	*/
 	if ((drv->bus->probe && drv->probe) ||
 	    (drv->bus->remove && drv->remove) ||
 	    (drv->bus->shutdown && drv->shutdown))
 		printk(KERN_WARNING "Driver '%s' needs updating - please use "
 			"bus_type methods\n", drv->name);
 
+	/* 根据名称判断,不能重复注册相同的驱动 */
 	other = driver_find(drv->name, drv->bus);
 	if (other) {
 		printk(KERN_ERR "Error: Driver '%s' is already registered, "

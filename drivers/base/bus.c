@@ -683,6 +683,9 @@ int bus_add_driver(struct device_driver *drv)
 
 	/* 对pci驱动，这里应该是指向全局变量pci_bus_type
 	   在__pci_register_driver()中赋的值
+
+	   对USB驱动,指向usb_bus_type
+	   参见usb_register_driver
 	*/
 	bus = bus_get(drv->bus);
 	if (!bus)

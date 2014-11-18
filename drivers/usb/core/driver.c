@@ -1884,6 +1884,9 @@ int usb_set_usb2_hardware_lpm(struct usb_device *udev, int enable)
 
 #endif /* CONFIG_PM_RUNTIME */
 
+/*
+USB总线类型
+*/
 struct bus_type usb_bus_type = {
 	.name =		"usb",
 	.match =	usb_device_match,

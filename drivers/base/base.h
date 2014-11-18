@@ -54,6 +54,9 @@ struct driver_private {
 	struct klist klist_devices;
 	struct klist_node knode_bus;
 	struct module_kobject *mkobj;
+	/* 具体驱动结构中会内嵌一个struct device_driver结构
+	   这里的driver会指向那里
+	*/
 	struct device_driver *driver;
 };
 #define to_driver(obj) container_of(obj, struct driver_private, kobj)

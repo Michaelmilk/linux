@@ -193,6 +193,8 @@ struct usb_interface {
 };
 /* struct usb_interface结构中内嵌了一个struct device结构
 通过struct device指针获取struct usb_interface指针
+
+@d: struct device指针
 */
 #define	to_usb_interface(d) container_of(d, struct usb_interface, dev)
 
@@ -1035,6 +1037,9 @@ extern ssize_t usb_show_dynids(struct usb_dynids *dynids, char *buf);
  */
 struct usbdrv_wrap {
 	struct device_driver driver;
+	/* 非0为设备驱动
+	   0为接口驱动
+	*/
 	int for_devices;
 };
 
@@ -1130,6 +1135,7 @@ struct usb_driver {
 	const struct usb_device_id *id_table;
 
 	struct usb_dynids dynids;
+	/* 内嵌驱动模型的封装,以便加入驱动模型的框架中 */
 	struct usbdrv_wrap drvwrap;
 	unsigned int no_dynamic_id:1;
 	unsigned int supports_autosuspend:1;
@@ -1483,6 +1489,7 @@ urb包含了建立任何 USB传输所需的所有信息，并贯穿于USB协议栈对数据处理的整个过程。
 */
 
 	/* private: usb core and host controller only fields in the urb */
+	/* 一个urb可以被发往多个不同的端点,使用kref统计使用次数 */
 	struct kref kref;		/* reference count of the URB */
 	/* 与主机控制器相关数据，对USB内核层是透明 */
 	void *hcpriv;			/* private data for host controller */
