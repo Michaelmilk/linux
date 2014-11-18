@@ -254,14 +254,29 @@ struct usb_descriptor_header {
 
 /*-------------------------------------------------------------------------*/
 
+/* 设备描述符,一个设备只有一个设备描述符 */
 /* USB_DT_DEVICE: Device descriptor */
 struct usb_device_descriptor {
+	/* 描述符大小,固定为0x12,占18个字节 */
 	__u8  bLength;
+	/* 设备描述符类型,固定为0x01 */
 	__u8  bDescriptorType;
 
+	/* USB规范发布号,表示了本设备能适用于哪种协议,如2.0=0x0200, 1.1=0x0110 */
 	__le16 bcdUSB;
+	/* 类型代码(由USB指定)
+	   0,表示所有接口在配置描述符里,并且所有接口是独立的
+	   1-0xFE,表示不同的接口关联
+	   0xFF,厂商自定义
+
+	   如:USB_CLASS_PER_INTERFACE
+	      USB_CLASS_HUB
+	      USB_CLASS_VENDOR_SPEC
+	*/
 	__u8  bDeviceClass;
+	/* 子类型代码 */
 	__u8  bDeviceSubClass;
+	/* 协议代码(由USB分配) */
 	__u8  bDeviceProtocol;
 	/* 一次传输的最大数据量 */
 	__u8  bMaxPacketSize0;
@@ -373,6 +388,7 @@ struct usb_endpoint_descriptor {
 
 	/* 端口地址 */
 	__u8  bEndpointAddress;
+	/* usb_endpoint_type */
 	__u8  bmAttributes;
 	/* 一次传输的最大数据量 */
 	__le16 wMaxPacketSize;
@@ -439,6 +455,13 @@ static inline int usb_endpoint_num(const struct usb_endpoint_descriptor *epd)
  */
 static inline int usb_endpoint_type(const struct usb_endpoint_descriptor *epd)
 {
+/*
+返回以下4个值之一
+USB_ENDPOINT_XFER_CONTROL
+USB_ENDPOINT_XFER_ISOC
+USB_ENDPOINT_XFER_BULK
+USB_ENDPOINT_XFER_INT
+*/
 	return epd->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK;
 }
 
