@@ -280,15 +280,23 @@ struct usb_device_descriptor {
 	__u8  bDeviceProtocol;
 	/* 一次传输的最大数据量 */
 	__u8  bMaxPacketSize0;
+	/* 供应商ID(由USB指定) */
 	__le16 idVendor;
+	/* 产品ID(由厂商分配) */
 	__le16 idProduct;
+	/* 设备出产编码,由厂商设置 */
 	__le16 bcdDevice;
+	/* 厂商描述符字符串索引.索引到对应的字符串描述符.0表示没有 */
 	__u8  iManufacturer;
+	/* 产品描述符字符串索引 */
 	__u8  iProduct;
+	/* 设备序列号字符串索引 */
 	__u8  iSerialNumber;
+	/* 可能的配置数.指配置字符串的个数 */
 	__u8  bNumConfigurations;
 } __attribute__ ((packed));
 
+/* 设备描述符固定大小,占18个字节 */
 #define USB_DT_DEVICE_SIZE		18
 
 
@@ -319,6 +327,10 @@ struct usb_device_descriptor {
 
 /*-------------------------------------------------------------------------*/
 
+/*
+配置描述符,定义设备的配置信息,一个设备可以有多个配置描述符.
+*/
+
 /* USB_DT_CONFIG: Configuration descriptor information.
  *
  * USB_DT_OTHER_SPEED_CONFIG is the same descriptor, except that the
@@ -328,17 +340,26 @@ struct usb_device_descriptor {
  * descriptors.
  */
 struct usb_config_descriptor {
+	/* 描述符大小,固定0x09 */
 	__u8  bLength;
+	/* 配置描述符类型,固定为0x02 */
 	__u8  bDescriptorType;
 
+	/* 返回整个数据的长度.指此配置返回的配置描述符,接口描述符,端点描述符的全部大小 */
 	__le16 wTotalLength;
+	/* 配置所支持的接口数.指该配置配备的接口数量,也表示该配置下接口描述符数量 */
 	__u8  bNumInterfaces;
+	/* 作为Set Configuration的一个参数选择配置值 */
 	__u8  bConfigurationValue;
+	/* 用于描述该配置字符串描述符的索引 */
 	__u8  iConfiguration;
+	/* 供电模式选择.Bit4-0保留,D7总线供电,D6自供电,D5远程唤醒 */
 	__u8  bmAttributes;
+	/* 总线供电的USB设备的最大消耗电流.以2mA为单位 */
 	__u8  bMaxPower;
 } __attribute__ ((packed));
 
+/* 配置描述符大小,固定占9个字节 */
 #define USB_DT_CONFIG_SIZE		9
 
 /* from config descriptor bmAttributes */
@@ -348,6 +369,11 @@ struct usb_config_descriptor {
 #define USB_CONFIG_ATT_BATTERY		(1 << 4)	/* battery powered */
 
 /*-------------------------------------------------------------------------*/
+
+/*
+字符串描述符,是可选的.
+如果不支持字符串描述符,其设备,配置,接口描述符内的所有字符串描述符索引必须为0.
+*/
 
 /* USB_DT_STRING: String descriptor */
 struct usb_string_descriptor {
@@ -363,17 +389,30 @@ struct usb_string_descriptor {
 
 /*-------------------------------------------------------------------------*/
 
+/*
+接口描述符,说明了接口所提供的配置,一个配置所拥有的接口数量通过配置描述符的bNumInterfaces指定
+*/
+
 /* USB_DT_INTERFACE: Interface descriptor */
 struct usb_interface_descriptor {
+	/* 描述符大小,固定为0x09 */
 	__u8  bLength;
+	/* 接口描述符类型,固定为0x04 */
 	__u8  bDescriptorType;
 
+	/* 该接口的编号 */
 	__u8  bInterfaceNumber;
+	/* 用于为上一个字段选择可供替换的位置.即备用的接口描述符编号 */
 	__u8  bAlternateSetting;
+	/* 使用的端点数目.端点0除外 */
 	__u8  bNumEndpoints;
+	/* 类型代码(由USB分配) */
 	__u8  bInterfaceClass;
+	/* 子类型代码(由USB分配) */
 	__u8  bInterfaceSubClass;
+	/* 协议代码(由USB分配) */
 	__u8  bInterfaceProtocol;
+	/* 字符串描述符的索引 */
 	__u8  iInterface;
 } __attribute__ ((packed));
 
@@ -381,17 +420,30 @@ struct usb_interface_descriptor {
 
 /*-------------------------------------------------------------------------*/
 
+/*
+端点描述符,每个端点都有自己的端点描述符,由接口描述符中的bNumEndpoints决定其数量
+*/
+
 /* USB_DT_ENDPOINT: Endpoint descriptor */
 struct usb_endpoint_descriptor {
+	/* 描述符大小,固定为0x07 */
 	__u8  bLength;
+	/* 接口描述符类型,固定为0x05 */
 	__u8  bDescriptorType;
 
 	/* 端口地址 */
 	__u8  bEndpointAddress;
-	/* usb_endpoint_type */
+	/* 端点属性.Bit7-2保留.Bit1-0: 00控制, 01同步, 10批量, 11中断
+	   见函数usb_endpoint_type
+	*/
 	__u8  bmAttributes;
-	/* 一次传输的最大数据量 */
+	/* 本端点接收或发送一次传输的最大数据量 */
 	__le16 wMaxPacketSize;
+	/* 轮询数据传送端点的时间间隔
+	   对于批量传送和控制传送的端点忽略
+	   对于同步传送的端点,必须为1
+	   对于中断传送的端点,范围1-255
+	*/
 	__u8  bInterval;
 
 	/* NOTE:  these two are _only_ in audio endpoints. */
