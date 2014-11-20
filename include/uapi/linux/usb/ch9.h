@@ -452,6 +452,7 @@ struct usb_endpoint_descriptor {
 	   Bit7-2: 保留.
 	   Bit1-0: 00控制, 01同步, 10批量, 11中断
 	   见函数usb_endpoint_type
+	   Bit5-4: USB3.0定义中断类型
 	*/
 	__u8  bmAttributes;
 	/* 本端点接收或发送一次传输的最大数据量 */
@@ -512,6 +513,7 @@ struct usb_endpoint_descriptor {
  */
 static inline int usb_endpoint_num(const struct usb_endpoint_descriptor *epd)
 {
+	/* Bit3-0为端点号 */
 	return epd->bEndpointAddress & USB_ENDPOINT_NUMBER_MASK;
 }
 
