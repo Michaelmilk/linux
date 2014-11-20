@@ -218,6 +218,9 @@ struct usb_hcd {
 	 */
 	unsigned long hcd_priv[0]
 			__attribute__ ((aligned(sizeof(s64))));
+	/* hcd_priv的大小由hc_driver的hcd_priv_size字段决定
+	   空间在usb_create_hcd => usb_create_shared_hcd中分配
+	*/
 };
 
 /* 2.4 does this a bit differently ... */

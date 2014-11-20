@@ -206,7 +206,9 @@ enum dwc2_control_phase {
 /* Transaction types */
 enum dwc2_transaction_type {
 	DWC2_TRANSACTION_NONE,
+	/* 周期性,如同步传送 */
 	DWC2_TRANSACTION_PERIODIC,
+	/* 非周期性,如控制传送,批量传送 */
 	DWC2_TRANSACTION_NON_PERIODIC,
 	DWC2_TRANSACTION_ALL,
 };

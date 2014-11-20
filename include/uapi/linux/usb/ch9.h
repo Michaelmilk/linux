@@ -252,6 +252,8 @@ struct usb_descriptor_header {
 } __attribute__ ((packed));
 
 
+/* 下面这些描述符信息通常保存在USB设备的固件程序中 */
+
 /*-------------------------------------------------------------------------*/
 
 /* 设备描述符,一个设备只有一个设备描述符 */
@@ -278,7 +280,9 @@ struct usb_device_descriptor {
 	__u8  bDeviceSubClass;
 	/* 协议代码(由USB分配) */
 	__u8  bDeviceProtocol;
-	/* 一次传输的最大数据量 */
+	/* 端点0一次传输的最大数据量
+	   仅8,16,32,64为合法值
+	*/
 	__u8  bMaxPacketSize0;
 	/* 供应商ID(由USB指定) */
 	__le16 idVendor;
@@ -329,6 +333,8 @@ struct usb_device_descriptor {
 
 /*
 配置描述符,定义设备的配置信息,一个设备可以有多个配置描述符.
+如USB设备的低功耗模式和高功耗模式可分别对应一个配置.
+在使用USB设备前,必须为其选择一个合适的配置.
 */
 
 /* USB_DT_CONFIG: Configuration descriptor information.
@@ -390,7 +396,9 @@ struct usb_string_descriptor {
 /*-------------------------------------------------------------------------*/
 
 /*
-接口描述符,说明了接口所提供的配置,一个配置所拥有的接口数量通过配置描述符的bNumInterfaces指定
+接口描述符,说明了接口所提供的配置,一个配置所拥有的接口数量通过配置描述符的bNumInterfaces指定.
+如对一个光驱来说,当用于文件传输时,使用其大容量存储接口;
+而当用于播放CD时,使用其音频接口.
 */
 
 /* USB_DT_INTERFACE: Interface descriptor */
@@ -421,7 +429,10 @@ struct usb_interface_descriptor {
 /*-------------------------------------------------------------------------*/
 
 /*
-端点描述符,每个端点都有自己的端点描述符,由接口描述符中的bNumEndpoints决定其数量
+端点描述符,每个端点都有自己的端点描述符,由接口描述符中的bNumEndpoints决定其数量.
+端点是USB设备中的实际物理单元,USB数据传输就是在主机和USB设备各个端点之间进行.
+端点一般由USB接口芯片提供.
+0号端点比较特殊,它有数据输入IN和数据输出OUT两个物理单元,且只能支持控制传输.
 */
 
 /* USB_DT_ENDPOINT: Endpoint descriptor */
@@ -431,9 +442,15 @@ struct usb_endpoint_descriptor {
 	/* 接口描述符类型,固定为0x05 */
 	__u8  bDescriptorType;
 
-	/* 端口地址 */
+	/* 端口地址
+	   Bit3-0: 端点号
+	   Bit6-4: 保留,为0
+	   Bit7: 方向,如果控制端点则忽略;0出端点,1入端点
+	*/
 	__u8  bEndpointAddress;
-	/* 端点属性.Bit7-2保留.Bit1-0: 00控制, 01同步, 10批量, 11中断
+	/* 端点属性.
+	   Bit7-2: 保留.
+	   Bit1-0: 00控制, 01同步, 10批量, 11中断
 	   见函数usb_endpoint_type
 	*/
 	__u8  bmAttributes;

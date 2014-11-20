@@ -878,6 +878,10 @@ static int dwc2_assign_and_init_hc(struct dwc2_hsotg *hsotg, struct dwc2_qh *qh)
 	return 0;
 }
 
+/*
+在USB上数据信息的一次接收或发送的处理过程称为事务处理.
+*/
+
 /**
  * dwc2_hcd_select_transactions() - Selects transactions from the HCD transfer
  * schedule and assigns them to available host channels. Called from the HCD
