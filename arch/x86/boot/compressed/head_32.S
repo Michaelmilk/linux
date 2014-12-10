@@ -331,7 +331,8 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 */
 
 				/* push arguments for decompress_kernel: */
-	pushl	$z_output_len	/* decompressed length */
+	pushl	$z_run_size	/* size of kernel with .bss and .brk */
+	pushl	$z_output_len	/* decompressed length, end of relocs */
 
 	/* %ebx为临时的包含未解压代码的起始地址
 	   %ebx减去增加的偏移，得到最终的解压地址 */
@@ -353,11 +354,12 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 
 	call	decompress_kernel /* returns kernel location in %eax */
 
-	/* 栈顶指针+24，即decompress_kernel()函数6个参数所占的长度
+	/* 栈顶指针+28，即decompress_kernel()函数7个参数所占的长度
 	   decompress_kernel()函数返回的时候退栈
 	   栈是由高地址向低地址的，所以加20起到退栈的作用 */
 
-	addl	$24, %esp
+
+	addl	$28, %esp
 
 /*
  * Jump to the decompressed kernel.

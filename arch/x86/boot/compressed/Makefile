@@ -103,11 +103,14 @@ suffix-$(CONFIG_KERNEL_XZ)	:= xz
 suffix-$(CONFIG_KERNEL_LZO) 	:= lzo
 suffix-$(CONFIG_KERNEL_LZ4) 	:= lz4
 
+RUN_SIZE = $(shell $(OBJDUMP) -h vmlinux | \
+	     perl $(srctree)/arch/x86/tools/calc_run_size.pl)
+
         # 生成piggy.S的命令
         # 中间的或在生成失败的时候才执行删除动作
 
 quiet_cmd_mkpiggy = MKPIGGY $@
-      cmd_mkpiggy = $(obj)/mkpiggy $< > $@ || ( rm -f $@ ; false )
+      cmd_mkpiggy = $(obj)/mkpiggy $< $(RUN_SIZE) > $@ || ( rm -f $@ ; false )
 
         # 先由arch/x86/boot/compressed/mkpiggy.c编译出小程序mkpiggy
         # 解决完依赖后，由mkpiggy小程序生成piggy.S
