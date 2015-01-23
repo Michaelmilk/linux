@@ -123,7 +123,6 @@ __register_chrdev_region(unsigned int major, unsigned int baseminor,
 			goto out;
 		}
 		major = i;
-		ret = major;
 	}
 
 	cd->major = major;

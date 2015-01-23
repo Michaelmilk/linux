@@ -7,36 +7,10 @@
 #include <linux/path.h>
 
 struct vfsmount;
+struct nameidata;
 
 enum { MAX_NESTED_LINKS = 8 };
 
-/*
-在递归寻找目标节点的过程中，需要借助一个搜索辅助结构nameidata，
-这是一个临时结构，仅仅用在寻找目标节点的过程中。
-*/
-struct nameidata {
-	/* 上层目录 */
-	struct path	path;
-	/* 路径的最后一个部分 */
-	struct qstr	last;
-	/* 已安装文件系统的根目录 */
-	struct path	root;
-	/* 第一个字段@path的path.dentry.d_inode */
-	struct inode	*inode; /* path.dentry.d_inode */
-	/* 查找标志 */
-	unsigned int	flags;
-	unsigned	seq, m_seq;
-	/* 路径名称最后一部分的类型 */
-	int		last_type;
-	/* 符号链接的嵌套深度 */
-	unsigned	depth;
-	/* 与嵌套的符号链接关联的路径名数组 */
-	char *saved_names[MAX_NESTED_LINKS + 1];
-};
-
-/*
- * Type of the last component on LOOKUP_PARENT
- */
 /*
 @LAST_NORM	: 最后一个部分是普通文件名
 @LAST_ROOT	: '/'
@@ -44,6 +18,10 @@ struct nameidata {
 @LAST_DOTDOT	: '..'
 @LAST_BIND	: 符号链接
 */
+
+/*
+ * Type of the last component on LOOKUP_PARENT
+ */
 enum {LAST_NORM, LAST_ROOT, LAST_DOT, LAST_DOTDOT, LAST_BIND};
 
 /*
@@ -105,16 +83,8 @@ extern struct dentry *lock_rename(struct dentry *, struct dentry *);
 extern void unlock_rename(struct dentry *, struct dentry *);
 
 extern void nd_jump_link(struct nameidata *nd, struct path *path);
-
-static inline void nd_set_link(struct nameidata *nd, char *path)
-{
-	nd->saved_names[nd->depth] = path;
-}
-
-static inline char *nd_get_link(struct nameidata *nd)
-{
-	return nd->saved_names[nd->depth];
-}
+extern void nd_set_link(struct nameidata *nd, char *path);
+extern char *nd_get_link(struct nameidata *nd);
 
 static inline void nd_terminate_link(void *name, size_t len, size_t maxlen)
 {

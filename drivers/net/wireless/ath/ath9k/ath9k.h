@@ -28,7 +28,6 @@
 #include "debug.h"
 #include "mci.h"
 #include "dfs.h"
-#include "spectral.h"
 
 struct ath_node;
 struct ath_vif;
@@ -190,6 +189,7 @@ struct ath_frame_info {
 	u8 rtscts_rate;
 	u8 retries : 7;
 	u8 baw_tracked : 1;
+	u8 tx_power;
 };
 
 struct ath_rxbuf {
@@ -347,7 +347,9 @@ struct ath_chanctx {
 	u64 tsf_val;
 	u32 last_beacon;
 
+	int flush_timeout;
 	u16 txpower;
+	u16 cur_txpower;
 	bool offchannel;
 	bool stopped;
 	bool active;
@@ -364,7 +366,7 @@ enum ath_chanctx_event {
 	ATH_CHANCTX_EVENT_BEACON_SENT,
 	ATH_CHANCTX_EVENT_TSF_TIMER,
 	ATH_CHANCTX_EVENT_BEACON_RECEIVED,
-	ATH_CHANCTX_EVENT_ASSOC,
+	ATH_CHANCTX_EVENT_AUTHORIZED,
 	ATH_CHANCTX_EVENT_SWITCH,
 	ATH_CHANCTX_EVENT_ASSIGN,
 	ATH_CHANCTX_EVENT_UNASSIGN,
@@ -382,10 +384,12 @@ enum ath_chanctx_state {
 
 struct ath_chanctx_sched {
 	bool beacon_pending;
+	bool beacon_adjust;
 	bool offchannel_pending;
 	bool wait_switch;
 	bool force_noa_update;
 	bool extend_absence;
+	bool mgd_prepare_tx;
 	enum ath_chanctx_state state;
 	u8 beacon_miss;
 
@@ -470,6 +474,7 @@ void ath_chanctx_set_next(struct ath_softc *sc, bool force);
 void ath_offchannel_next(struct ath_softc *sc);
 void ath_scan_complete(struct ath_softc *sc, bool abort);
 void ath_roc_complete(struct ath_softc *sc, bool abort);
+struct ath_chanctx* ath_is_go_chanctx_present(struct ath_softc *sc);
 
 #else
 
@@ -542,7 +547,6 @@ static inline void ath_chanctx_check_active(struct ath_softc *sc,
 
 #endif /* CONFIG_ATH9K_CHANNEL_CONTEXT */
 
-int ath_reset_internal(struct ath_softc *sc, struct ath9k_channel *hchan);
 void ath_startrecv(struct ath_softc *sc);
 bool ath_stoprecv(struct ath_softc *sc);
 u32 ath_calcrxfilter(struct ath_softc *sc);
@@ -597,7 +601,7 @@ struct ath_vif {
 	u16 seq_no;
 
 	/* BSS info */
-	u8 bssid[ETH_ALEN];
+	u8 bssid[ETH_ALEN] __aligned(2);
 	u16 aid;
 	bool assoc;
 
@@ -620,6 +624,7 @@ struct ath_vif {
 	u32 noa_start;
 	u32 noa_duration;
 	bool periodic_noa;
+	bool oneshot_noa;
 };
 
 struct ath9k_vif_iter_data {
@@ -717,7 +722,8 @@ int ath_update_survey_stats(struct ath_softc *sc);
 void ath_update_survey_nf(struct ath_softc *sc, int channel);
 void ath9k_queue_reset(struct ath_softc *sc, enum ath_reset_type type);
 void ath_ps_full_sleep(unsigned long data);
-void __ath9k_flush(struct ieee80211_hw *hw, u32 queues, bool drop);
+void __ath9k_flush(struct ieee80211_hw *hw, u32 queues, bool drop,
+		   bool sw_pending, bool timeout_override);
 
 /**********/
 /* BTCOEX */
@@ -929,6 +935,7 @@ void ath_ant_comb_scan(struct ath_softc *sc, struct ath_rx_status *rs);
 #define ATH9K_PCI_AR9565_2ANT     0x0100
 #define ATH9K_PCI_NO_PLL_PWRSAVE  0x0200
 #define ATH9K_PCI_KILLER          0x0400
+#define ATH9K_PCI_LED_ACT_HI      0x0800
 
 /*
  * Default cache line size, in bytes.
@@ -979,6 +986,7 @@ struct ath_softc {
 	struct ath_chanctx_sched sched;
 	struct ath_offchannel offchannel;
 	struct ath_chanctx *next_chan;
+	struct completion go_beacon;
 #endif
 
 	unsigned long driver_data;
@@ -986,7 +994,6 @@ struct ath_softc {
 	u8 gtt_cnt;
 	u32 intrstatus;
 	u16 ps_flags; /* PS_* */
-	u16 curtxpow;
 	bool ps_enabled;
 	bool ps_idle;
 	short nbcnvifs;
@@ -1027,10 +1034,8 @@ struct ath_softc {
 	struct dfs_pattern_detector *dfs_detector;
 	u64 dfs_prev_pulse_ts;
 	u32 wow_enabled;
-	/* relay(fs) channel for spectral scan */
-	struct rchan *rfs_chan_spec_scan;
-	enum spectral_mode spectral_mode;
-	struct ath_spec_scan spec_config;
+
+	struct ath_spec_scan_priv spec_priv;
 
 	struct ieee80211_vif *tx99_vif;
 	struct sk_buff *tx99_skb;
@@ -1073,7 +1078,7 @@ void ath9k_tasklet(unsigned long data);
 int ath_cabq_update(struct ath_softc *);
 u8 ath9k_parse_mpdudensity(u8 mpdudensity);
 irqreturn_t ath_isr(int irq, void *dev);
-int ath_reset(struct ath_softc *sc);
+int ath_reset(struct ath_softc *sc, struct ath9k_channel *hchan);
 void ath_cancel_work(struct ath_softc *sc);
 void ath_restart_work(struct ath_softc *sc);
 int ath9k_init_device(u16 devid, struct ath_softc *sc,

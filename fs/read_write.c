@@ -419,6 +419,23 @@ ssize_t new_sync_read(struct file *filp, char __user *buf, size_t len, loff_t *p
 
 EXPORT_SYMBOL(new_sync_read);
 
+ssize_t __vfs_read(struct file *file, char __user *buf, size_t count,
+		   loff_t *pos)
+{
+	ssize_t ret;
+
+	if (file->f_op->read)
+		ret = file->f_op->read(file, buf, count, pos);
+	else if (file->f_op->aio_read)
+		ret = do_sync_read(file, buf, count, pos);
+	else if (file->f_op->read_iter)
+		ret = new_sync_read(file, buf, count, pos);
+	else
+		ret = -EINVAL;
+
+	return ret;
+}
+
 /*
 @file	: 文件指针
 @buf	: 保存数据的buf
@@ -447,12 +464,7 @@ ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 	if (ret >= 0) {
 		count = ret;
 		/* 读数据 */
-		if (file->f_op->read)
-			ret = file->f_op->read(file, buf, count, pos);
-		else if (file->f_op->aio_read)
-			ret = do_sync_read(file, buf, count, pos);
-		else
-			ret = new_sync_read(file, buf, count, pos);
+		ret = __vfs_read(file, buf, count, pos);
 		if (ret > 0) {
 			fsnotify_access(file);
 			add_rchar(current, ret);

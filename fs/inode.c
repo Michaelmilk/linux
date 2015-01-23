@@ -118,6 +118,11 @@ int proc_nr_inodes(struct ctl_table *table, int write,
 }
 #endif
 
+static int no_open(struct inode *inode, struct file *file)
+{
+	return -ENXIO;
+}
+
 /**
  * inode_init_always - perform inode structure intialisation
  * @sb: superblock inode belongs to
@@ -129,7 +134,7 @@ int proc_nr_inodes(struct ctl_table *table, int write,
 int inode_init_always(struct super_block *sb, struct inode *inode)
 {
 	static const struct inode_operations empty_iops;
-	static const struct file_operations empty_fops;
+	static const struct file_operations no_open_fops = {.open = no_open};
 	struct address_space *const mapping = &inode->i_data;
 
 	/* 记录所属的超级块 */
@@ -138,7 +143,7 @@ int inode_init_always(struct super_block *sb, struct inode *inode)
 	inode->i_flags = 0;
 	atomic_set(&inode->i_count, 1);
 	inode->i_op = &empty_iops;
-	inode->i_fop = &empty_fops;
+	inode->i_fop = &no_open_fops;
 	inode->__i_nlink = 1;
 	inode->i_opflags = 0;
 	i_uid_write(inode, 0);
@@ -148,9 +153,6 @@ int inode_init_always(struct super_block *sb, struct inode *inode)
 	inode->i_blocks = 0;
 	inode->i_bytes = 0;
 	inode->i_generation = 0;
-#ifdef CONFIG_QUOTA
-	memset(&inode->i_dquot, 0, sizeof(inode->i_dquot));
-#endif
 	inode->i_pipe = NULL;
 	inode->i_bdev = NULL;
 	inode->i_cdev = NULL;
@@ -362,7 +364,7 @@ void address_space_init_once(struct address_space *mapping)
 	memset(mapping, 0, sizeof(*mapping));
 	INIT_RADIX_TREE(&mapping->page_tree, GFP_ATOMIC);
 	spin_lock_init(&mapping->tree_lock);
-	mutex_init(&mapping->i_mmap_mutex);
+	init_rwsem(&mapping->i_mmap_rwsem);
 	INIT_LIST_HEAD(&mapping->private_list);
 	spin_lock_init(&mapping->private_lock);
 	mapping->i_mmap = RB_ROOT;
@@ -1856,8 +1858,7 @@ void init_special_inode(struct inode *inode, umode_t mode, dev_t rdev)
 		/* 如果是 FIFO，则使用 def_fifo_fops 函数集 */
 		inode->i_fop = &pipefifo_fops;
 	else if (S_ISSOCK(mode))
-		/* 如果是 SOCKET，则使用 def_sock_fops 函数集 */
-		inode->i_fop = &bad_sock_fops;
+		;	/* leave it no_open_fops */
 	else
 		/* 如果不是以上四种类型则忽略，并打印提示信息 */
 		printk(KERN_DEBUG "init_special_inode: bogus i_mode (%o) for"

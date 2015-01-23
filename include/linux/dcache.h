@@ -157,19 +157,20 @@ struct dentry {
 
 	/* Least Recently Used链表 */
 	struct list_head d_lru;		/* LRU list */
-	/*
-	 * d_child and d_rcu can share memory
-	 */
-	union {
-		/* 将当前dentry实例链入其父dentry的d_subdirs链表 */
-		struct list_head d_child;	/* child of parent list */
-	 	struct rcu_head d_rcu;
-	} d_u;
+	/* 将当前dentry实例链入其父dentry的d_subdirs链表 */
+	struct list_head d_child;	/* child of parent list */
 	/* 子目录/文件的目录项链表 */
 	struct list_head d_subdirs;	/* our children */
-	/* 链入struct inode的i_dentry链表
-	   该链表表示关联相同文件的各个dentry项，例如文件的硬链接 */
-	struct hlist_node d_alias;	/* inode alias list */
+	/*
+	 * d_alias and d_rcu can share memory
+	 */
+	union {
+		/* 链入struct inode的i_dentry链表
+		   该链表表示关联相同文件的各个dentry项，例如文件的硬链接 */
+
+		struct hlist_node d_alias;	/* inode alias list */
+	 	struct rcu_head d_rcu;
+	} d_u;
 };
 
 /*
@@ -282,7 +283,6 @@ extern seqlock_t rename_lock;
  */
 extern void d_instantiate(struct dentry *, struct inode *);
 extern struct dentry * d_instantiate_unique(struct dentry *, struct inode *);
-extern struct dentry * d_materialise_unique(struct dentry *, struct inode *);
 extern int d_instantiate_no_diralias(struct dentry *, struct inode *);
 extern void __d_drop(struct dentry *dentry);
 extern void d_drop(struct dentry *dentry);

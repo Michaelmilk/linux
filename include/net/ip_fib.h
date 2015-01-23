@@ -230,8 +230,9 @@ void fib_free_table(struct fib_table *tb);
 未定义CONFIG_IP_MULTIPLE_TABLES的时候
 FIB_TABLE_HASHSZ为2
 */
-#define TABLE_LOCAL_INDEX	0
-#define TABLE_MAIN_INDEX	1
+
+#define TABLE_LOCAL_INDEX	(RT_TABLE_LOCAL & (FIB_TABLE_HASHSZ - 1))
+#define TABLE_MAIN_INDEX	(RT_TABLE_MAIN  & (FIB_TABLE_HASHSZ - 1))
 
 static inline struct fib_table *fib_get_table(struct net *net, u32 id)
 {

@@ -50,7 +50,7 @@ ACPICA: ACPI Component Architecture
 
 /* Current ACPICA subsystem version in YYYYMMDD format */
 
-#define ACPI_CA_VERSION                 0x20140926
+#define ACPI_CA_VERSION                 0x20141107
 
 #include <acpi/acconfig.h>
 #include <acpi/actypes.h>

@@ -8,6 +8,7 @@
 #include <linux/threads.h>
 #include <linux/nsproxy.h>
 #include <linux/kref.h>
+#include <linux/ns_common.h>
 
 /*
 实现pid号与某页内存中bit位之间的映射
@@ -60,7 +61,7 @@ struct pid_namespace {
 	kgid_t pid_gid;
 	int hide_pid;
 	int reboot;	/* group exit code if this pidns was rebooted */
-	unsigned int proc_inum;
+	struct ns_common ns;
 };
 
 extern struct pid_namespace init_pid_ns;
