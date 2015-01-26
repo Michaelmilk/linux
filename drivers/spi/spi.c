@@ -46,6 +46,7 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/spi.h>
 
+/* 驱动模块卸载时调用 */
 static void spidev_release(struct device *dev)
 {
 	struct spi_device	*spi = to_spi_device(dev);
@@ -58,6 +59,7 @@ static void spidev_release(struct device *dev)
 	kfree(spi);
 }
 
+/* 打印模块别名 */
 static ssize_t
 modalias_show(struct device *dev, struct device_attribute *a, char *buf)
 {
@@ -70,6 +72,7 @@ modalias_show(struct device *dev, struct device_attribute *a, char *buf)
 
 	return sprintf(buf, "%s%s\n", SPI_MODULE_PREFIX, spi->modalias);
 }
+/* spi总线属性 */
 static DEVICE_ATTR_RO(modalias);
 
 static struct attribute *spi_dev_attrs[] = {
@@ -2407,10 +2410,12 @@ static int __init spi_init(void)
 		goto err0;
 	}
 
+	/* 注册spi总线 */
 	status = bus_register(&spi_bus_type);
 	if (status < 0)
 		goto err1;
 
+	/* 目录/sys/class/spi_master/ */
 	status = class_register(&spi_master_class);
 	if (status < 0)
 		goto err2;

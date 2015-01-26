@@ -76,6 +76,7 @@ extern struct bus_type spi_bus_type;
 struct spi_device {
 	struct device		dev;
 	struct spi_master	*master;
+	/* 最大时钟频率 */
 	u32			max_speed_hz;
 	u8			chip_select;
 	u8			bits_per_word;
@@ -318,9 +319,14 @@ static inline void spi_unregister_driver(struct spi_driver *sdrv)
  * message's completion function when the transaction completes.
  */
 struct spi_master {
+/*
+一个控制器驱动使用spi_master来描述
+*/
 	struct device	dev;
 
 	struct list_head list;
+
+	/* 该控制器对应的SPI总线号 */
 
 	/* other than negative (== assign one dynamically), bus_num is fully
 	 * board-specific.  usually that simplifies to being SOC-specific.
@@ -329,6 +335,8 @@ struct spi_master {
 	 * would normally use bus_num=2 for that controller.
 	 */
 	s16			bus_num;
+
+	/* 控制器支持的片选数量,即能支持多少个spi设备 */
 
 	/* chipselects will be integral to many controllers; some others
 	 * might use board-specific GPIOs.
@@ -368,6 +376,8 @@ struct spi_master {
 	/* flag indicating that the SPI bus is locked for exclusive use */
 	bool			bus_lock_flag;
 
+	/* 设置SPI总线的模式,时钟等 */
+
 	/* Setup mode and clock, etc (spi driver may call many times).
 	 *
 	 * IMPORTANT:  this may be called when transfers to another
@@ -375,6 +385,8 @@ struct spi_master {
 	 * which could break those transfers.
 	 */
 	int			(*setup)(struct spi_device *spi);
+
+	/* 实现SPI总线读写方法函数 */
 
 	/* bidirectional bulk transfers
 	 *
@@ -398,6 +410,7 @@ struct spi_master {
 	int			(*transfer)(struct spi_device *spi,
 						struct spi_message *mesg);
 
+	/* 注销时调用 */
 	/* called on release() to free memory provided by spi_master */
 	void			(*cleanup)(struct spi_device *spi);
 
