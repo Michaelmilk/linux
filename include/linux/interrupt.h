@@ -536,6 +536,10 @@ extern void __tasklet_schedule(struct tasklet_struct *t);
 
 static inline void tasklet_schedule(struct tasklet_struct *t)
 {
+	/* 测试状态,并且标记bit位
+	   如果该节点@t未加入tasklet_vec链表
+	   则将其加入链表
+	*/
 	if (!test_and_set_bit(TASKLET_STATE_SCHED, &t->state))
 		__tasklet_schedule(t);
 }

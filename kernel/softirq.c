@@ -547,15 +547,23 @@ static void tasklet_action(struct softirq_action *a)
 {
 	struct tasklet_struct *list;
 
+	/* 关中断 */
 	local_irq_disable();
+	/* 取链表头 */
 	list = __this_cpu_read(tasklet_vec.head);
+	/* 清空tasklet_vec链表 */
 	__this_cpu_write(tasklet_vec.head, NULL);
+	/* 二级指针指向head */
 	__this_cpu_write(tasklet_vec.tail, this_cpu_ptr(&tasklet_vec.head));
+	/* 开中断 */
 	local_irq_enable();
 
+	/* 遍历链表 */
 	while (list) {
+		/* 取一个节点 */
 		struct tasklet_struct *t = list;
 
+		/* 链表后移 */
 		list = list->next;
 
 		if (tasklet_trylock(t)) {
@@ -570,8 +578,10 @@ static void tasklet_action(struct softirq_action *a)
 			tasklet_unlock(t);
 		}
 
+		/* t节点执行失败,将其放回tasklet_vec链表 */
 		local_irq_disable();
 		t->next = NULL;
+		/* 通过二级指针将t节点放回链表 */
 		*__this_cpu_read(tasklet_vec.tail) = t;
 		__this_cpu_write(tasklet_vec.tail, &(t->next));
 		__raise_softirq_irqoff(TASKLET_SOFTIRQ);
@@ -631,12 +641,14 @@ void tasklet_kill(struct tasklet_struct *t)
 	if (in_interrupt())
 		pr_notice("Attempt to kill tasklet from interrupt\n");
 
+	/* 如果@t还在tasklet_vec链表里,则一直等待 */
 	while (test_and_set_bit(TASKLET_STATE_SCHED, &t->state)) {
 		do {
 			yield();
 		} while (test_bit(TASKLET_STATE_SCHED, &t->state));
 	}
 	tasklet_unlock_wait(t);
+	/* 清除标记 */
 	clear_bit(TASKLET_STATE_SCHED, &t->state);
 }
 EXPORT_SYMBOL(tasklet_kill);
