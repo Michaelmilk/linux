@@ -2310,6 +2310,10 @@ struct filename {
 	const char		*name;	/* pointer to actual string */
 	const __user char	*uptr;	/* original userland pointer */
 	struct audit_names	*aname;
+	/* 参考函数getname_flags
+	   false - 该结构体实例保存在cache的起始位置
+	   true - 该结构体实例是kzalloc动态分配的
+	*/
 	bool			separate; /* should "name" be freed? */
 };
 
@@ -2349,10 +2353,12 @@ extern int ioctl_preallocate(struct file *filp, void __user *argp);
 extern void __init vfs_caches_init_early(void);
 extern void __init vfs_caches_init(unsigned long);
 
+/* names_cachep在vfs_caches_init中初始化 */
 extern struct kmem_cache *names_cachep;
 
 extern void final_putname(struct filename *name);
 
+/* 路径名称,长度PATH_MAX */
 #define __getname()		kmem_cache_alloc(names_cachep, GFP_KERNEL)
 #define __putname(name)		kmem_cache_free(names_cachep, (void *)(name))
 #ifndef CONFIG_AUDITSYSCALL
