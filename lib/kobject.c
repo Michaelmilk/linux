@@ -726,6 +726,9 @@ struct kobject *kobject_create(void)
  */
 struct kobject *kobject_create_and_add(const char *name, struct kobject *parent)
 {
+/*
+@parent为NULL时,直接在/sys/目录下建立名称为@name的目录
+*/
 	struct kobject *kobj;
 	int retval;
 
