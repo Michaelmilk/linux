@@ -146,6 +146,7 @@ getname_flags(const char __user *filename, int flags, int *empty)
 	if (unlikely(!result))
 		return ERR_PTR(-ENOMEM);
 
+	/* 路径名称空间开始为一个struct filename结构体 */
 	/*
 	 * First, try to embed the struct filename inside the names_cache
 	 * allocation
@@ -156,6 +157,7 @@ getname_flags(const char __user *filename, int flags, int *empty)
 	max = EMBEDDED_NAME_MAX;
 
 recopy:
+	/* 复制路径 */
 	len = strncpy_from_user(kname, filename, max);
 	if (unlikely(len < 0)) {
 		err = ERR_PTR(len);
@@ -3400,6 +3402,9 @@ struct file *do_file_open_root(struct dentry *dentry, struct vfsmount *mnt,
 	return file;
 }
 
+/*
+@dfd: 例如AT_FDCWD
+*/
 struct dentry *kern_path_create(int dfd, const char *pathname,
 				struct path *path, unsigned int lookup_flags)
 {
@@ -3412,6 +3417,8 @@ struct dentry *kern_path_create(int dfd, const char *pathname,
 	int err2;
 	int error;
 	bool is_dir = (lookup_flags & LOOKUP_DIRECTORY);
+
+	/* 这里只处理LOOKUP_DIRECTORY和LOOKUP_REVAL两个标志 */
 
 	/*
 	 * Note that only LOOKUP_REVAL and LOOKUP_DIRECTORY matter here. Any
@@ -3489,6 +3496,9 @@ void done_path_create(struct path *path, struct dentry *dentry)
 }
 EXPORT_SYMBOL(done_path_create);
 
+/*
+@dfd: 例如AT_FDCWD
+*/
 struct dentry *user_path_create(int dfd, const char __user *pathname,
 				struct path *path, unsigned int lookup_flags)
 {
@@ -3631,11 +3641,16 @@ int vfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 }
 EXPORT_SYMBOL(vfs_mkdir);
 
+/*
+sys_mkdir调用sys_mkdirat(AT_FDCWD, pathname, mode);
+
+*/
 SYSCALL_DEFINE3(mkdirat, int, dfd, const char __user *, pathname, umode_t, mode)
 {
 	struct dentry *dentry;
 	struct path path;
 	int error;
+	/* 查询的时候要判断的是目录 */
 	unsigned int lookup_flags = LOOKUP_DIRECTORY;
 
 retry:
@@ -3656,8 +3671,10 @@ retry:
 	return error;
 }
 
+/* sys_mkdir */
 SYSCALL_DEFINE2(mkdir, const char __user *, pathname, umode_t, mode)
 {
+	/* SYSCALL_DEFINE3 mkdirat */
 	return sys_mkdirat(AT_FDCWD, pathname, mode);
 }
 
