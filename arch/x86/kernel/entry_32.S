@@ -780,8 +780,11 @@ ENTRY(irq_entries_start)
 	RING0_INT_FRAME
 vector=FIRST_EXTERNAL_VECTOR
 /* 循环设置NR_IRQS 个 interrupt */
+/* 第一层循环32次,第二层循环7次,一共循环224次 */
+/* 重复32次， 即gcc重复生成代码32次 */
 .rept (FIRST_SYSTEM_VECTOR-FIRST_EXTERNAL_VECTOR+6)/7
 	.balign 32
+/* 重复7次，这样，其实一共重复32×7=224次 */
   .rept	7
     .if vector < FIRST_SYSTEM_VECTOR
       .if vector <> FIRST_EXTERNAL_VECTOR
