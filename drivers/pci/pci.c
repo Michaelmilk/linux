@@ -1336,6 +1336,10 @@ int pci_enable_device_mem(struct pci_dev *dev)
 }
 EXPORT_SYMBOL(pci_enable_device_mem);
 
+/*
+初始化设备，使I/O，memory可用，唤醒设备
+*/
+
 /**
  * pci_enable_device - Initialize device before it's used by a driver.
  * @dev: PCI device to be initialized
@@ -1347,9 +1351,6 @@ EXPORT_SYMBOL(pci_enable_device_mem);
  *  Note we don't actually enable the device many times if we call
  *  this function repeatedly (we just increment the count).
  */
-/*
-初始化设备，使I/O，memory可用，唤醒设备
-*/
 int pci_enable_device(struct pci_dev *dev)
 {
 	return pci_enable_device_flags(dev, IORESOURCE_MEM | IORESOURCE_IO);
